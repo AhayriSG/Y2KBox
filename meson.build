@@ -3916,10 +3916,6 @@ subdir('common-user')
 subdir('bsd-user')
 subdir('linux-user')
 
-# needed for fuzzing binaries
-subdir('tests/qtest/libqos')
-subdir('tests/qtest/fuzz')
-
 ##############################################
 # Internal static_libraries and dependencies #
 ##############################################
@@ -4694,9 +4690,6 @@ subdir('pyvenv')
 # Tests are disabled on emscripten because they rely on host features that aren't
 # supported by emscripten (e.g. fork and unix socket).
 tcg_tests_summary = {}
-if get_option('tests').allowed() and host_os != 'emscripten'
-  subdir('tests')
-endif
 if gtk.found()
   subdir('po')
 endif
