@@ -3646,15 +3646,12 @@ if have_system
     'hw/9pfs',
     'hw/acpi',
     'hw/adc',
-    'hw/alpha',
-    'hw/arm',
     'hw/audio',
     'hw/block',
     'hw/char',
     'hw/display',
     'hw/dma',
     'hw/fsi',
-    'hw/hexagon',
     'hw/hyperv',
     'hw/i2c',
     'hw/i3c',
@@ -3666,7 +3663,6 @@ if have_system
     'hw/intc',
     'hw/isa',
     'hw/mem',
-    'hw/mips',
     'hw/misc',
     'hw/misc/macio',
     'hw/net',
@@ -3677,16 +3673,10 @@ if have_system
     'hw/nvram',
     'hw/pci',
     'hw/pci-host',
-    'hw/ppc',
     'hw/rtc',
-    'hw/riscv',
-    'hw/s390x',
     'hw/scsi',
     'hw/sd',
     'hw/sensor',
-    'hw/sh4',
-    'hw/sparc',
-    'hw/sparc64',
     'hw/ssi',
     'hw/timer',
     'hw/tpm',
@@ -3712,21 +3702,9 @@ if have_system or have_user
   trace_events_subdirs += [
     'accel/tcg',
     'hw/core',
-    'target/arm',
-    'target/arm/hvf',
-    'target/arm/tcg',
-    'target/hexagon',
-    'target/hppa',
     'target/i386',
     'target/i386/kvm',
     'target/i386/whpx',
-    'target/loongarch',
-    'target/mips/tcg',
-    'target/ppc',
-    'target/riscv',
-    'target/s390x',
-    'target/s390x/kvm',
-    'target/sparc',
   ]
 endif
 
@@ -3759,6 +3737,7 @@ qtest_module_ss = ss.source_set()
 modules = {}
 target_modules = {}
 plugin_modules = []
+arm_common_ss = ss.source_set()  # XP fork: arm removed; placeholder, never built
 hw_arch = {}
 target_arch = {}
 target_system_arch = {}
@@ -3912,9 +3891,6 @@ endif
 
 common_user_inc = []
 
-subdir('common-user')
-subdir('bsd-user')
-subdir('linux-user')
 
 ##############################################
 # Internal static_libraries and dependencies #

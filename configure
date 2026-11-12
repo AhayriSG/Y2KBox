@@ -476,12 +476,6 @@ case "$cpu" in
     ;;
 esac
 
-if test -n "$host_arch" && {
-    ! test -d "$source_path/linux-user/include/host/$host_arch" ||
-    ! test -d "$source_path/common-user/host/$host_arch"; }; then
-    error_exit "linux-user/include/host/$host_arch does not exist." \
-       "This is a bug in the configure script, please report it."
-fi
 if test -n "$linux_arch" && ! test -d "$source_path/linux-headers/asm-$linux_arch"; then
     error_exit "linux-headers/asm-$linux_arch does not exist." \
        "This is a bug in the configure script, please report it."
@@ -789,33 +783,9 @@ fi
 default_target_list=""
 mak_wilds=""
 
-if [ -n "$host_arch" ] && [ -d "$source_path/common-user/host/$host_arch" ]; then
-    if [ "$linux_user" != no ]; then
-        if [ "$host_os" = linux ]; then
-            linux_user=yes
-        elif [ "$linux_user" = yes ]; then
-            error_exit "linux-user not supported on this architecture"
-        fi
-        if [ "$linux_user" = "yes" ]; then
-            mak_wilds="${mak_wilds} $source_path/configs/targets/*-linux-user.mak"
-        fi
-    fi
-    if [ "$bsd_user" != no ]; then
-        if [ "$bsd_user" = "" ]; then
-            test $host_os = freebsd && bsd_user=yes
-        fi
-        if [ "$bsd_user" = yes ] && ! [ -d "$source_path/bsd-user/$host_os" ]; then
-            error_exit "bsd-user not supported on this host OS"
-        fi
-        if [ "$bsd_user" = "yes" ]; then
-            mak_wilds="${mak_wilds} $source_path/configs/targets/*-bsd-user.mak"
-        fi
-    fi
-else
-    if [ "$linux_user" = yes ] || [ "$bsd_user" = yes ]; then
-        error_exit "user mode emulation not supported on this architecture"
-    fi
-fi
+# XP fork: user-mode emulation removed.
+linux_user=no
+bsd_user=no
 if [ "$system" = "yes" ]; then
     mak_wilds="${mak_wilds} $source_path/configs/targets/*-softmmu.mak"
 fi
