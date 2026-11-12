@@ -4685,7 +4685,7 @@ endif
 subdir('scripts')
 subdir('tools')
 subdir('pc-bios')
-subdir('docs')
+build_docs = false
 subdir('pyvenv')
 # Tests are disabled on emscripten because they rely on host features that aren't
 # supported by emscripten (e.g. fork and unix socket).
@@ -4755,7 +4755,6 @@ summary(summary_info, bool_yn: true, section: 'Directories')
 # Host binaries
 summary_info = {}
 summary_info += {'python':            '@0@ (version: @1@)'.format(python.full_path(), python.language_version())}
-summary_info += {'sphinx-build':      sphinx_build}
 summary_info += {'gdb':               gdb}
 summary_info += {'iasl':              iasl}
 summary_info += {'genisoimage':       config_host['GENISOIMAGE']}
