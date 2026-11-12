@@ -1,33 +1,19 @@
-# Default configuration for i386-softmmu
-
-# Uncomment the following lines to disable these optional devices:
+# Default configuration for i386-softmmu -- XP fork.
 #
-#CONFIG_AMD_IOMMU=n
-#CONFIG_APPLESMC=n
-#CONFIG_FDC=n
-#CONFIG_HPET=n
-#CONFIG_HYPERV=n
-#CONFIG_ISA_DEBUG=n
-#CONFIG_ISA_IPMI_BT=n
-#CONFIG_ISA_IPMI_KCS=n
-#CONFIG_PCI_IPMI_KCS=n
-#CONFIG_PCI_IPMI_BT=n
-#CONFIG_IPMI_SSIF=n
-#CONFIG_PCI_DEVICES=n
-#CONFIG_PVPANIC=n
-#CONFIG_QXL=n
-#CONFIG_SEV=n
-#CONFIG_SGA=n
-#CONFIG_TDX=n
-#CONFIG_TEST_DEVICES=n
-#CONFIG_TPM_CRB=n
-#CONFIG_TPM_TIS_ISA=n
-#CONFIG_VTD=n
-#CONFIG_SGX=n
+# Target: Windows XP (32-bit) guests on the i440fx "pc" machine.
+# Everything below is switched off because XP cannot use it, or it only
+# exists for other guests (modern PCIe machines, confidential computing,
+# paravirtual Xen/KVM-only bits, UEFI).
 
-# Boards are selected by default, uncomment to keep out of the build.
-# CONFIG_ISAPC=n
-# CONFIG_I440FX=n
-# CONFIG_Q35=n
-# CONFIG_MICROVM=n
-# CONFIG_NITRO_ENCLAVE=n
+CONFIG_Q35=n
+CONFIG_MICROVM=n
+CONFIG_NITRO_ENCLAVE=n
+CONFIG_ISAPC=n
+CONFIG_XEN_EMU=n
+CONFIG_SEV=n
+CONFIG_SGX=n
+CONFIG_TDX=n
+CONFIG_VTD=n
+CONFIG_VTD_ACCEL=n
+CONFIG_AMD_IOMMU=n
+CONFIG_X86_FW_OVMF=n

@@ -11,7 +11,6 @@
 #include "qemu/target-info-qapi.h"
 #include "hw/core/boards.h"
 #include "hw/i386/x86.h"
-#include "hw/arm/virt.h"
 #include "system/dma.h"
 #include "monitor/hmp.h"
 #include "monitor/monitor.h"
@@ -130,16 +129,6 @@ static dma_addr_t find_ovmf_log(void)
          */
         end = x86ms->below_4g_mem_size;
         start = end - MIN(end, 128 * MiB);
-        return find_ovmf_log_range(start, end);
-    }
-
-    if (target_arch() == SYS_EMU_TARGET_AARCH64 &&
-        object_dynamic_cast(OBJECT(ms), TYPE_VIRT_MACHINE)) {
-        VirtMachineState *vms = VIRT_MACHINE(ms);
-
-        /* edk2 ArmVirt firmware allocations are in the first 128 MB */
-        start = vms->memmap[VIRT_MEM].base;
-        end = start + 128 * MiB;
         return find_ovmf_log_range(start, end);
     }
 
