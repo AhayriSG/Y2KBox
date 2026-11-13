@@ -90,12 +90,34 @@ unsigned __attribute__((constructor)) cpuinfo_init(void)
         }
     }
 
-    max = __get_cpuid_max(0x8000000, 0);
+    max = __get_cpuid_max(0x80000000, 0);
     if (max >= 1) {
         __cpuid(0x80000001, a, b, c, d);
         info |= (c & bit_LZCNT ? CPUINFO_LZCNT : 0);
     }
 #endif
+
+    {
+        /* XP fork: x86-64-v3 is the hard baseline (AVX2, BMI1/2, FMA, F16C,
+         * LZCNT, MOVBE, POPCNT). The binary is built with -march flags that
+         * assume it, so fail early with a readable message. */
+        const unsigned need = CPUINFO_MOVBE | CPUINFO_LZCNT | CPUINFO_POPCNT |
+                              CPUINFO_BMI1 | CPUINFO_BMI2 | CPUINFO_AVX1 |
+                              CPUINFO_AVX2;
+        unsigned ma, mb, mc = 0, md;
+        if (__get_cpuid_max(0, 0) >= 1) {
+            __cpuid(1, ma, mb, mc, md);
+        }
+        if ((info & need) != need || !(mc & bit_FMA) || !(mc & bit_F16C)) {
+            static const char msg[] =
+                "qemu: this build requires an x86-64-v3 host CPU "
+                "(AVX2, BMI1/2, FMA, F16C, LZCNT, MOVBE).\n";
+            if (write(2, msg, sizeof(msg) - 1) < 0) {
+                /* nothing useful to do */
+            }
+            _exit(1);
+        }
+    }
 
     info |= CPUINFO_ALWAYS;
     cpuinfo = info;

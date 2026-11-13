@@ -55,8 +55,7 @@ qapi_trace_events = []
 
 bsd_oses = ['gnu/kfreebsd', 'freebsd', 'netbsd', 'openbsd', 'dragonfly', 'darwin']
 supported_oses = ['windows', 'freebsd', 'netbsd', 'openbsd', 'darwin', 'sunos', 'linux', 'emscripten']
-supported_cpus = ['ppc64', 's390x', 'riscv64', 'x86_64',
-  'aarch64', 'loongarch64', 'sparc64', 'wasm64']
+supported_cpus = ['x86_64']
 
 cpu = host_machine.cpu_family()
 
@@ -934,25 +933,6 @@ endif
 
 tcg_arch = host_arch
 if have_tcg
-  if host_arch == 'unknown'
-    if not get_option('tcg_interpreter')
-      error('Unsupported CPU @0@, try --enable-tcg-interpreter'.format(cpu))
-    endif
-  elif host_arch == 'wasm64'
-    if not get_option('tcg_interpreter')
-      error('WebAssembly host requires --enable-tcg-interpreter')
-    endif
-  elif get_option('tcg_interpreter')
-    warning('Use of the TCG interpreter is not recommended on this host')
-    warning('architecture. There is a native TCG execution backend available')
-    warning('which provides substantially better performance and reliability.')
-    warning('It is strongly recommended to remove the --enable-tcg-interpreter')
-    warning('configuration option on this architecture to use the native')
-    warning('backend.')
-  endif
-  if get_option('tcg_interpreter')
-    tcg_arch = 'tci'
-  endif
   add_project_arguments('-iquote', meson.current_source_dir() / 'tcg' / tcg_arch,
                         language: all_languages)
 
@@ -4854,11 +4834,7 @@ if have_system
 endif
 summary_info += {'TCG support':       config_all_accel.has_key('CONFIG_TCG')}
 if config_all_accel.has_key('CONFIG_TCG')
-  if get_option('tcg_interpreter')
-    summary_info += {'TCG backend':   'TCI (TCG with bytecode interpreter, slow)'}
-  else
-    summary_info += {'TCG backend':   'native (@0@)'.format(cpu)}
-  endif
+  summary_info += {'TCG backend':   'native (@0@, x86-64-v@1@ baseline)'.format(cpu, get_option('x86_version'))}
   summary_info += {'TCG plugins':       get_option('plugins')}
   summary_info += {'TCG debug enabled': get_option('debug_tcg')}
   if have_linux_user or have_bsd_user

@@ -10,9 +10,9 @@ Base: upstream QEMU `9d7d057` (11.1.90). License: unchanged (GPL-2.0, see COPYIN
 | Done | Next |
 |------|------|
 | Removed tests/, docs/, all non-x86 targets, boards and user-mode emulators | Prune unused device models and old versioned machine types |
-| i386-softmmu builds; only the i440FX `pc` machine remains | Drop non-x86 TCG host backends / TCI; assume x86-64-v3 |
+| i386-softmmu builds; only the i440FX `pc` machine remains | IOMMU/SEV/SGX/TDX/VFIO removal; SSE2 baseline benchmark (A/B vs AVX-512) |
 | Full TCG: KVM/HVF/WHPX/NVMM/MSHV/Nitro, Xen and Hyper-V code removed (`-accel help` -> tcg only) | SSE2 TCG fast paths (gvec) and MTTCG tuning |
-| Fresh build graph 1,930 -> 1,721 steps; SeaBIOS boots under TCG | VT-d/AMD-Vi, SEV/SGX/TDX, VFIO, vmapple, fsi removal |
+| x86-64 hosts only (non-x86 TCG backends + TCI removed); x86-64-v3 enforced at startup | Fresh build graph 1,930 -> 1,721 steps; SeaBIOS boots under TCG (2 vCPUs) |
 | | VBoxVGA + HGSMI/VBVA, VMMDev, HGCM, 3D host service |
 
 ## Building
@@ -33,3 +33,11 @@ gitlab.com is unreachable.
 VirtualBox <= 6.1 display/VMMDev sources are GPL version 2 (7.x is GPL-3.0-only and
 must not be copied). The Chromium-based 3D host service exists in open source only up
 to the 5.x series. Audit every file's header before porting anything.
+
+## Host baseline
+
+x86-64-v3 is the hard minimum (AVX2, BMI1/2, FMA, F16C, LZCNT, MOVBE, POPCNT):
+`x86_version` defaults to 3, the binary exits with a message on older CPUs, and the
+TCG backend treats those features as compile-time constants. AVX-512 (VL/BW/DQ/VBMI2)
+stays runtime-detected: the backend already has gated fast paths for it, so AVX-512
+hosts benefit without making v4 mandatory. `-Dx86_version=4` remains available.

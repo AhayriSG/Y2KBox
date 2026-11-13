@@ -112,16 +112,4 @@ if have_block
   util_ss.add(files('yank.c'))
 endif
 
-if cpu == 'aarch64'
-  util_ss.add(files('cpuinfo-aarch64.c'))
-elif cpu == 'x86_64'
-  util_ss.add(files('cpuinfo-i386.c'))
-elif cpu == 'loongarch64'
-  util_ss.add(files('cpuinfo-loongarch.c'))
-elif cpu == 'ppc64'
-  util_ss.add(files('cpuinfo-ppc.c'))
-elif cpu == 'riscv64'
-  util_ss.add(files('cpuinfo-riscv.c'))
-elif cpu == 's390x'
-  util_ss.add(files('s390x_pci_mmio.c'))
-endif
+util_ss.add(files('cpuinfo-i386.c'))

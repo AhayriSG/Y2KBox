@@ -137,8 +137,8 @@ static TCGReg tcg_target_call_oarg_reg(TCGCallReturnKind kind, int slot)
 #define SOFTMMU_RESERVE_REGS \
     (tcg_use_softmmu ? (1 << TCG_REG_L0) | (1 << TCG_REG_L1) : 0)
 
-#define have_bmi2       (cpuinfo & CPUINFO_BMI2)
-#define have_lzcnt      (cpuinfo & CPUINFO_LZCNT)
+#define have_bmi2       1  /* guaranteed by x86-64-v3 */
+#define have_lzcnt      1  /* guaranteed by x86-64-v3 */
 
 static const tcg_insn_unit *tb_ret_addr;
 

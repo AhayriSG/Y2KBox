@@ -9,11 +9,11 @@
 
 #include "host/cpuinfo.h"
 
-#define have_bmi1         (cpuinfo & CPUINFO_BMI1)
-#define have_popcnt       (cpuinfo & CPUINFO_POPCNT)
-#define have_avx1         (cpuinfo & CPUINFO_AVX1)
-#define have_avx2         (cpuinfo & CPUINFO_AVX2)
-#define have_movbe        (cpuinfo & CPUINFO_MOVBE)
+#define have_bmi1         1  /* guaranteed by x86-64-v3 */
+#define have_popcnt       1  /* guaranteed by x86-64-v3 */
+#define have_avx1         1  /* guaranteed by x86-64-v3 */
+#define have_avx2         1  /* guaranteed by x86-64-v3 */
+#define have_movbe        1  /* guaranteed by x86-64-v3 */
 
 /*
  * There are interesting instructions in AVX512, so long as we have AVX512VL,
