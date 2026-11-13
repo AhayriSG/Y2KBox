@@ -85,43 +85,34 @@ meson options (existing build dirs keep old option values).
   next `ld_vec` reads 128 bits back -> **store-forwarding stall** (~15-20 cycles).
   Stores are fine. TCG has no vector-typed guest memory op.
 
-## 5. IN PROGRESS: `qemu_ld_vec` / `qemu_st_vec` (128-bit, little-endian)
+## 5. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
-Goal: load guest memory straight into an XMM host register, store as one 128-bit
-`st_vec` to env. Design worked out; **nothing of this is written yet**. Plan:
+New TCG ops (include/tcg/tcg-opc.h) used by `gen_ldo_env_A0`/`gen_sto_env_A0`
+(target/i386/tcg/translate.c). Generators: `tcg_gen_qemu_{ld,st}_v128`
+(tcg/tcg-op-ldst.c, wrappers in include/tcg/tcg-op-mem.h). Backend
+(tcg/x86_64/tcg-target.c.inc): `tgen_qemu_ld_vec/st_vec` emit VMOVDQA (known
+16-aligned) or VMOVDQU directly to/from the vector reg; constraints
+`C_O1_I1(x,L)` / `C_O0_I2(x,L)`; slow path reuses the i128 helper calls and moves
+RAX:RDX <-> xmm (`TCGLabelQemuLdst.is_vec/vec_reg`). Limitations: little-endian
+only (asserted); plugin memory callbacks are not emitted for these ops.
 
-1. `include/tcg/tcg-opc.h` (near line 125-145, qemu_ld2/st2 defs): add
-   `DEF(qemu_ld_vec,1,1,1, CALL_CLOBBER|SIDE_EFFECTS|VECTOR)` and
-   `DEF(qemu_st_vec,0,2,1, same)`.
-2. `tcg/tcg.c`: in `tcg_op_supported` (~2414-2422, next to ld_vec/st_vec) return
-   `type == TCG_TYPE_V128 && has_type`; add the ops to the dump switch (~2945) so
-   memop prints; add `bool is_vec; TCGReg vec_reg;` to `TCGLabelQemuLdst` (~l.100).
-   Vector-flagged ops fall to the generic `tcg_out_vec_op` dispatch (~5827).
-3. `tcg/tcg-op-ldst.c`: add `tcg_gen_qemu_ld_vec_int/st_vec_int` modeled on
-   `tcg_gen_qemu_ld_i128_int` (~402-470): `check_max_alignment`, `tcg_gen_req_mo`,
-   serial-mode atomicity reduction, `make_memop_idx`, `tci_extend_addr`, then
-   `tcg_gen_op3(INDEX_op_qemu_ld_vec, ...)`. Public wrappers in
-   `include/tcg/tcg-op-mem.h` follow the `tcg_gen_qemu_ld_i128(.., TCGv_va ..)`
-   -> `tcg_gen_qemu_ld_chk_i128(.., tcgv_va_temp(a), .., TCG_TYPE_VA)` pattern.
-4. `tcg/x86_64/tcg-target-con-set.h`: add `C_O1_I1(x, L)` and `C_O0_I2(x, L)`.
-   `tcg_target_op_def` (~3913): map the new ops. `tcg_out_vec_op` (~3585, near the
-   ld_vec case ~3815): call new `tgen_qemu_ld_vec/st_vec`.
-5. Backend fast path: reuse `prepare_host_addr` (existing i128 code ~2100-2216);
-   emit `VMOVDQA` if memop align >= 16 else `VMOVDQU` straight to/from the vector
-   reg (keep the existing runtime path when atom == MO_128 and unaligned without
-   ATOMIC_VMOVDQU). Slow path: set label type I128; for loads use
-   datalo=RAX/datahi=RDX, and after `tcg_out_ld_helper_ret` call
-   `tcg_out_pair_to_vec(s, TCG_TYPE_I64, vec_reg, RAX, RDX)` (helpers at ~1828/1840)
-   before jumping back; for stores `tcg_out_vec_to_pair` into two GPRs that differ
-   from `addr_reg` before `tcg_out_st_helper_args`.
-6. Frontend: rewrite `gen_ldo_env_A0`/`gen_sto_env_A0` (translate.c:2159/2171;
-   callers emit.c.inc:213, 465, 4651) to use a V128 temp + `tcg_gen_st_vec`/
-   `tcg_gen_ld_vec`.
-7. **Test before trusting:** a boot-sector test (like `xp/bench/sse2.asm`) that does
-   movdqu/movdqa at offsets 0..31, across a 4 KB page boundary, to/from VGA text
-   memory 0xB8000 (MMIO slow path), a misaligned `movdqa` raising #GP, and
-   compares with integer loads. Then rerun the benchmark (expect memory-op cost to
-   drop to ~register-op cost). Keep a copy of the previous binary for A/B.
+**Measured (old binary vs new, same host, min of 2, 200M iters unless noted):**
+
+| image | old | new |
+|-------|-----|-----|
+| aligned load `movdqa xmm,[m]` | 1.56 s | 0.58 s |
+| unaligned load `movdqu` | 1.55 s | 0.64 s |
+| `paddd xmm,[m]` | 1.60 s | 0.65 s |
+| aligned store | 0.66 s | 0.59 s |
+| mixed mem loop (300M) | 6.20 s | 2.82 s |
+| register-only loop (300M) | 2.31 s | 2.31 s |
+
+**Tested** with `xp/bench/vectest.asm` (prints OK/FAIL<n> on port 0x402): unaligned
+loads/stores across 4 KB page boundaries, aligned ops, misaligned MOVDQA raising
+#GP (load and store), memory-operand ALU op vs register form, and loads from VGA
+text RAM (MMIO slow path) vs integer loads. Passes on the old reference binary and
+the new one, -smp 1 and -smp 2. SeaBIOS still boots. Not yet tested: real XP,
+AVX-guest atomicity path (MO_ATOM_IFALIGN), a stress test under MTTCG.
 
 ## 6. TODO after that (priority order)
 

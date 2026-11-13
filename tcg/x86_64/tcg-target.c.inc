@@ -1866,6 +1866,11 @@ static bool tcg_out_qemu_ld_slow_path(TCGContext *s, TCGLabelQemuLdst *l)
     tcg_out_ld_helper_args(s, l, &ldst_helper_param);
     tcg_out_branch(s, 1, qemu_ld_helpers[opc & MO_SIZE]);
     tcg_out_ld_helper_ret(s, l, false, &ldst_helper_param);
+    if (l->is_vec) {
+        /* result is in datalo:datahi (RAX:RDX); move into the vector reg */
+        tcg_out_pair_to_vec(s, TCG_TYPE_I64, l->vec_reg,
+                            l->datalo_reg, l->datahi_reg);
+    }
 
     tcg_out_jmp(s, l->raddr);
     return true;
@@ -1885,6 +1890,10 @@ static bool tcg_out_qemu_st_slow_path(TCGContext *s, TCGLabelQemuLdst *l)
         tcg_patch32(label_ptr[1], s->code_ptr - label_ptr[1] - 4);
     }
 
+    if (l->is_vec) {
+        tcg_out_vec_to_pair(s, TCG_TYPE_I64, l->datalo_reg, l->datahi_reg,
+                            l->vec_reg);
+    }
     tcg_out_st_helper_args(s, l, &ldst_helper_param);
     tcg_out_branch(s, 1, qemu_st_helpers[opc & MO_SIZE]);
 
@@ -2352,6 +2361,67 @@ static const TCGOutOpQemuLdSt2 outop_qemu_st2 = {
     .base.static_constraint = C_O0_I3(L, L, L),
     .out = tgen_qemu_st2,
 };
+
+/*
+ * XP fork: 128-bit guest load/store directly to/from a vector register.
+ * VMOVDQA when the access is known 16-byte aligned, else VMOVDQU (aligned
+ * 16-byte accesses are atomic on every AVX host, which x86-64-v3 guarantees).
+ */
+static void tgen_qemu_ld_vec(TCGContext *s, TCGReg vreg, TCGReg addr,
+                             MemOpIdx oi)
+{
+    TCGLabelQemuLdst *ldst;
+    HostAddress h;
+
+    ldst = prepare_host_addr(s, &h, addr, oi, true);
+    tcg_out_vex_modrm_sib_offset(s,
+                                 (h.aa.align >= MO_128 ? OPC_MOVDQA_VxWx
+                                                       : OPC_MOVDQU_VxWx)
+                                 + h.seg,
+                                 vreg, 0, h.base, h.index, 0, h.ofs);
+    if (ldst) {
+        ldst->type = TCG_TYPE_I128;
+        ldst->is_vec = true;
+        ldst->vec_reg = vreg;
+        ldst->datalo_reg = TCG_REG_RAX;     /* helper returns RAX:RDX */
+        ldst->datahi_reg = TCG_REG_RDX;
+        ldst->raddr = tcg_splitwx_to_rx(s->code_ptr);
+    }
+}
+
+static void tgen_qemu_st_vec(TCGContext *s, TCGReg vreg, TCGReg addr,
+                             MemOpIdx oi)
+{
+    TCGLabelQemuLdst *ldst;
+    HostAddress h;
+
+    ldst = prepare_host_addr(s, &h, addr, oi, false);
+    tcg_out_vex_modrm_sib_offset(s,
+                                 (h.aa.align >= MO_128 ? OPC_MOVDQA_WxVx
+                                                       : OPC_MOVDQU_WxVx)
+                                 + h.seg,
+                                 vreg, 0, h.base, h.index, 0, h.ofs);
+    if (ldst) {
+        /* slow path needs the data in two GPRs that are not the address */
+        static const TCGReg pool[] = {
+            TCG_REG_RAX, TCG_REG_RDX, TCG_REG_RCX, TCG_REG_R8, TCG_REG_R9
+        };
+        TCGReg r[2];
+        int n = 0;
+
+        for (int i = 0; i < ARRAY_SIZE(pool) && n < 2; i++) {
+            if (pool[i] != addr) {
+                r[n++] = pool[i];
+            }
+        }
+        ldst->type = TCG_TYPE_I128;
+        ldst->is_vec = true;
+        ldst->vec_reg = vreg;
+        ldst->datalo_reg = r[0];
+        ldst->datahi_reg = r[1];
+        ldst->raddr = tcg_splitwx_to_rx(s->code_ptr);
+    }
+}
 
 static void tcg_out_exit_tb(TCGContext *s, uintptr_t a0)
 {
@@ -3816,6 +3886,12 @@ static void tcg_out_vec_op(TCGContext *s, TCGOpcode opc,
         tcg_out8(s, a2);
         break;
 
+    case INDEX_op_qemu_ld_vec:
+        tgen_qemu_ld_vec(s, a0, a1, a2);
+        break;
+    case INDEX_op_qemu_st_vec:
+        tgen_qemu_st_vec(s, a0, a1, a2);
+        break;
     case INDEX_op_ld_vec:
         tcg_out_ld(s, type, a0, a1, a2);
         break;
@@ -3919,6 +3995,11 @@ tcg_target_op_def(TCGOpcode op, TCGType type, unsigned flags)
 
     case INDEX_op_st_vec:
         return C_O0_I2(x, r);
+
+    case INDEX_op_qemu_ld_vec:
+        return C_O1_I1(x, L);
+    case INDEX_op_qemu_st_vec:
+        return C_O0_I2(x, L);
 
     case INDEX_op_add_vec:
     case INDEX_op_sub_vec:

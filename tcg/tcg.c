@@ -99,6 +99,8 @@ typedef struct QEMU_PACKED {
 
 struct TCGLabelQemuLdst {
     bool is_ld;             /* qemu_ld: true, qemu_st: false */
+    bool is_vec;            /* data lives in vec_reg (qemu_ld_vec/st_vec) */
+    TCGReg vec_reg;
     MemOpIdx oi;
     TCGType type;           /* result type of a load */
     TCGReg addr_reg;        /* reg index for guest virtual addr */
@@ -2415,6 +2417,10 @@ bool tcg_op_supported(TCGOpcode op, TCGType type, unsigned flags)
     case INDEX_op_extrh_i64_i32:
         return true;
 
+    case INDEX_op_qemu_ld_vec:
+    case INDEX_op_qemu_st_vec:
+        return type == TCG_TYPE_V128 && has_type;
+
     case INDEX_op_mov_vec:
     case INDEX_op_dup_vec:
     case INDEX_op_dupm_vec:
@@ -2944,6 +2950,8 @@ void tcg_dump_ops(TCGContext *s, FILE *f, bool have_prefs)
             case INDEX_op_qemu_st:
             case INDEX_op_qemu_ld2:
             case INDEX_op_qemu_st2:
+            case INDEX_op_qemu_ld_vec:
+            case INDEX_op_qemu_st_vec:
                 {
                     const char *s_al, *s_tlb, *s_op, *s_at;
                     MemOpIdx oi = op->args[k++];

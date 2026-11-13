@@ -24,6 +24,7 @@
 #include "exec/translation-block.h"
 #include "tcg/tcg-op.h"
 #include "tcg/tcg-op-gvec.h"
+#include "tcg/tcg-temp-internal.h"
 #include "exec/translator.h"
 #include "exec/target_page.h"
 #include "fpu/softfloat.h"
@@ -2156,16 +2157,22 @@ static inline void gen_stq_env_A0(DisasContext *s, int offset)
     tcg_gen_qemu_st_i64(t, s->A0, s->mem_index, MO_LEUQ);
 }
 
+/*
+ * XP fork: 128-bit XMM loads/stores go straight between guest memory and a
+ * host vector register (qemu_ld_vec/qemu_st_vec). The previous i128 path went
+ * through an integer register pair and caused a store-forwarding stall when
+ * the value was reloaded from env as a vector.
+ */
 static inline void gen_ldo_env_A0(DisasContext *s, int offset, bool align)
 {
     MemOp atom = (s->cpuid_ext_features & CPUID_EXT_AVX
                   ? MO_ATOM_IFALIGN : MO_ATOM_IFALIGN_PAIR);
     MemOp mop = MO_128 | MO_LE | atom | (align ? MO_ALIGN_16 : 0);
-    int mem_index = s->mem_index;
-    TCGv_i128 t = tcg_temp_new_i128();
+    TCGv_vec t = tcg_temp_new_vec(TCG_TYPE_V128);
 
-    tcg_gen_qemu_ld_i128(t, s->A0, mem_index, mop);
-    tcg_gen_st_i128(t, tcg_env, offset);
+    tcg_gen_qemu_ld_v128(t, s->A0, s->mem_index, mop);
+    tcg_gen_st_vec(t, tcg_env, offset);
+    tcg_temp_free_vec(t);
 }
 
 static inline void gen_sto_env_A0(DisasContext *s, int offset, bool align)
@@ -2173,11 +2180,11 @@ static inline void gen_sto_env_A0(DisasContext *s, int offset, bool align)
     MemOp atom = (s->cpuid_ext_features & CPUID_EXT_AVX
                   ? MO_ATOM_IFALIGN : MO_ATOM_IFALIGN_PAIR);
     MemOp mop = MO_128 | MO_LE | atom | (align ? MO_ALIGN_16 : 0);
-    int mem_index = s->mem_index;
-    TCGv_i128 t = tcg_temp_new_i128();
+    TCGv_vec t = tcg_temp_new_vec(TCG_TYPE_V128);
 
-    tcg_gen_ld_i128(t, tcg_env, offset);
-    tcg_gen_qemu_st_i128(t, s->A0, mem_index, mop);
+    tcg_gen_ld_vec(t, tcg_env, offset);
+    tcg_gen_qemu_st_v128(t, s->A0, s->mem_index, mop);
+    tcg_temp_free_vec(t);
 }
 
 static void gen_ldy_env_A0(DisasContext *s, int offset, bool align)

@@ -1090,3 +1090,48 @@ GEN_ATOMIC_HELPER128(xchg, mov2, 0)
 
 #undef GEN_ATOMIC_HELPER
 #undef GEN_ATOMIC_HELPER128
+
+/*
+ * XP fork: 128-bit guest memory <-> host vector register, little-endian only.
+ * Avoids the integer register pair detour of qemu_ld2/st2 (which causes a
+ * store-forwarding stall when the value is reloaded as a vector from env).
+ */
+static void tcg_gen_qemu_ldst_vec_int(bool is_ld, TCGv_vec val, TCGTemp *addr,
+                                      TCGArg idx, MemOp memop)
+{
+    TCGTemp *addr_new;
+
+    tcg_debug_assert((memop & MO_BSWAP) == 0);   /* x86 guest on x86 host */
+    check_max_alignment(memop_alignment_bits(memop));
+    tcg_gen_req_mo(is_ld ? (TCG_MO_LD_LD | TCG_MO_ST_LD)
+                         : (TCG_MO_ST_LD | TCG_MO_ST_ST));
+
+    /* In serial mode, reduce atomicity. */
+    if (!(tcg_ctx->gen_tb->cflags & CF_PARALLEL)) {
+        memop &= ~MO_ATOM_MASK;
+        memop |= MO_ATOM_NONE;
+    }
+    addr_new = tci_extend_addr(addr);
+    gen_ldst1(is_ld ? INDEX_op_qemu_ld_vec : INDEX_op_qemu_st_vec,
+              TCG_TYPE_V128, tcgv_vec_temp(val), addr_new,
+              make_memop_idx(memop, idx));
+    maybe_free_addr(addr, addr_new);
+}
+
+void tcg_gen_qemu_ld_chk_v128(TCGv_vec val, TCGTemp *addr, TCGArg idx,
+                              MemOp memop, TCGType addr_type)
+{
+    tcg_debug_assert(addr_type == tcg_ctx->addr_type);
+    tcg_debug_assert((memop & MO_SIZE) == MO_128);
+    tcg_debug_assert((memop & MO_SIGN) == 0);
+    tcg_gen_qemu_ldst_vec_int(true, val, addr, idx, memop);
+}
+
+void tcg_gen_qemu_st_chk_v128(TCGv_vec val, TCGTemp *addr, TCGArg idx,
+                              MemOp memop, TCGType addr_type)
+{
+    tcg_debug_assert(addr_type == tcg_ctx->addr_type);
+    tcg_debug_assert((memop & MO_SIZE) == MO_128);
+    tcg_debug_assert((memop & MO_SIGN) == 0);
+    tcg_gen_qemu_ldst_vec_int(false, val, addr, idx, memop);
+}

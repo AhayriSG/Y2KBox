@@ -228,6 +228,8 @@ QEMU_ARG_NONNULL
 void tcg_gen_qemu_ld_chk_i128(TCGv_i128, TCGTemp *, TCGArg, MemOp, TCGType);
 QEMU_ARG_NONNULL
 void tcg_gen_qemu_st_chk_i128(TCGv_i128, TCGTemp *, TCGArg, MemOp, TCGType);
+void tcg_gen_qemu_ld_chk_v128(TCGv_vec, TCGTemp *, TCGArg, MemOp, TCGType);
+void tcg_gen_qemu_st_chk_v128(TCGv_vec, TCGTemp *, TCGArg, MemOp, TCGType);
 
 QEMU_ARG_NONNULL
 void tcg_gen_atomic_cmpxchg_chk_i128(TCGv_i128, TCGTemp *, TCGv_i128,
