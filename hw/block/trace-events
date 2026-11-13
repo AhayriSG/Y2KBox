@@ -72,20 +72,6 @@ vhost_user_blk_device_realize_out(void *vdev) "vdev %p"
 hd_geometry_lchs_guess(void *blk, int cyls, int heads, int secs) "blk %p LCHS %d %d %d"
 hd_geometry_guess(void *blk, uint32_t cyls, uint32_t heads, uint32_t secs, int trans) "blk %p CHS %u %u %u trans %d"
 
-# xen-block.c
-xen_block_realize(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
-xen_block_connect(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
-xen_block_disconnect(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
-xen_block_unrealize(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
-xen_block_size(const char *type, uint32_t disk, uint32_t partition, int64_t sectors) "%s d%up%u %"PRIi64
-xen_disk_realize(void) ""
-xen_disk_unrealize(void) ""
-xen_cdrom_realize(void) ""
-xen_cdrom_unrealize(void) ""
-xen_block_blockdev_add(char *str) "%s"
-xen_block_blockdev_del(const char *node_name) "%s"
-xen_block_device_create(unsigned int number) "%u"
-xen_block_device_destroy(unsigned int number) "%u"
 
 # m25p80.c
 m25p80_flash_erase(void *s, int offset, uint32_t len) "[%p] offset = 0x%"PRIx32", len = %u"

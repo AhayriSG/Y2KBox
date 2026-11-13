@@ -231,60 +231,6 @@ void colo_do_failover(void)
     }
 }
 
-void qmp_xen_set_replication(bool enable, bool primary,
-                             bool has_failover, bool failover,
-                             Error **errp)
-{
-    ReplicationMode mode = primary ?
-                           REPLICATION_MODE_PRIMARY :
-                           REPLICATION_MODE_SECONDARY;
-
-    if (has_failover && enable) {
-        error_setg(errp, "Parameter 'failover' is only for"
-                   " stopping replication");
-        return;
-    }
-
-    if (enable) {
-        replication_start_all(mode, errp);
-    } else {
-        if (!has_failover) {
-            failover = NULL;
-        }
-        replication_stop_all(failover, failover ? NULL : errp);
-    }
-}
-
-ReplicationStatus *qmp_query_xen_replication_status(Error **errp)
-{
-    Error *err = NULL;
-    ReplicationStatus *s = g_new0(ReplicationStatus, 1);
-
-    replication_get_error_all(&err);
-    if (err) {
-        s->error = true;
-        s->desc = g_strdup(error_get_pretty(err));
-    } else {
-        s->error = false;
-    }
-
-    error_free(err);
-    return s;
-}
-
-void qmp_xen_colo_do_checkpoint(Error **errp)
-{
-    Error *err = NULL;
-
-    replication_do_checkpoint_all(&err);
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
-    /* Notify all filters of all NIC to do checkpoint */
-    colo_notify_filters_event(COLO_EVENT_CHECKPOINT, errp);
-}
-
 COLOStatus *qmp_query_colo_status(Error **errp)
 {
     COLOStatus *s = g_new0(COLOStatus, 1);

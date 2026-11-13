@@ -28,7 +28,7 @@ DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
     "-machine [type=]name[,prop=value[,...]]\n"
     "                selects emulated machine ('-machine help' for list)\n"
     "                property accel=accel1[:accel2[:...]] selects accelerator\n"
-    "                supported accelerators are kvm, xen, hvf, nitro, nvmm, whpx, mshv or tcg (default: tcg)\n"
+    "                the only accelerator is tcg (default: tcg)\n"
     "                vmport=on|off|auto controls emulation of vmport (default: auto)\n"
     "                dump-guest-core=on|off include guest memory in a core dump (default=on)\n"
     "                mem-merge=on|off controls memory merge support (default: on)\n"
@@ -70,15 +70,15 @@ SRST
 
     ``accel=accels1[:accels2[:...]]``
         This is used to enable an accelerator. Depending on the target
-        architecture, kvm, xen, hvf, nitro, nvmm, whpx, mshv or tcg can be
+        architecture, tcg can be
         available. By default, tcg is used. If there is more than one
         accelerator specified, the next one is used if the previous one
         fails to initialize.
 
     ``vmport=on|off|auto``
         Enables emulation of VMWare IO port, for vmmouse etc. auto says
-        to select the value based on accel and i8042. For accel=xen or
-        i8042=off the default is off otherwise the default is on.
+        to select the value based on i8042. For i8042=off the default
+        is off otherwise the default is on.
 
     ``dump-guest-core=on|off``
         Include guest memory in a core dump. The default is on.
@@ -241,40 +241,18 @@ ERST
 
 DEF("accel", HAS_ARG, QEMU_OPTION_accel,
     "-accel [accel=]accelerator[,prop=value[,...]]\n"
-    "                select accelerator (kvm, xen, hvf, nitro, nvmm, whpx, mshv or tcg; use 'help' for a list)\n"
-    "                igd-passthru=on|off (enable Xen integrated Intel graphics passthrough, default=off)\n"
-    "                kernel-irqchip=on|off|split controls accelerated irqchip support (default=on)\n"
-    "                kvm-shadow-mem=size of KVM shadow MMU in bytes\n"
+    "                select accelerator (tcg; use 'help' for a list)\n"
     "                one-insn-per-tb=on|off (one guest instruction per TCG translation block)\n"
     "                split-wx=on|off (enable TCG split w^x mapping)\n"
     "                tb-size=n (TCG translation block cache size)\n"
-    "                dirty-ring-size=n (KVM dirty ring GFN count, default 0)\n"
-    "                eager-split-size=n (KVM Eager Page Split chunk size, default 0, disabled. ARM only)\n"
-    "                notify-vmexit=run|internal-error|disable,notify-window=n (enable notify VM exit and set notify window, x86 only)\n"
-    "                thread=single|multi (enable multi-threaded TCG)\n"
-    "                device=path (KVM device path, default /dev/kvm)\n", QEMU_ARCH_ALL)
+    "                thread=single|multi (enable multi-threaded TCG)\n", QEMU_ARCH_ALL)
 SRST
 ``-accel name[,prop=value[,...]]``
     This is used to enable an accelerator. Depending on the target
-    architecture, kvm, xen, hvf, nitro, nvmm, whpx, mshv or tcg can be available.
+    architecture, tcg can be available.
     By default, tcg is used. If there is more than one accelerator
     specified, the next one is used if the previous one fails to
     initialize.
-
-    ``igd-passthru=on|off``
-        When Xen is in use, this option controls whether Intel
-        integrated graphics devices can be passed through to the guest
-        (default=off)
-
-    ``kernel-irqchip=on|off|split``
-        Controls KVM in-kernel irqchip support. The default is full
-        acceleration of the interrupt controllers. On x86, split irqchip
-        reduces the kernel attack surface, at a performance cost for
-        non-MSI interrupts. Disabling the in-kernel irqchip completely
-        is not recommended except for debugging purposes.
-
-    ``kvm-shadow-mem=size``
-        Defines the size of the KVM shadow MMU.
 
     ``one-insn-per-tb=on|off``
         Makes the TCG accelerator put only one guest instruction into
@@ -298,51 +276,6 @@ SRST
         where both the back-end and front-ends support it and no
         incompatible TCG features have been enabled (e.g.
         icount/replay).
-
-    ``dirty-ring-size=n``
-        When the KVM accelerator is used, it controls the size of the per-vCPU
-        dirty page ring buffer (number of entries for each vCPU). It should
-        be a value that is power of two, and it should be 1024 or bigger (but
-        still less than the maximum value that the kernel supports).  4096
-        could be a good initial value if you have no idea which is the best.
-        Set this value to 0 to disable the feature.  By default, this feature
-        is disabled (dirty-ring-size=0).  When enabled, KVM will instead
-        record dirty pages in a bitmap.
-
-    ``eager-split-size=n``
-        KVM implements dirty page logging at the PAGE_SIZE granularity and
-        enabling dirty-logging on a huge-page requires breaking it into
-        PAGE_SIZE pages in the first place. KVM on ARM does this splitting
-        lazily by default. There are performance benefits in doing huge-page
-        split eagerly, especially in situations where TLBI costs associated
-        with break-before-make sequences are considerable and also if guest
-        workloads are read intensive. The size here specifies how many pages
-        to break at a time and needs to be a valid block size which is
-        1GiB/2MiB/4KiB, 32MiB/16KiB and 512MiB/64KiB for 4KiB/16KiB/64KiB
-        PAGE_SIZE respectively. Be wary of specifying a higher size as it will
-        have an impact on the memory. By default, this feature is disabled
-        (eager-split-size=0).
-
-    ``notify-vmexit=run|internal-error|disable,notify-window=n``
-        Enables or disables notify VM exit support on x86 host and specify
-        the corresponding notify window to trigger the VM exit if enabled.
-        ``run`` option enables the feature. It does nothing and continue
-        if the exit happens. ``internal-error`` option enables the feature.
-        It raises a internal error. ``disable`` option doesn't enable the feature.
-        This feature can mitigate the CPU stuck issue due to event windows don't
-        open up for a specified of time (i.e. notify-window).
-        Default: notify-vmexit=run,notify-window=0.
-
-    ``device=path``
-        Sets the path to the KVM device node. Defaults to ``/dev/kvm``. This
-        option can be used to pass the KVM device to use via a file descriptor
-        by setting the value to ``/dev/fdset/NN``.
-
-    ``hyperv=on|off|auto``
-        For the WHPX backend, determines whether to enable Hyper-V enlightenments.
-        On x86_64, Hyper-V enlightenments are on by default. On AArch64, they're off
-        by default.
-
 ERST
 
 DEF("smp", HAS_ARG, QEMU_OPTION_smp,
@@ -2559,7 +2492,7 @@ SRST
 ERST
 
 DEF("vga", HAS_ARG, QEMU_OPTION_vga,
-    "-vga [std|cirrus|vmware|qxl|xenfb|tcx|cg3|virtio|none]\n"
+    "-vga [std|cirrus|vmware|qxl|tcx|cg3|virtio|none]\n"
     "                select video card type\n", QEMU_ARCH_ALL)
 SRST
 ``-vga type``
@@ -5229,28 +5162,6 @@ SRST
 ``-enable-kvm``
     Enable KVM full virtualization support. This option is only
     available if KVM support is enabled when compiling.
-ERST
-
-DEF("xen-domid", HAS_ARG, QEMU_OPTION_xen_domid,
-    "-xen-domid id   specify xen guest domain id\n",
-    QEMU_ARCH_ARM | QEMU_ARCH_I386)
-DEF("xen-attach", 0, QEMU_OPTION_xen_attach,
-    "-xen-attach     attach to existing xen domain\n"
-    "                libxl will use this when starting QEMU\n",
-    QEMU_ARCH_ARM | QEMU_ARCH_I386)
-DEF("xen-domid-restrict", 0, QEMU_OPTION_xen_domid_restrict,
-    "-xen-domid-restrict     restrict set of available xen operations\n"
-    "                        to specified domain id. (Does not affect\n"
-    "                        xenpv machine type).\n",
-    QEMU_ARCH_ARM | QEMU_ARCH_I386)
-SRST
-``-xen-domid id``
-    Specify xen guest domain id (XEN only).
-
-``-xen-attach``
-    Attach to existing xen domain. libxl will use this when starting
-    QEMU (XEN only). Restrict set of available xen operations to
-    specified domain id (XEN only).
 ERST
 
 DEF("no-reboot", 0, QEMU_OPTION_no_reboot, \

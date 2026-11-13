@@ -83,7 +83,6 @@ static const char *const if_name[IF_COUNT] = {
     [IF_MTD] = "mtd",
     [IF_SD] = "sd",
     [IF_VIRTIO] = "virtio",
-    [IF_XEN] = "xen",
 };
 
 static int if_max_devs[IF_COUNT] = {
@@ -255,13 +254,13 @@ void drive_check_orphaned(void)
          * Ignore default drives, because we create certain default
          * drives unconditionally, then leave them unclaimed.  Not the
          * users fault.
-         * Ignore IF_VIRTIO or IF_XEN, because it gets desugared into
+         * Ignore IF_VIRTIO, because it gets desugared into
          * -device, so we can leave failing to -device.
          * Ignore IF_NONE, because leaving unclaimed IF_NONE remains
          * available for device_add is a feature.
          */
         if (dinfo->is_default || dinfo->type == IF_VIRTIO
-            || dinfo->type == IF_XEN || dinfo->type == IF_NONE) {
+            || dinfo->type == IF_NONE) {
             continue;
         }
         if (!blk_get_attached_dev(blk)) {
@@ -970,15 +969,6 @@ DriveInfo *drive_new(QemuOpts *all_opts, BlockInterfaceType block_default_type,
         qemu_opt_set(devopts, "driver", "virtio-blk", &error_abort);
         qemu_opt_set(devopts, "drive", qdict_get_str(bs_opts, "id"),
                      &error_abort);
-    } else if (type == IF_XEN) {
-        QemuOpts *devopts;
-        devopts = qemu_opts_create(qemu_find_opts("device"), NULL, 0,
-                                   &error_abort);
-        qemu_opt_set(devopts, "driver",
-                     (media == MEDIA_CDROM) ? "xen-cdrom" : "xen-disk",
-                     &error_abort);
-        qemu_opt_set(devopts, "drive", qdict_get_str(bs_opts, "id"),
-                     &error_abort);
     }
 
     filename = qemu_opt_get(legacy_opts, "file");
@@ -1024,7 +1014,6 @@ DriveInfo *drive_new(QemuOpts *all_opts, BlockInterfaceType block_default_type,
     switch(type) {
     case IF_IDE:
     case IF_SCSI:
-    case IF_XEN:
     case IF_NONE:
         dinfo->media_cd = media == MEDIA_CDROM;
         break;

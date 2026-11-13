@@ -49,14 +49,6 @@
 #include "qapi/error.h"
 #include "qapi/qapi-type-infos-machine.h"
 #include "qemu/error-report.h"
-#include "system/xen.h"
-#ifdef CONFIG_XEN
-#include <xen/hvm/hvm_info_table.h>
-#include "hw/xen/xen_pt.h"
-#include "hw/xen/xen_igd.h"
-#endif
-#include "hw/xen/xen-x86.h"
-#include "hw/xen/xen.h"
 #include "migration/global_state.h"
 #include "migration/misc.h"
 #include "system/runstate.h"
@@ -66,8 +58,6 @@
 #include "hw/uefi/var-service-api.h"
 #include "hw/i386/acpi-build.h"
 #include "target/i386/cpu.h"
-
-#define XEN_IOAPIC_NUM_PIRQS 128ULL
 
 static GlobalProperty pc_piix_compat_defaults[] = {
     { TYPE_RAMFB_DEVICE, "use-legacy-x86-rom", "true" },
@@ -90,18 +80,6 @@ static int pc_pci_slot_get_pirq(PCIDevice *pci_dev, int pci_intx)
     int slot_addend;
     slot_addend = PCI_SLOT(pci_dev->devfn) - 1;
     return (pci_intx + slot_addend) & 3;
-}
-
-static void piix_intx_routing_notifier_xen(PCIDevice *dev)
-{
-    int i;
-
-    /* Scan for updates to PCI link routes. */
-    for (i = 0; i < PIIX_NUM_PIRQS; i++) {
-        const PCIINTxRoute route = pci_device_route_intx_to_irq(dev, i);
-        const uint8_t v = route.mode == PCI_INTX_ENABLED ? route.irq : 0;
-        xen_set_pci_link_route(i, v);
-    }
 }
 
 /* PC hardware initialisation */
@@ -149,44 +127,37 @@ static void pc_init1(MachineState *machine, const char *pci_type)
      *    so legacy non-PAE guests can get as much memory as possible in
      *    the 32bit address space below 4G.
      *
-     *  - Note that Xen has its own ram setup code in xen_ram_init(),
-     *    called via xen_hvm_init_pc().
-     *
      * Examples:
      *    qemu -M pc-1.7 -m 4G    (old default)    -> 3584M low,  512M high
      *    qemu -M pc -m 4G        (new default)    -> 3072M low, 1024M high
      *    qemu -M pc,max-ram-below-4g=2G -m 4G     -> 2048M low, 2048M high
      *    qemu -M pc,max-ram-below-4g=4G -m 3968M  -> 3968M low (=4G-128M)
      */
-    if (xen_enabled()) {
-        xen_hvm_init_pc(pcms, &ram_memory);
-    } else {
-        ram_memory = machine->ram;
-        if (!pcms->max_ram_below_4g) {
-            pcms->max_ram_below_4g = 0xe0000000; /* default: 3.5G */
-        }
-        lowmem = pcms->max_ram_below_4g;
-        if (machine->ram_size >= pcms->max_ram_below_4g) {
-            if (pcmc->gigabyte_align) {
-                if (lowmem > 0xc0000000) {
-                    lowmem = 0xc0000000;
-                }
-                if (lowmem & (1 * GiB - 1)) {
-                    warn_report("Large machine and max_ram_below_4g "
-                                "(%" PRIu64 ") not a multiple of 1G; "
-                                "possible bad performance.",
-                                pcms->max_ram_below_4g);
-                }
+    ram_memory = machine->ram;
+    if (!pcms->max_ram_below_4g) {
+        pcms->max_ram_below_4g = 0xe0000000; /* default: 3.5G */
+    }
+    lowmem = pcms->max_ram_below_4g;
+    if (machine->ram_size >= pcms->max_ram_below_4g) {
+        if (pcmc->gigabyte_align) {
+            if (lowmem > 0xc0000000) {
+                lowmem = 0xc0000000;
+            }
+            if (lowmem & (1 * GiB - 1)) {
+                warn_report("Large machine and max_ram_below_4g "
+                            "(%" PRIu64 ") not a multiple of 1G; "
+                            "possible bad performance.",
+                            pcms->max_ram_below_4g);
             }
         }
+    }
 
-        if (machine->ram_size >= lowmem) {
-            x86ms->above_4g_mem_size = machine->ram_size - lowmem;
-            x86ms->below_4g_mem_size = lowmem;
-        } else {
-            x86ms->above_4g_mem_size = 0;
-            x86ms->below_4g_mem_size = machine->ram_size;
-        }
+    if (machine->ram_size >= lowmem) {
+        x86ms->above_4g_mem_size = machine->ram_size - lowmem;
+        x86ms->below_4g_mem_size = lowmem;
+    } else {
+        x86ms->above_4g_mem_size = 0;
+        x86ms->below_4g_mem_size = machine->ram_size;
     }
 
     pc_machine_init_sgx_epc(pcms);
@@ -219,26 +190,14 @@ static void pc_init1(MachineState *machine, const char *pci_type)
 
     pcms->pcibus = PCI_BUS(qdev_get_child_bus(DEVICE(phb), "pci.0"));
     pci_bus_map_irqs(pcms->pcibus,
-                     xen_enabled() ? xen_pci_slot_get_pirq
-                                   : pc_pci_slot_get_pirq);
+                     pc_pci_slot_get_pirq);
 
     hole64_size = object_property_get_uint(phb,
                                            PCI_HOST_PROP_PCI_HOLE64_SIZE,
                                            &error_abort);
 
     /* allocate ram and load rom/bios */
-    if (!xen_enabled()) {
-        pc_memory_init(pcms, system_memory, pci_memory, hole64_size);
-    } else {
-        assert(machine->ram_size == x86ms->below_4g_mem_size +
-                                    x86ms->above_4g_mem_size);
-
-        pc_system_flash_cleanup_unused(pcms);
-        if (machine->kernel_filename != NULL) {
-            /* For xen HVM direct kernel boot, load linux here */
-            xen_load_linux(pcms);
-        }
-    }
+    pc_memory_init(pcms, system_memory, pci_memory, hole64_size);
 
     gsi_state = pc_gsi_create(&x86ms->gsi, true);
 
@@ -263,19 +222,6 @@ static void pc_init1(MachineState *machine, const char *pci_type)
     }
     pci_realize_and_unref(pci_dev, pcms->pcibus, &error_fatal);
 
-    if (xen_enabled()) {
-        pci_device_set_intx_routing_notifier(
-                    pci_dev, piix_intx_routing_notifier_xen);
-
-        /*
-         * Xen supports additional interrupt routes from the PCI devices to
-         * the IOAPIC: the four pins of each PCI device on the bus are also
-         * connected to the IOAPIC directly.
-         * These additional routes can be discovered through ACPI.
-         */
-        pci_bus_irqs(pcms->pcibus, xen_intx_set_irq, pci_dev,
-                     XEN_IOAPIC_NUM_PIRQS);
-    }
 
     isa_bus = ISA_BUS(qdev_get_child_bus(DEVICE(pci_dev), "isa.0"));
     x86ms->rtc = ISA_DEVICE(object_resolve_path_component(OBJECT(pci_dev),
@@ -337,25 +283,6 @@ static void pc_set_south_bridge(Object *obj, int value, Error **errp)
 
     pcms->south_bridge = value;
 }
-
-#ifdef CONFIG_XEN
-static void pc_xen_hvm_init(MachineState *machine)
-{
-    PCMachineState *pcms = PC_MACHINE(machine);
-
-    if (!xen_enabled()) {
-        error_report("xenfv machine requires the xen accelerator");
-        exit(1);
-    }
-
-    pc_init1(machine, xen_igd_gfx_pt_enabled()
-                      ? TYPE_IGD_PASSTHROUGH_I440FX_PCI_DEVICE
-                      : TYPE_I440FX_PCI_DEVICE);
-
-    xen_igd_reserve_slot(pcms->pcibus);
-    pci_create_simple(pcms->pcibus, -1, "xen-platform");
-}
-#endif
 
 static void pc_i440fx_init(MachineState *machine)
 {
@@ -631,16 +558,3 @@ static void pc_i440fx_machine_4_1_options(MachineClass *m)
 
 DEFINE_I440FX_MACHINE(4, 1);
 
-#ifdef CONFIG_XEN
-static void xenfv_machine_4_2_options(MachineClass *m)
-{
-    pc_i440fx_machine_4_2_options(m);
-    m->desc = "Xen Fully-virtualized PC";
-    m->alias = "xenfv";
-    m->max_cpus = HVM_MAX_VCPUS;
-    m->default_machine_opts = "accel=xen,suppress-vmdesc=on";
-}
-
-DEFINE_SECURE_PC_MACHINE(xenfv_4_2, "xenfv-4.2", pc_xen_hvm_init,
-                         xenfv_machine_4_2_options);
-#endif

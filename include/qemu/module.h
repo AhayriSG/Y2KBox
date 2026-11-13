@@ -46,7 +46,6 @@ typedef enum {
     MODULE_INIT_TARGET_INFO,
     MODULE_INIT_QOM,
     MODULE_INIT_TRACE,
-    MODULE_INIT_XEN_BACKEND,
     MODULE_INIT_LIBQOS,
     MODULE_INIT_FUZZ_TARGET,
     MODULE_INIT_MAX
@@ -56,8 +55,6 @@ typedef enum {
 #define opts_init(function) module_init(function, MODULE_INIT_OPTS)
 #define type_init(function) module_init(function, MODULE_INIT_QOM)
 #define trace_init(function) module_init(function, MODULE_INIT_TRACE)
-#define xen_backend_init(function) module_init(function, \
-                                               MODULE_INIT_XEN_BACKEND)
 #define libqos_init(function) module_init(function, MODULE_INIT_LIBQOS)
 #define fuzz_target_init(function) module_init(function, \
                                                MODULE_INIT_FUZZ_TARGET)

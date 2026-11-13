@@ -170,7 +170,3 @@ config VMMOUSE
     bool
     depends on VMPORT
 
-config XEN_EMU
-    bool
-    default y
-    depends on KVM && I386

@@ -36,7 +36,6 @@
 #include "ui/pixel_ops.h"
 #include "ui/console.h"
 #include "qemu/timer.h"
-#include "hw/xen/xen.h"
 #include "migration/vmstate.h"
 #include "trace.h"
 
@@ -2269,7 +2268,6 @@ bool vga_common_init(VGACommonState *s, Object *obj, Error **errp)
         return false;
     }
     vmstate_register_ram(&s->vram, s->global_vmstate ? NULL : DEVICE(obj));
-    xen_register_framebuffer(&s->vram);
     s->vram_ptr = memory_region_get_ram_ptr(&s->vram);
     s->get_bpp = vga_get_bpp;
     s->get_params = vga_get_params;

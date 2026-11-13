@@ -30,7 +30,6 @@
 #include "hw/acpi/piix4.h"
 #include "system/runstate.h"
 #include "system/system.h"
-#include "system/xen.h"
 #include "qapi/error.h"
 #include "qemu/range.h"
 #include "hw/acpi/cpu.h"
@@ -486,9 +485,6 @@ static void piix4_pm_realize(PCIDevice *dev, Error **errp)
     s->machine_ready.notify = piix4_pm_machine_ready;
     qemu_add_machine_init_done_notifier(&s->machine_ready);
 
-    if (xen_enabled()) {
-        s->acpi_pci_hotplug.use_acpi_hotplug_bridge = false;
-    }
 
     piix4_acpi_system_hot_add_init(pci_address_space_io(dev),
                                    pci_get_bus(dev), s);

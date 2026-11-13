@@ -233,8 +233,6 @@ meson_options_help() {
   printf "%s\n" '  vvfat           vvfat image format support'
   printf "%s\n" '  werror          Treat warnings as errors'
   printf "%s\n" '  whpx            WHPX acceleration support'
-  printf "%s\n" '  xen             Xen backend support'
-  printf "%s\n" '  xen-pci-passthrough'
   printf "%s\n" '                  Xen PCI passthrough support'
   printf "%s\n" '  xkbcommon       xkbcommon support'
   printf "%s\n" '  zstd            zstd compression support'
@@ -649,10 +647,6 @@ _meson_option_parse() {
     --enable-whpx) printf "%s" -Dwhpx=enabled ;;
     --disable-whpx) printf "%s" -Dwhpx=disabled ;;
     --x86-version=*) quote_sh "-Dx86_version=$2" ;;
-    --enable-xen) printf "%s" -Dxen=enabled ;;
-    --disable-xen) printf "%s" -Dxen=disabled ;;
-    --enable-xen-pci-passthrough) printf "%s" -Dxen_pci_passthrough=enabled ;;
-    --disable-xen-pci-passthrough) printf "%s" -Dxen_pci_passthrough=disabled ;;
     --enable-xkbcommon) printf "%s" -Dxkbcommon=enabled ;;
     --disable-xkbcommon) printf "%s" -Dxkbcommon=disabled ;;
     --enable-zstd) printf "%s" -Dzstd=enabled ;;

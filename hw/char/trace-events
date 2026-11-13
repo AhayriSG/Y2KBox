@@ -125,13 +125,6 @@ stm32l4x5_usart_overrun_detected(uint8_t current, uint8_t received) "USART: Over
 stm32l4x5_usart_receiver_not_enabled(uint8_t ue_bit, uint8_t re_bit) "USART: Receiver not enabled, UE=0x%x, RE=0x%x"
 stm32l4x5_usart_update_params(int speed, uint8_t parity, int data, int stop) "USART: speed: %d, parity: %c, data bits: %d, stop bits: %d"
 
-# xen_console.c
-xen_console_connect(unsigned int idx, unsigned int ring_ref, unsigned int port, unsigned int limit) "idx %u ring_ref %u port %u limit %u"
-xen_console_disconnect(unsigned int idx) "idx %u"
-xen_console_unrealize(unsigned int idx) "idx %u"
-xen_console_realize(unsigned int idx, const char *chrdev) "idx %u chrdev %s"
-xen_console_device_create(unsigned int idx) "idx %u"
-xen_console_device_destroy(unsigned int idx) "idx %u"
 
 # stm32f2xx_usart.c
 stm32f2xx_usart_read(char *id, unsigned size, uint64_t ofs, uint64_t val) " %s size %d ofs 0x%02" PRIx64 " -> 0x%02" PRIx64

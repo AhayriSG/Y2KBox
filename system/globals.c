@@ -26,7 +26,6 @@
 #include "exec/cpu-common.h"
 #include "hw/display/vga.h"
 #include "hw/core/loader.h"
-#include "hw/xen/xen.h"
 #include "net/net.h"
 #include "system/cpus.h"
 #include "system/system.h"
@@ -67,11 +66,3 @@ int only_migratable; /* turn it off unless user states otherwise */
 QemuUUID qemu_uuid;
 bool qemu_uuid_set;
 
-uint32_t xen_domid;
-enum xen_mode xen_mode = XEN_DISABLED;
-bool xen_domid_restrict;
-bool xen_is_stubdomain;
-struct evtchn_backend_ops *xen_evtchn_ops;
-struct gnttab_backend_ops *xen_gnttab_ops;
-struct foreignmem_backend_ops *xen_foreignmem_ops;
-struct xenstore_backend_ops *xen_xenstore_ops;

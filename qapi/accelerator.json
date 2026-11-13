@@ -62,25 +62,13 @@
 # @Accelerator:
 #     Information about support for MSHV acceleration
 #
-# @hvf: Apple Hypervisor.framework
-#
-# @kvm: KVM
-#
-# @mshv: Hyper-V
-#
-# @nvmm: NetBSD NVMM
-#
 # @qtest: QTest (dummy accelerator)
 #
 # @tcg: TCG (dynamic translation)
 #
-# @whpx: Windows Hypervisor Platform
-#
-# @xen: Xen
-#
 # Since: 10.2
 ##
-{ 'enum': 'Accelerator', 'data': ['hvf', 'kvm', 'mshv', 'nvmm', 'qtest', 'tcg', 'whpx', 'xen'] }
+{ 'enum': 'Accelerator', 'data': ['qtest', 'tcg'] }
 
 ##
 # @AcceleratorInfo:

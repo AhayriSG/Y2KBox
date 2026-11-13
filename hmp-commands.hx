@@ -1842,32 +1842,6 @@ SRST
 ERST
 #endif
 
-    {
-        .name       = "xen-event-inject",
-        .args_type  = "port:i",
-        .params     = "port",
-        .help       = "inject event channel",
-        .cmd        = hmp_xen_event_inject,
-    },
-
-SRST
-``xen-event-inject`` *port*
-  Notify guest via event channel on port *port*.
-ERST
-
-
-    {
-        .name       = "xen-event-list",
-        .args_type  = "",
-        .params     = "",
-        .help       = "list event channel state",
-        .cmd        = hmp_xen_event_list,
-    },
-
-SRST
-``xen-event-list``
-  List event channels in the guest
-ERST
 
 HXCOMM *** MUST BE LAST ENTRY **
     {

@@ -39,7 +39,6 @@
 #include "hw/core/qdev.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/boards.h"
-#include "system/xen.h"
 #include "system/kvm.h"
 #include "system/tcg.h"
 #include "system/qtest.h"
@@ -58,7 +57,6 @@
 #include "system/dma.h"
 #include "system/hostmem.h"
 #include "system/hw_accel.h"
-#include "system/xen-mapcache.h"
 #include "trace.h"
 
 #ifdef CONFIG_FALLOCATE_PUNCH_HOLE
@@ -576,12 +574,6 @@ MemoryRegion *flatview_translate(FlatView *fv, hwaddr addr, hwaddr *xlat,
                                     is_write, true, &as, attrs);
     mr = section.mr;
 
-    if (xen_map_cache_enabled() &&
-        memory_access_is_direct(mr, is_write, attrs)) {
-        /* mapcache: Next page may be unmapped or in a different bucket/VA. */
-        hwaddr page = ((addr & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE) - addr;
-        *plen = MIN(page, *plen);
-    }
 
     return mr;
 }
@@ -1014,7 +1006,7 @@ void physical_memory_set_dirty_range(ram_addr_t start, ram_addr_t length,
     unsigned long idx, offset, base;
     int i;
 
-    if (!mask && !xen_enabled()) {
+    if (!mask) {
         return;
     }
 
@@ -1052,9 +1044,6 @@ void physical_memory_set_dirty_range(ram_addr_t start, ram_addr_t length,
         }
     }
 
-    if (xen_enabled()) {
-        xen_hvm_modified_memory(start, length);
-    }
 }
 
 /*
@@ -1271,9 +1260,6 @@ uint64_t physical_memory_set_dirty_lebitmap(unsigned long *bitmap,
             }
         }
 
-        if (xen_enabled()) {
-            xen_hvm_modified_memory(start, pages << TARGET_PAGE_BITS);
-        }
     } else {
         uint8_t clients = tcg_enabled() ? DIRTY_CLIENTS_ALL
                                         : DIRTY_CLIENTS_NOCODE;
@@ -2158,30 +2144,20 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
     new_block->offset = find_ram_offset(new_block->max_length);
 
     if (!new_block->host) {
-        if (xen_enabled()) {
-            xen_ram_alloc(new_block->offset, new_block->max_length,
-                          new_block->mr, &err);
-            if (err) {
-                error_propagate(errp, err);
-                qemu_mutex_unlock_ramlist();
-                return;
-            }
-        } else {
-            new_block->host = qemu_anon_ram_alloc(new_block->max_length,
-                                                  &new_block->mr->align,
-                                                  shared, noreserve);
-            if (!new_block->host) {
-                g_autofree char *size_s = size_to_str(new_block->max_length);
-                error_setg_errno(errp, errno,
-                                 "Cannot set up %s of guest memory '%s'",
-                                 size_s,
-                                 memory_region_name(new_block->mr));
-                qemu_mutex_unlock_ramlist();
-                return;
-            }
-            memory_try_enable_merging(new_block->host, new_block->max_length);
-            free_on_error = true;
+        new_block->host = qemu_anon_ram_alloc(new_block->max_length,
+                                              &new_block->mr->align,
+                                              shared, noreserve);
+        if (!new_block->host) {
+            g_autofree char *size_s = size_to_str(new_block->max_length);
+            error_setg_errno(errp, errno,
+                             "Cannot set up %s of guest memory '%s'",
+                             size_s,
+                             memory_region_name(new_block->mr));
+            qemu_mutex_unlock_ramlist();
+            return;
         }
+        memory_try_enable_merging(new_block->host, new_block->max_length);
+        free_on_error = true;
     }
 
     if (new_block->flags & RAM_GUEST_MEMFD_PRIVATE) {
@@ -2326,10 +2302,6 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, ram_addr_t max_size,
                           RAM_RESIZEABLE)) == 0);
     assert(max_size >= size);
 
-    if (xen_enabled()) {
-        error_setg(errp, "-mem-path not supported with Xen");
-        return NULL;
-    }
 
     if (kvm_enabled() && !kvm_has_sync_mmu()) {
         error_setg(errp,
@@ -2580,8 +2552,6 @@ static void reclaim_ramblock(RAMBlock *block)
 {
     if (block->flags & RAM_PREALLOC) {
         ;
-    } else if (xen_map_cache_enabled()) {
-        xen_invalidate_map_cache_entry(block->host);
 #if !defined(_WIN32) && !defined(EMSCRIPTEN)
     } else if (block->fd >= 0) {
         qemu_ram_munmap(block->fd, block->host, block->max_length);
@@ -2672,8 +2642,6 @@ void qemu_ram_remap(ram_addr_t addr)
             vaddr = ramblock_ptr(block, offset);
             if (block->flags & RAM_PREALLOC) {
                 ;
-            } else if (xen_enabled()) {
-                abort();
             } else {
                 if (ram_block_discard_range(block, offset, page_size) != 0) {
                     /*
@@ -2738,22 +2706,6 @@ static void *qemu_ram_ptr_length(RAMBlock *block, ram_addr_t addr,
         len = *size;
     }
 
-    if (xen_map_cache_enabled() && block->host == NULL) {
-        /* We need to check if the requested address is in the RAM
-         * because we don't want to map the entire memory in QEMU.
-         * In that case just map the requested area.
-         */
-        if (xen_mr_is_memory(block->mr)) {
-            return xen_map_cache(block->mr, block->offset + addr,
-                                 len, block->offset,
-                                 lock, lock, is_write);
-        }
-
-        block->host = xen_map_cache(block->mr, block->offset,
-                                    block->max_length,
-                                    block->offset,
-                                    1, lock, is_write);
-    }
 
     return ramblock_ptr(block, addr);
 }
@@ -2787,20 +2739,6 @@ RAMBlock *qemu_ram_block_from_host(void *ptr, bool round_offset,
     RAMBlock *block;
     uint8_t *host = ptr;
 
-    if (xen_map_cache_enabled()) {
-        ram_addr_t ram_addr;
-        RCU_READ_LOCK_GUARD();
-        ram_addr = xen_ram_addr_from_mapcache(ptr);
-        if (ram_addr == RAM_ADDR_INVALID) {
-            return NULL;
-        }
-
-        block = qemu_get_ram_block(ram_addr);
-        if (block) {
-            *offset = ram_addr - block->offset;
-        }
-        return block;
-    }
 
     RCU_READ_LOCK_GUARD();
     block = qatomic_rcu_read(&ram_list.mru_block);
@@ -3835,9 +3773,6 @@ void address_space_unmap(AddressSpace *as, void *buffer, hwaddr len,
         if (is_write) {
             invalidate_and_set_dirty(mr, addr1, access_len);
         }
-        if (xen_map_cache_enabled()) {
-            xen_invalidate_map_cache_entry(buffer);
-        }
         memory_region_unref(mr);
         return;
     }
@@ -3944,9 +3879,6 @@ void address_space_cache_destroy(MemoryRegionCache *cache)
         return;
     }
 
-    if (xen_map_cache_enabled()) {
-        xen_invalidate_map_cache_entry(cache->ptr);
-    }
     memory_region_unref(cache->mrs.mr);
     flatview_unref(cache->fv);
     cache->mrs.mr = NULL;

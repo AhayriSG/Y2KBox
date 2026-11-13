@@ -63,7 +63,6 @@
 #include "system/replay.h"
 #include "system/runstate.h"
 #include "system/system.h"
-#include "system/xen.h"
 #include "migration/colo.h"
 #include "qemu/bitmap.h"
 #include "net/announce.h"
@@ -2742,12 +2741,6 @@ qemu_loadvm_section_start_full(QEMUFile *f, uint8_t type, Error **errp)
     se->load_version_id = version_id;
     se->load_section_id = section_id;
 
-    /* Validate if it is a device's state */
-    if (xen_enabled() && qemu_savevm_se_iterable(se)) {
-        error_setg(errp, "loadvm: %s RAM loading not allowed on Xen", idstr);
-        return -EINVAL;
-    }
-
     if (trace_downtime) {
         start_ts = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
     }
@@ -3408,88 +3401,6 @@ bool save_snapshot(const char *name, bool overwrite, const char *vmstate,
 
     vm_resume(saved_state);
     return ret == 0;
-}
-
-void qmp_xen_save_devices_state(const char *filename, bool has_live, bool live,
-                                Error **errp)
-{
-    QEMUFile *f;
-    QIOChannelFile *ioc;
-    int saved_vm_running;
-    int ret;
-
-    if (!has_live) {
-        /* live default to true so old version of Xen tool stack can have a
-         * successful live migration */
-        live = true;
-    }
-
-    saved_vm_running = runstate_is_running();
-    vm_stop(RUN_STATE_SAVE_VM);
-    global_state_store_running();
-
-    ioc = qio_channel_file_new_path(filename, O_WRONLY | O_CREAT | O_TRUNC,
-                                    0660, errp);
-    if (!ioc) {
-        goto the_end;
-    }
-    qio_channel_set_name(QIO_CHANNEL(ioc), "migration-xen-save-state");
-    f = qemu_file_new_output(QIO_CHANNEL(ioc));
-    object_unref(OBJECT(ioc));
-    qemu_savevm_send_header(f);
-    ret = qemu_save_device_state(f, errp);
-    if (ret < 0 || qemu_fclose(f) < 0) {
-        if (*errp == NULL) {
-            error_setg(errp, "saving Xen device state failed");
-        }
-    } else {
-        /* libxl calls the QMP command "stop" before calling
-         * "xen-save-devices-state" and in case of migration failure, libxl
-         * would call "cont".
-         * So call bdrv_inactivate_all (release locks) here to let the other
-         * side of the migration take control of the images.
-         */
-        if (live && !saved_vm_running) {
-            migration_block_inactivate();
-        }
-    }
-
- the_end:
-    if (saved_vm_running) {
-        vm_start();
-    }
-}
-
-void qmp_xen_load_devices_state(const char *filename, Error **errp)
-{
-    ERRP_GUARD();
-    QEMUFile *f;
-    QIOChannelFile *ioc;
-    int ret;
-
-    /* Guest must be paused before loading the device state; the RAM state
-     * will already have been loaded by xc
-     */
-    if (runstate_is_running()) {
-        error_setg(errp, "Cannot update device state while vm is running");
-        return;
-    }
-    vm_stop(RUN_STATE_RESTORE_VM);
-
-    ioc = qio_channel_file_new_path(filename, O_RDONLY | O_BINARY, 0, errp);
-    if (!ioc) {
-        return;
-    }
-    qio_channel_set_name(QIO_CHANNEL(ioc), "migration-xen-load-state");
-    f = qemu_file_new_input(QIO_CHANNEL(ioc));
-    object_unref(OBJECT(ioc));
-
-    ret = qemu_loadvm_state(f, errp);
-    qemu_fclose(f);
-    if (ret < 0) {
-        error_prepend(errp, "loading Xen device state failed: ");
-    }
-    migration_incoming_state_destroy();
 }
 
 bool load_snapshot(const char *name, const char *vmstate,

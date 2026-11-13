@@ -13,7 +13,6 @@
 #include "monitor/hmp.h"
 #include "system/hw_accel.h"
 #include "system/kvm.h"
-#include "system/xen.h"
 #include "system/mshv.h"
 #include "system/address-spaces.h"
 #include "hw/core/qdev-properties.h"
@@ -22,24 +21,7 @@
 
 APICCommonClass *apic_get_class(Error **errp)
 {
-    const char *apic_type = "apic";
-
-    /* TODO: in-kernel irqchip for hvf */
-    if (kvm_enabled()) {
-        if (!kvm_irqchip_in_kernel()) {
-            error_setg(errp, "KVM does not support userspace APIC");
-            return NULL;
-        }
-        apic_type = "kvm-apic";
-    } else if (xen_enabled()) {
-        apic_type = "xen-apic";
-    } else if (whpx_irqchip_in_kernel()) {
-        apic_type = "whpx-apic";
-    } else if (mshv_enabled()) {
-        apic_type = "mshv-apic";
-    }
-
-    return APIC_COMMON_CLASS(object_class_by_name(apic_type));
+    return APIC_COMMON_CLASS(object_class_by_name("apic"));
 }
 
 void x86_cpu_apic_create(X86CPU *cpu, Error **errp)

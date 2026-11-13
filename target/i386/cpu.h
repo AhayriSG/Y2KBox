@@ -35,8 +35,6 @@
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "hw/hyperv/hvgdk_mini.h"
 
-#define XEN_NR_VIRQS 24
-
 #ifdef TARGET_X86_64
 #define I386_ELF_MACHINE  EM_X86_64
 #define ELF_MACHINE_UNAME "x86_64"
@@ -2301,23 +2299,6 @@ typedef struct CPUArchState {
     uint64_t tsc;
     void *xsave_buf;
     uint32_t xsave_buf_len;
-#if defined(CONFIG_KVM)
-    struct kvm_nested_state *nested_state;
-    MemoryRegion *xen_vcpu_info_mr;
-    void *xen_vcpu_info_hva;
-    uint64_t xen_vcpu_info_gpa;
-    uint64_t xen_vcpu_info_default_gpa;
-    uint64_t xen_vcpu_time_info_gpa;
-    uint64_t xen_vcpu_runstate_gpa;
-    uint8_t xen_vcpu_callback_vector;
-    bool xen_callback_asserted;
-    uint16_t xen_virq[XEN_NR_VIRQS];
-    uint64_t xen_singleshot_timer_ns;
-    QEMUTimer *xen_singleshot_timer;
-    uint64_t xen_periodic_timer_period;
-    QEMUTimer *xen_periodic_timer;
-    QemuMutex xen_timers_lock;
-#endif
 #if defined(CONFIG_MSHV)
     /* Shared register page */
     struct hv_vp_register_page *regs_page;
@@ -2547,7 +2528,6 @@ struct ArchCPU {
 
     int32_t hv_max_vps;
 
-    bool xen_vapic;
 };
 
 typedef struct X86CPUModel X86CPUModel;

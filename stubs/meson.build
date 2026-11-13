@@ -78,12 +78,10 @@ if have_system
   endif
   stub_ss.add(files('kvm.c'))
   stub_ss.add(files('win32-kbd-hook.c'))
-  stub_ss.add(files('xen-hw-stub.c'))
   stub_ss.add(files('qmp-arm-gic.c'))
   stub_ss.add(files('qmp-i386-rtc.c'))
   stub_ss.add(files('qmp-i386-sev.c'))
   stub_ss.add(files('qmp-i386-sgx.c'))
-  stub_ss.add(files('qmp-i386-xen.c'))
   stub_ss.add(files('qmp-cpu-arm.c'))
   stub_ss.add(files('qmp-cpu-i386.c'))
   stub_ss.add(files('qmp-cpu-loongarch.c'))

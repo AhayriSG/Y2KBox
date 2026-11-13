@@ -296,16 +296,6 @@ else
 endif
 accelerator_targets = { 'CONFIG_KVM': kvm_targets }
 
-if cpu == 'x86_64'
-  xen_targets = ['i386-softmmu', 'x86_64-softmmu']
-elif cpu == 'aarch64'
-  # i386 emulator provides xenpv machine type for multiple architectures
-  xen_targets = ['i386-softmmu', 'x86_64-softmmu', 'aarch64-softmmu']
-else
-  xen_targets = []
-endif
-accelerator_targets += { 'CONFIG_XEN': xen_targets }
-
 if cpu == 'aarch64'
   accelerator_targets += {
     'CONFIG_HVF': ['aarch64-softmmu'],
@@ -957,85 +947,6 @@ endif
 if 'CONFIG_MSHV' not in accelerators and get_option('mshv').enabled()
   error('mshv not available on this platform')
 endif
-
-xen = not_found
-if get_option('xen').enabled() or (get_option('xen').auto() and have_system)
-  xencontrol = dependency('xencontrol', required: false,
-                          method: 'pkg-config')
-  if xencontrol.found()
-    xen_pc = declare_dependency(version: xencontrol.version(),
-      dependencies: [
-        xencontrol,
-        # disabler: true makes xen_pc.found() return false if any is not found
-        dependency('xenstore', required: false,
-                   method: 'pkg-config',
-                   disabler: true),
-        dependency('xenforeignmemory', required: false,
-                   method: 'pkg-config',
-                   disabler: true),
-        dependency('xengnttab', required: false,
-                   method: 'pkg-config',
-                   disabler: true),
-        dependency('xenevtchn', required: false,
-                   method: 'pkg-config',
-                   disabler: true),
-        dependency('xendevicemodel', required: false,
-                   method: 'pkg-config',
-                   disabler: true),
-        # optional, no "disabler: true"
-        dependency('xentoolcore', required: false,
-                   method: 'pkg-config')])
-    if xen_pc.found()
-      xen = xen_pc
-    endif
-  endif
-  if not xen.found()
-    xen_tests = [ '4.11.0', '4.10.0', '4.9.0', '4.8.0', '4.7.1' ]
-    xen_libs = {
-      '4.11.0': [ 'xenstore', 'xenctrl', 'xendevicemodel', 'xenforeignmemory', 'xengnttab', 'xenevtchn', 'xentoolcore' ],
-      '4.10.0': [ 'xenstore', 'xenctrl', 'xendevicemodel', 'xenforeignmemory', 'xengnttab', 'xenevtchn', 'xentoolcore' ],
-      '4.9.0': [ 'xenstore', 'xenctrl', 'xendevicemodel', 'xenforeignmemory', 'xengnttab', 'xenevtchn' ],
-      '4.8.0': [ 'xenstore', 'xenctrl', 'xenforeignmemory', 'xengnttab', 'xenevtchn' ],
-      '4.7.1': [ 'xenstore', 'xenctrl', 'xenforeignmemory', 'xengnttab', 'xenevtchn' ],
-    }
-    xen_deps = {}
-    foreach ver: xen_tests
-      # cache the various library tests to avoid polluting the logs
-      xen_test_deps = []
-      foreach l: xen_libs[ver]
-        if l not in xen_deps
-          xen_deps += { l: cc.find_library(l, required: false) }
-        endif
-        xen_test_deps += xen_deps[l]
-      endforeach
-
-      # Use -D to pick just one of the test programs in scripts/xen-detect.c
-      xen_version = ver.split('.')
-      xen_ctrl_version = xen_version[0] + \
-        ('0' + xen_version[1]).substring(-2) + \
-        ('0' + xen_version[2]).substring(-2)
-      if cc.links(files('scripts/xen-detect.c'),
-                  args: '-DCONFIG_XEN_CTRL_INTERFACE_VERSION=' + xen_ctrl_version,
-                  dependencies: xen_test_deps)
-        xen = declare_dependency(version: ver, dependencies: xen_test_deps)
-        break
-      endif
-    endforeach
-  endif
-  if xen.found()
-    accelerators += 'CONFIG_XEN'
-  elif get_option('xen').enabled()
-    error('could not compile and link Xen test program')
-  endif
-endif
-have_xen_pci_passthrough = get_option('xen_pci_passthrough') \
-  .require(xen.found(),
-           error_message: 'Xen PCI passthrough requested but Xen not enabled') \
-  .require(host_os == 'linux',
-           error_message: 'Xen PCI passthrough not available on this platform') \
-  .require(cpu == 'x86_64',
-           error_message: 'Xen PCI passthrough not available on this platform') \
-  .allowed()
 
 ################
 # Dependencies #
@@ -2539,17 +2450,8 @@ config_host_data.set('CONFIG_X11', x11.found())
 config_host_data.set('CONFIG_DBUS_DISPLAY', dbus_display)
 config_host_data.set('CONFIG_CFI', get_option('cfi'))
 config_host_data.set('CONFIG_SELINUX', selinux.found())
-config_host_data.set('CONFIG_XEN_BACKEND', xen.found())
 config_host_data.set('CONFIG_LIBDW', libdw.found())
 config_host_data.set('CONFIG_IGVM', igvm.found())
-if xen.found()
-  # protect from xen.version() having less than three components
-  xen_version = xen.version().split('.') + ['0', '0']
-  xen_ctrl_version = xen_version[0] + \
-    ('0' + xen_version[1]).substring(-2) + \
-    ('0' + xen_version[2]).substring(-2)
-  config_host_data.set('CONFIG_XEN_CTRL_INTERFACE_VERSION', xen_ctrl_version)
-endif
 config_host_data.set('QEMU_VERSION', '"@0@"'.format(meson.project_version()))
 config_host_data.set('QEMU_VERSION_MAJOR', meson.project_version().split('.')[0])
 config_host_data.set('QEMU_VERSION_MINOR', meson.project_version().split('.')[1])
@@ -4826,11 +4728,6 @@ if have_system
   summary_info += {'WHPX support':      config_all_accel.has_key('CONFIG_WHPX')}
   summary_info += {'NVMM support':      config_all_accel.has_key('CONFIG_NVMM')}
   summary_info += {'MSHV support':      config_all_accel.has_key('CONFIG_MSHV')}
-  summary_info += {'Xen support':       xen.found()}
-  if xen.found()
-    summary_info += {'xen ctrl version':  xen.version()}
-  endif
-  summary_info += {'Xen emulation':     config_all_devices.has_key('CONFIG_XEN_EMU')}
 endif
 summary_info += {'TCG support':       config_all_accel.has_key('CONFIG_TCG')}
 if config_all_accel.has_key('CONFIG_TCG')

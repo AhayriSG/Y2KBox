@@ -47,7 +47,6 @@
 #include "system/runstate-action.h"
 #include "system/seccomp.h"
 #include "system/tcg.h"
-#include "system/xen.h"
 
 #include "qemu/error-report.h"
 #include "qemu/sockets.h"
@@ -61,7 +60,6 @@
 #include "hw/display/vga.h"
 #include "hw/firmware/smbios.h"
 #include "hw/acpi/acpi.h"
-#include "hw/xen/xen.h"
 #include "hw/core/loader.h"
 #include "monitor/qdev.h"
 #include "net/net.h"
@@ -210,7 +208,6 @@ static const struct {
     const char *driver;
     int *flag;
 } default_list[] = {
-    { .driver = "xen-console",          .flag = &default_serial    },
     { .driver = "isa-serial",           .flag = &default_serial    },
     { .driver = "isa-parallel",         .flag = &default_parallel  },
     { .driver = "isa-fdc",              .flag = &default_floppy    },
@@ -991,12 +988,6 @@ static const VGAInterfaceInfo vga_interfaces[VGA_TYPE_MAX] = {
         .name = "CG3 framebuffer",
         .class_names = { "cgthree" },
     },
-#ifdef CONFIG_XEN_BACKEND
-    [VGA_XENFB] = {
-        .opt_name = "xenfb",
-        .name = "Xen paravirtualized framebuffer",
-    },
-#endif
 };
 
 static bool vga_interface_available(VGAInterfaceType t)
@@ -1762,13 +1753,6 @@ static void qemu_apply_legacy_machine_options(QDict *qdict)
     if (value) {
         accelerators = g_strdup(value);
         qdict_del(qdict, "accel");
-    }
-
-    value = qdict_get_try_str(qdict, "igd-passthru");
-    if (value) {
-        object_register_sugar_prop(ACCEL_CLASS_NAME("xen"), "igd-passthru", value,
-                                   false);
-        qdict_del(qdict, "igd-passthru");
     }
 
     value = qdict_get_try_str(qdict, "kvm-shadow-mem");
@@ -3592,27 +3576,6 @@ void qemu_init(int argc, char **argv)
                 break;
             case QEMU_OPTION_nodefaults:
                 has_defaults = 0;
-                break;
-            case QEMU_OPTION_xen_domid:
-                if (!(accel_find("xen")) && !(accel_find("kvm"))) {
-                    error_report("Option not supported for this target");
-                    exit(1);
-                }
-                xen_domid = atoi(optarg);
-                break;
-            case QEMU_OPTION_xen_attach:
-                if (!(accel_find("xen"))) {
-                    error_report("Option not supported for this target");
-                    exit(1);
-                }
-                xen_mode = XEN_ATTACH;
-                break;
-            case QEMU_OPTION_xen_domid_restrict:
-                if (!(accel_find("xen"))) {
-                    error_report("Option not supported for this target");
-                    exit(1);
-                }
-                xen_domid_restrict = true;
                 break;
             case QEMU_OPTION_trace:
                 trace_opt_parse(optarg);

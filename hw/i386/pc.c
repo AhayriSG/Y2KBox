@@ -41,11 +41,9 @@
 #include "hw/input/i8042.h"
 #include "hw/audio/pcspk.h"
 #include "system/system.h"
-#include "system/xen.h"
 #include "system/reset.h"
 #include "kvm/kvm_i386.h"
 #include "kvm/tdx.h"
-#include "hw/xen/xen.h"
 #include "qapi/qapi-type-infos-common.h"
 #include "qobject/qlist.h"
 #include "qemu/error-report.h"
@@ -59,10 +57,6 @@
 #include "hw/net/ne2000-isa.h"
 #include "hw/virtio/virtio-iommu.h"
 #include "hw/virtio/virtio-md-pci.h"
-#include "hw/i386/kvm/xen_overlay.h"
-#include "hw/i386/kvm/xen_evtchn.h"
-#include "hw/i386/kvm/xen_gnttab.h"
-#include "hw/i386/kvm/xen_xenstore.h"
 #include "hw/mem/memory-device.h"
 #include "hw/mem/sp-mem.h"
 #include "e820_memory_layout.h"
@@ -70,10 +64,6 @@
 #include "sev.h"
 #include CONFIG_DEVICES
 
-#ifdef CONFIG_XEN_EMU
-#include "hw/xen/xen-legacy-backend.h"
-#include "hw/xen/xen-bus.h"
-#endif
 
 GlobalProperty pc_compat_11_1[] = {};
 const size_t pc_compat_11_1_len = G_N_ELEMENTS(pc_compat_11_1);
@@ -562,28 +552,6 @@ void pc_pci_as_mapping_init(MemoryRegion *system_memory,
     /* Set to lower priority than RAM */
     memory_region_add_subregion_overlap(system_memory, 0x0,
                                         pci_address_space, -1);
-}
-
-void xen_load_linux(PCMachineState *pcms)
-{
-    int i;
-    FWCfgState *fw_cfg;
-    X86MachineState *x86ms = X86_MACHINE(pcms);
-
-    assert(MACHINE(pcms)->kernel_filename != NULL);
-
-    fw_cfg = fw_cfg_init_io_dma(FW_CFG_IO_BASE, &address_space_memory);
-    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, x86ms->boot_cpus);
-    rom_set_fw(fw_cfg);
-
-    x86_load_linux(x86ms, fw_cfg, PC_FW_DATA);
-    for (i = 0; i < nb_option_roms; i++) {
-        assert(!strcmp(option_rom[i].name, "linuxboot_dma.bin") ||
-               !strcmp(option_rom[i].name, "pvh.bin") ||
-               !strcmp(option_rom[i].name, "multiboot_dma.bin"));
-        rom_add_option(option_rom[i].name, option_rom[i].bootindex);
-    }
-    x86ms->fw_cfg = fw_cfg;
 }
 
 #define PC_ROM_MIN_VGA     0xc0000
@@ -1099,25 +1067,11 @@ void pc_basic_device_init(struct PCMachineState *pcms,
 
     object_property_set_alias(OBJECT(pcms), "rtc-time", OBJECT(rtc_state));
 
-#ifdef CONFIG_XEN_EMU
-    if (xen_mode == XEN_EMULATE) {
-        xen_overlay_create();
-        xen_evtchn_create(IOAPIC_NUM_PINS, gsi);
-        xen_gnttab_create();
-        xen_xenstore_create();
-        if (pcms->pcibus) {
-            pci_create_simple(pcms->pcibus, -1, "xen-platform");
-        }
-        xen_bus_init();
-    }
-#endif
-
     qemu_register_boot_set(pc_boot_set, pcms);
     set_boot_dev(pcms, MC146818_RTC(rtc_state),
                  MACHINE(pcms)->boot_config.order, &error_fatal);
 
-    if (!xen_enabled() &&
-        (x86ms->pit == ON_OFF_AUTO_AUTO || x86ms->pit == ON_OFF_AUTO_ON)) {
+    if (x86ms->pit == ON_OFF_AUTO_AUTO || x86ms->pit == ON_OFF_AUTO_ON) {
         if (kvm_pit_in_kernel()) {
             pit = kvm_pit_init(isa_bus, 0x40);
         } else {
@@ -1133,7 +1087,7 @@ void pc_basic_device_init(struct PCMachineState *pcms,
     }
 
     if (pcms->vmport == ON_OFF_AUTO_AUTO) {
-        pcms->vmport = (xen_enabled() || !pcms->i8042_enabled)
+        pcms->vmport = !pcms->i8042_enabled
             ? ON_OFF_AUTO_OFF : ON_OFF_AUTO_ON;
     }
 
@@ -1167,8 +1121,6 @@ void pc_i8259_create(ISABus *isa_bus, qemu_irq *i8259_irqs)
 
     if (kvm_pic_in_kernel()) {
         i8259 = kvm_i8259_init(isa_bus);
-    } else if (xen_enabled()) {
-        i8259 = xen_i8259_init();
     } else {
         i8259 = i8259_init(isa_bus, x86_allocate_cpu_irq());
     }

@@ -28,7 +28,6 @@
 #include "system/system.h"
 #include "system/reset.h"
 #include "system/runstate.h"
-#include "system/xen.h"
 #include "system/qtest.h"
 #include "hw/pci/pci_bridge.h"
 #include "hw/mem/nvdimm.h"

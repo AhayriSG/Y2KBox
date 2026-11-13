@@ -153,8 +153,6 @@ void hmp_virtio_status(MonitorHMP *hmp, const QDict *qdict);
 void hmp_virtio_queue_status(MonitorHMP *hmp, const QDict *qdict);
 void hmp_vhost_queue_status(MonitorHMP *hmp, const QDict *qdict);
 void hmp_virtio_queue_element(MonitorHMP *hmp, const QDict *qdict);
-void hmp_xen_event_inject(MonitorHMP *hmp, const QDict *qdict);
-void hmp_xen_event_list(MonitorHMP *hmp, const QDict *qdict);
 void hmp_rocker(MonitorHMP *hmp, const QDict *qdict);
 void hmp_rocker_ports(MonitorHMP *hmp, const QDict *qdict);
 void hmp_rocker_of_dpa_flows(MonitorHMP *hmp, const QDict *qdict);
