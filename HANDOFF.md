@@ -1,0 +1,186 @@
+# Y2KBox handoff (read this first)
+
+Last updated: 2026-11-13. Branch `xp-fork` (== `main` in the Y2KBox repo).
+Base commit: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
+
+## 1. Project aim (non-negotiable constraints from the owner)
+
+* **Only Windows XP 32-bit guests.** Not 64-bit XP, not Vista+, not other OSes.
+  Target binary: `i386-softmmu` only.
+* **Emulation, not virtualization.** TCG/MTTCG only. No KVM, WHPX, HVF, NVMM,
+  MSHV, Xen, Hyper-V, VT-d/AMD-Vi, SEV/SGX/TDX, VFIO. Do not depend on any host
+  virtualization stack.
+* **Hosts: x86-64 only, x86-64-v3 minimum** (AVX2, BMI1/2, FMA, F16C, LZCNT,
+  MOVBE, POPCNT). Owner is fine excluding older CPUs. v4 was considered and
+  rejected for now (see section 4). AVX-512 stays runtime-detected.
+* **Performance is the point:** acceptable SSE2 speed under TCG/MTTCG.
+* **3D: VBoxVGA** (VirtualBox Guest Additions XPDM driver + host 3D service).
+  Owner explicitly rejected qemu-3dfx (per-game guest wrappers) and says
+  virglrenderer/viogpu3d/SoftGPU/Wine9x are not mature enough for XP.
+* **Fixed machine, no user-facing QEMU flags** (-smp, -cpu, -m, ...):
+  - vCPU/thread count = max host threads (cap to what XP supports, see 6).
+  - RAM: user picks in a GUI, **max 3.5 GB**; everything below 4 GB, so no
+    above-4G RAM, no 64-bit PCI hole logic.
+  - Later (NOT now): own executable + simple **wxWidgets GUI** asking for: a
+    qemu-img-created `.qcow2` disk, RAM size (<=3.5 GB), floppy image, CD/ISO.
+* Remove unrelated QEMU code freely, as long as XP-32 / TCG still works.
+
+## 2. What is DONE (commits on `xp-fork`, oldest first)
+
+1. Remove `tests/`.   2. Remove `docs/`.
+3. Remove all non-x86 targets, boards, linux-user/bsd-user (`xp/strip/02-*.sh`).
+4. i440FX `pc` machine only (`default.mak` disables q35, microvm, isapc, nitro,
+   Xen-emu, SEV/SGX/TDX, VT-d, AMD-Vi, OVMF).
+5. Full TCG: remove KVM/HVF/WHPX/NVMM/MSHV/Nitro accelerators, Xen, Hyper-V
+   devices; options default to disabled (`xp/strip/03-*.sh`).
+6. x86-64 hosts only, v3 baseline: removed aarch64/loongarch64/ppc64/riscv64/
+   s390x/sparc64 TCG backends + TCI; `x86_version` default 3; startup check
+   exits with a message on non-v3 CPUs; v3 features are compile-time constants in
+   `tcg/x86_64`; fixed upstream typo (CPUID leaf 0x8000000 -> 0x80000000)
+   (`xp/strip/04-*.sh`).
+7. Remove Xen completely: stubs, headers, all call sites, QAPI/HMP/CLI
+   (`xp/strip/05-remove-xen.py`).
+8. SSE2 microbenchmark `xp/bench/` + `XPQEMU_NO_AVX512=1` env switch for A/B.
+
+Verified after each step: fresh `configure` + full build OK; `-accel help` lists
+only tcg; SeaBIOS boots under TCG with `-smp 2`. **XP itself has NOT been booted
+yet.** Binary ~60 MB; source tree ~88 MB (from 171 MB); build graph 1930 -> 1716.
+
+## 3. How to build / verify
+
+    sudo apt install libfdt-dev libslirp-dev nasm   # plus glib/pixman dev, python3
+    pip install meson ninja tomli
+    # subprojects/keycodemapdb: if gitlab.com is blocked, clone
+    #   https://github.com/qemu/keycodemapdb at the rev in its .wrap file
+    mkdir build && cd build
+    ../configure --target-list=i386-softmmu --disable-tools --disable-guest-agent --disable-werror
+    ninja qemu-system-i386        # ~8-10 min on 2 cores
+    ./qemu-system-i386 -accel help                # expect: tcg only
+    ./qemu-system-i386 -L pc-bios -machine pc -accel tcg -m 64 -smp 2 -display none \
+      -monitor none -serial none -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d
+      # expect SeaBIOS banner, "Found 2 cpu(s)", "Booting from ..."
+
+Strip scripts are in `xp/strip/` (reproducible; `05` is not idempotent - `git
+checkout` the touched files before re-running). Dev gotchas: the sandbox shell
+was dash (use `bash` scripts), commands time out at 300 s (run ninja with
+`setsid nohup ... &` and poll), always do a FRESH configure after changing
+meson options (existing build dirs keep old option values).
+
+## 4. Key findings (evidence, not guesses)
+
+* **AVX-512 gives nothing for SSE2 guests**: 300M-iteration loop, reg-only
+  3.13 s (on) vs 3.09 s (masked); with memory ops 8.11 s vs 8.14 s. The x86 TCG
+  backend already has runtime-gated AVX-512 paths (vpternlog, 64-bit sar/rotate,
+  min/max...), so v4 hosts benefit without v4 being mandatory. Stay on v3.
+* **SSE2 register ops are already inline TCG vector ops** (add_vec, mul_vec,
+  xor_vec, cmp_vec, shri_vec...). But: (a) every op is ld_vec from `env`, op,
+  st_vec to `env` (XMM regs are not TCG globals); (b) **PSHUFD is an out-of-line
+  helper** (`pshufd_xmm`); (c) **guest 128-bit loads are slow**.
+* **128-bit load hotspot (diagnosed):** single-op microbenchmarks (200M iters):
+  baseline 0.95 s, aligned store 0.95 s, aligned load 2.01 s, unaligned load
+  1.97 s, `paddd xmm,[mem]` 2.03 s. Loads cost ~5 ns extra. Cause: the XP guest
+  CPU has no AVX, so `gen_ldo_env_A0` (target/i386/tcg/translate.c:2159) uses
+  `MO_ATOM_IFALIGN_PAIR`; the backend then loads into an integer register PAIR
+  (`qemu_ld2_i128`), the frontend stores it to env as two 64-bit stores, and the
+  next `ld_vec` reads 128 bits back -> **store-forwarding stall** (~15-20 cycles).
+  Stores are fine. TCG has no vector-typed guest memory op.
+
+## 5. IN PROGRESS: `qemu_ld_vec` / `qemu_st_vec` (128-bit, little-endian)
+
+Goal: load guest memory straight into an XMM host register, store as one 128-bit
+`st_vec` to env. Design worked out; **nothing of this is written yet**. Plan:
+
+1. `include/tcg/tcg-opc.h` (near line 125-145, qemu_ld2/st2 defs): add
+   `DEF(qemu_ld_vec,1,1,1, CALL_CLOBBER|SIDE_EFFECTS|VECTOR)` and
+   `DEF(qemu_st_vec,0,2,1, same)`.
+2. `tcg/tcg.c`: in `tcg_op_supported` (~2414-2422, next to ld_vec/st_vec) return
+   `type == TCG_TYPE_V128 && has_type`; add the ops to the dump switch (~2945) so
+   memop prints; add `bool is_vec; TCGReg vec_reg;` to `TCGLabelQemuLdst` (~l.100).
+   Vector-flagged ops fall to the generic `tcg_out_vec_op` dispatch (~5827).
+3. `tcg/tcg-op-ldst.c`: add `tcg_gen_qemu_ld_vec_int/st_vec_int` modeled on
+   `tcg_gen_qemu_ld_i128_int` (~402-470): `check_max_alignment`, `tcg_gen_req_mo`,
+   serial-mode atomicity reduction, `make_memop_idx`, `tci_extend_addr`, then
+   `tcg_gen_op3(INDEX_op_qemu_ld_vec, ...)`. Public wrappers in
+   `include/tcg/tcg-op-mem.h` follow the `tcg_gen_qemu_ld_i128(.., TCGv_va ..)`
+   -> `tcg_gen_qemu_ld_chk_i128(.., tcgv_va_temp(a), .., TCG_TYPE_VA)` pattern.
+4. `tcg/x86_64/tcg-target-con-set.h`: add `C_O1_I1(x, L)` and `C_O0_I2(x, L)`.
+   `tcg_target_op_def` (~3913): map the new ops. `tcg_out_vec_op` (~3585, near the
+   ld_vec case ~3815): call new `tgen_qemu_ld_vec/st_vec`.
+5. Backend fast path: reuse `prepare_host_addr` (existing i128 code ~2100-2216);
+   emit `VMOVDQA` if memop align >= 16 else `VMOVDQU` straight to/from the vector
+   reg (keep the existing runtime path when atom == MO_128 and unaligned without
+   ATOMIC_VMOVDQU). Slow path: set label type I128; for loads use
+   datalo=RAX/datahi=RDX, and after `tcg_out_ld_helper_ret` call
+   `tcg_out_pair_to_vec(s, TCG_TYPE_I64, vec_reg, RAX, RDX)` (helpers at ~1828/1840)
+   before jumping back; for stores `tcg_out_vec_to_pair` into two GPRs that differ
+   from `addr_reg` before `tcg_out_st_helper_args`.
+6. Frontend: rewrite `gen_ldo_env_A0`/`gen_sto_env_A0` (translate.c:2159/2171;
+   callers emit.c.inc:213, 465, 4651) to use a V128 temp + `tcg_gen_st_vec`/
+   `tcg_gen_ld_vec`.
+7. **Test before trusting:** a boot-sector test (like `xp/bench/sse2.asm`) that does
+   movdqu/movdqa at offsets 0..31, across a 4 KB page boundary, to/from VGA text
+   memory 0xB8000 (MMIO slow path), a misaligned `movdqa` raising #GP, and
+   compares with integer loads. Then rerun the benchmark (expect memory-op cost to
+   drop to ~register-op cost). Keep a copy of the previous binary for A/B.
+
+## 6. TODO after that (priority order)
+
+1. Inline PSHUFD/PSHUFLW/PSHUFHW/PUNPCK*/PACK*/SHUFPS (x86 backend already has
+   target-specific vec ops: x86_shufps, punpckl/h, psrldq, blend in
+   `tcg-target-opc.h.inc`). Consider keeping hot XMM regs in host regs.
+2. **Fixed machine config**: drop `-smp/-cpu/-m/-machine` choices; one XP CPU model
+   (candidate: Core 2/Penryn-class, SSE up to 4.1, decide after testing XP);
+   vCPUs = host threads. **Check the XP limit before capping**: my understanding
+   (unverified) is XP Pro licenses 2 *sockets* and 32-bit Windows tops out at 32
+   logical CPUs, so expose e.g. 2 sockets x N cores x 1 thread, MTTCG on.
+   RAM <= 0xE0000000, below-4G only: simplify `pc_memory_init` (remove above-4G,
+   hole64, max_ram_below_4g paths).
+3. Remove remaining virt leftovers: IOMMU (38 files reference it), SEV/confidential
+   (25), SGX (20), TDX, VFIO (17), unbuilt machine files (pc_q35.c, microvm*.c,
+   isapc.c, nitro_enclave.c), all `kvm_enabled()` call sites + `kvm_i386.h`,
+   `include/system/kvm*.h`, `hw/i386/kvm/clock.h`. Same technique as Xen: script
+   with brace-matching helpers (`xp/strip/05-remove-xen.py`), fix, fresh build.
+4. Prune devices (439 remain) and the ~19 versioned pc-i440fx machine types; keep:
+   i440fx, IDE (PIIX), a NIC XP has drivers for (rtl8139/e1000/pcnet), AC97/SB16,
+   PS/2, USB UHCI, ACPI, floppy, CD-ROM, qcow2/raw, VGA/VBE. Drop COLO, most of
+   migration (keep savevm snapshots), vhost, virtio*, etc.
+7. Boot an XP SP3 install end to end; then benchmark real workloads.
+8. Delete dead v3 fallback branches in `tcg/x86_64/tcg-target.c.inc` (already
+   compiled out via constants).
+9. **VBoxVGA + 3D** (big): see section 7.
+10. wxWidgets launcher (later, not now).
+
+## 7. VBoxVGA / 3D research notes
+
+* 86Box PR #6183 ("Add Initial Support for VBoxVGA Emulation") extends the Bochs
+  VBE device; it is early/stalled, shows no 3D, XP BSODs without one register; it
+  reports Guest Additions < 4.0.0 only (3.2.28 best) because of 86Box's missing
+  SSE (not a VBoxVGA limit - QEMU TCG has SSE2).
+* **Licensing:** VirtualBox **7.x is GPL-3.0-only - do not copy** into this
+  GPLv2 tree. The **5.2.x / 6.1.x** headers checked (DevVGA.cpp, DevVGA_VBVA.cpp,
+  VMMDev.cpp, crservice.cpp) say **GPL version 2** (plus MIT for the Bellard VGA
+  core). Audit every file's header before porting; not legal advice.
+* Official mirror https://github.com/VirtualBox/virtualbox has tags v5.2.2, v6.0.x,
+  v6.1.x, v7.x. **The Chromium-based 3D host service (`HostServices/SharedOpenGL`,
+  `GuestHost/OpenGL`) exists in v5.2.2 but not in v6.1.4**. XPDM display driver is
+  in `src/VBox/Additions/WINNT/Graphics/Video/{disp,mp}/xpdm`; it is 2D/VBVA/VHWA;
+  3D goes through the Chromium path (HGCM via VMMDev, PCI 80ee:cafe).
+  Use sparse + blobless clone (`git clone --filter=blob:none --no-checkout
+  --depth 1 --branch v5.2.2 ...`; never `git grep` on a blobless clone - it
+  downloads everything and times out).
+* Needed pieces: VBoxVGA (VBE dispi + HGSMI + VBVA, see `DevVGA_VBVA.cpp`, `HGSMI/`),
+  VMMDev + HGCM, GL stream receiver/replay (crserver). Open questions: Direct3D for
+  XP guests (vs OpenGL only), which GA version to target (plan: 5.2.x, with 3.2.28
+  as the bring-up baseline).
+
+## 8. Publishing note
+
+The owner's GitHub repo is https://github.com/AhayriSG/Y2KBox (initial commit
+only). The assistant that wrote this had no GitHub write access, so the work was
+delivered as `y2kbox.bundle` (branch `xp-fork`, requires upstream commit 9d7d057):
+
+    git init Y2KBox && cd Y2KBox
+    git fetch --depth 1 https://github.com/qemu/qemu.git 9d7d057a558b9a1c232cea390b4481dd20d9c9ce
+    git fetch /path/to/y2kbox.bundle xp-fork:main && git checkout main
+    git remote add origin https://github.com/AhayriSG/Y2KBox.git
+    git push --force origin main     # replaces the repo's lone "Initial commit"
