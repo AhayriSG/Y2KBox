@@ -19,7 +19,6 @@ system_ss.add(when: 'CONFIG_SERIAL_PCI_MULTI', if_true: files('serial-pci-multi.
 system_ss.add(when: 'CONFIG_SHAKTI_UART', if_true: files('shakti_uart.c'))
 system_ss.add(when: 'CONFIG_VIRTIO', if_true: files('virtio-serial-bus.c'))
 system_ss.add(when: 'CONFIG_VIRTIO_SERIAL', if_true: files('virtio-console.c'))
-system_ss.add(when: 'CONFIG_XEN_BUS', if_true: files('xen_console.c'))
 system_ss.add(when: 'CONFIG_XILINX', if_true: files('xilinx_uartlite.c'))
 system_ss.add(when: 'CONFIG_DIVA_GSP', if_true: files('diva-gsp.c'))
 

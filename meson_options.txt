@@ -73,19 +73,19 @@ option('malloc_trim', type : 'feature', value : 'auto',
 option('malloc', type : 'combo', choices : ['system', 'tcmalloc', 'jemalloc'],
        value: 'system', description: 'choose memory allocator to use')
 
-option('kvm', type: 'feature', value: 'auto',
+option('kvm', type: 'feature', value: 'disabled',
        description: 'KVM acceleration support')
-option('mshv', type: 'feature', value: 'auto',
+option('mshv', type: 'feature', value: 'disabled',
        description: 'MSHV acceleration support')
-option('whpx', type: 'feature', value: 'auto',
+option('whpx', type: 'feature', value: 'disabled',
        description: 'WHPX acceleration support')
-option('hvf', type: 'feature', value: 'auto',
+option('hvf', type: 'feature', value: 'disabled',
        description: 'HVF acceleration support')
-option('nitro', type: 'feature', value: 'auto',
+option('nitro', type: 'feature', value: 'disabled',
        description: 'Nitro acceleration support')
-option('nvmm', type: 'feature', value: 'auto',
+option('nvmm', type: 'feature', value: 'disabled',
        description: 'NVMM acceleration support')
-option('xen', type: 'feature', value: 'auto',
+option('xen', type: 'feature', value: 'disabled',
        description: 'Xen backend support')
 option('xen_pci_passthrough', type: 'feature', value: 'auto',
        description: 'Xen PCI passthrough support')
@@ -164,7 +164,7 @@ option('curl', type : 'feature', value : 'auto',
        description: 'CURL block device driver')
 option('gio', type : 'feature', value : 'auto',
        description: 'use libgio for D-Bus support')
-option('hv_balloon', type : 'feature', value : 'auto',
+option('hv_balloon', type : 'feature', value : 'disabled',
        description: 'hv-balloon driver (requires Glib 2.68+ GTree API)')
 option('libdw', type : 'feature', value : 'auto',
        description: 'debuginfo support')

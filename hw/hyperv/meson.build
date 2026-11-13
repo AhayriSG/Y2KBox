@@ -1,6 +1,2 @@
-system_ss.add(when: 'CONFIG_HYPERV', if_true: files('hyperv.c'))
-system_ss.add(when: 'CONFIG_HYPERV_TESTDEV', if_true: files('hyperv_testdev.c'))
-system_ss.add(when: 'CONFIG_VMBUS', if_true: files('vmbus.c'))
-system_ss.add(when: 'CONFIG_SYNDBG', if_true: files('syndbg.c'))
-system_ss.add(when: 'CONFIG_HV_BALLOON', if_true: files('hv-balloon.c', 'hv-balloon-page_range_tree.c', 'hv-balloon-our_range_memslots.c'))
-system_ss.add(when: 'CONFIG_HV_BALLOON', if_false: files('hv-balloon-stub.c'))
+# XP fork: Hyper-V device models removed; only the QMP stub remains.
+system_ss.add(files('hv-balloon-stub.c'))

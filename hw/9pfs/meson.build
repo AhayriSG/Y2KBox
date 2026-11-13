@@ -20,7 +20,6 @@ elif host_os == 'freebsd'
 elif host_os == 'linux'
   fs_ss.add(files('9p-util-linux.c'))
 endif
-fs_ss.add(when: 'CONFIG_XEN_BUS', if_true: files('xen-9p-backend.c'))
 system_ss.add_all(when: 'CONFIG_FSDEV_9P', if_true: fs_ss)
 
 system_ss.add(when: 'CONFIG_VIRTIO_9P', if_true: files('virtio-9p-device.c'))

@@ -28,8 +28,6 @@
 #include "system/hvf.h"
 #include "system/mshv.h"
 #include "system/whpx.h"
-#include "whpx/whpx-i386.h"
-#include "hvf/hvf-i386.h"
 #include "kvm/kvm_i386.h"
 #include "kvm/tdx.h"
 #include "sev.h"
@@ -8230,30 +8228,6 @@ uint64_t x86_cpu_get_supported_feature_word(X86CPU *cpu, FeatureWord w)
                         wi->msr.index);
             break;
         }
-    } else if (hvf_enabled()) {
-        if (wi->type != CPUID_FEATURE_WORD) {
-            return 0;
-        }
-        r = hvf_get_supported_cpuid(wi->cpuid.eax,
-                                    wi->cpuid.ecx,
-                                    wi->cpuid.reg);
-    } else if (mshv_enabled()) {
-        if (wi->type != CPUID_FEATURE_WORD) {
-            return 0;
-        }
-        r = mshv_get_supported_cpuid(wi->cpuid.eax,
-                                     wi->cpuid.ecx,
-                                     wi->cpuid.reg);
-    } else if (whpx_enabled()) {
-        switch (wi->type) {
-        case CPUID_FEATURE_WORD:
-            r = whpx_get_supported_cpuid(wi->cpuid.eax, wi->cpuid.ecx,
-                                                            wi->cpuid.reg);
-            break;
-        case MSR_FEATURE_WORD:
-            r = whpx_get_supported_msr_feature(wi->msr.index);
-            break;
-        }
     } else if (tcg_enabled() || qtest_enabled()) {
         r = wi->tcg_features;
     } else {
@@ -8330,16 +8304,6 @@ static void x86_cpu_get_supported_cpuid(uint32_t func, uint32_t index,
         *ebx = kvm_arch_get_supported_cpuid(kvm_state, func, index, R_EBX);
         *ecx = kvm_arch_get_supported_cpuid(kvm_state, func, index, R_ECX);
         *edx = kvm_arch_get_supported_cpuid(kvm_state, func, index, R_EDX);
-    } else if (hvf_enabled()) {
-        *eax = hvf_get_supported_cpuid(func, index, R_EAX);
-        *ebx = hvf_get_supported_cpuid(func, index, R_EBX);
-        *ecx = hvf_get_supported_cpuid(func, index, R_ECX);
-        *edx = hvf_get_supported_cpuid(func, index, R_EDX);
-    } else if (whpx_enabled()) {
-        *eax = whpx_get_supported_cpuid(func, index, R_EAX);
-        *ebx = whpx_get_supported_cpuid(func, index, R_EBX);
-        *ecx = whpx_get_supported_cpuid(func, index, R_ECX);
-        *edx = whpx_get_supported_cpuid(func, index, R_EDX);
     } else {
         *eax = 0;
         *ebx = 0;

@@ -3635,10 +3635,6 @@ if have_block
 endif
 if have_system
   trace_events_subdirs += [
-    'accel/hvf',
-    'accel/kvm',
-    'accel/mshv',
-    'accel/nitro',
     'audio',
     'backends',
     'backends/tpm',
@@ -3652,12 +3648,9 @@ if have_system
     'hw/display',
     'hw/dma',
     'hw/fsi',
-    'hw/hyperv',
     'hw/i2c',
     'hw/i3c',
     'hw/i386',
-    'hw/i386/xen',
-    'hw/i386/kvm',
     'hw/ide',
     'hw/input',
     'hw/intc',
@@ -3688,7 +3681,6 @@ if have_system
     'hw/virtio',
     'hw/vmapple',
     'hw/watchdog',
-    'hw/xen',
     'hw/gpio',
     'migration',
     'net',
@@ -3703,8 +3695,6 @@ if have_system or have_user
     'accel/tcg',
     'hw/core',
     'target/i386',
-    'target/i386/kvm',
-    'target/i386/whpx',
   ]
 endif
 

@@ -1,5 +1,4 @@
 # Enter target code first to reuse variables associated
-subdir('xenpv') # i386 uses it
 subdir('i386')
 subdir('remote')
 

@@ -11,7 +11,8 @@ Base: upstream QEMU `9d7d057` (11.1.90). License: unchanged (GPL-2.0, see COPYIN
 |------|------|
 | Removed tests/, docs/, all non-x86 targets, boards and user-mode emulators | Prune unused device models and old versioned machine types |
 | i386-softmmu builds; only the i440FX `pc` machine remains | Drop non-x86 TCG host backends / TCI; assume x86-64-v3 |
-| Build graph 1,930 -> 1,430 steps | SSE2 TCG fast paths (gvec) and MTTCG tuning |
+| Full TCG: KVM/HVF/WHPX/NVMM/MSHV/Nitro, Xen and Hyper-V code removed (`-accel help` -> tcg only) | SSE2 TCG fast paths (gvec) and MTTCG tuning |
+| Fresh build graph 1,930 -> 1,721 steps; SeaBIOS boots under TCG | VT-d/AMD-Vi, SEV/SGX/TDX, VFIO, vmapple, fsi removal |
 | | VBoxVGA + HGSMI/VBVA, VMMDev, HGCM, 3D host service |
 
 ## Building

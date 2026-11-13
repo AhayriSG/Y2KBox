@@ -32,12 +32,7 @@ endif
 i386_user_ss = ss.source_set()
 
 subdir('kvm')
-subdir('whpx')
-subdir('nvmm')
-subdir('hvf')
 subdir('tcg')
-subdir('emulate')
-subdir('mshv')
 
 target_arch += {'i386': i386_ss}
 target_system_arch += {'i386': i386_system_ss}
