@@ -9,10 +9,13 @@ Base: upstream QEMU `9d7d057` (11.1.90). License: unchanged (GPL-2.0, see COPYIN
 
 | Done | Next |
 |------|------|
-| Removed tests/, docs/, all non-x86 targets, boards and user-mode emulators | Prune unused device models and old versioned machine types |
-| i386-softmmu builds; only the i440FX `pc` machine remains | IOMMU/SEV/SGX/TDX/VFIO removal; SSE2 baseline benchmark (A/B vs AVX-512) |
+| Removed tests/, docs/, all non-x86 targets, boards and user-mode emulators | Prune unused device models and old versioned machine types; remove KVM call sites/headers |
+| TCG: vector guest memory ops (qemu_ld_vec/st_vec), inline PSHUFD & friends |
+| i386-softmmu builds; only the i440FX `pc` machine remains | IOMMU/SEV/SGX/TDX/VFIO removal (heavily entangled; own pass) |
 | Full TCG: KVM/HVF/WHPX/NVMM/MSHV/Nitro, Xen and Hyper-V code removed (`-accel help` -> tcg only) | SSE2 TCG fast paths (gvec) and MTTCG tuning |
-| x86-64 hosts only (non-x86 TCG backends + TCI removed); x86-64-v3 enforced at startup | Fresh build graph 1,930 -> 1,721 steps; SeaBIOS boots under TCG (2 vCPUs) |
+| x86-64 hosts only (non-x86 TCG backends + TCI removed); x86-64-v3 enforced at startup | Xen fully removed (stubs, headers, call sites, QAPI/CLI/HMP) |
+| SSE2 benchmark + AVX-512 A/B in `xp/bench/` (no AVX-512 gain; vector memory ops are the hotspot) |
+| Fresh build graph 1,930 -> 1,716 steps; SeaBIOS boots under TCG (2 vCPUs) |
 | | VBoxVGA + HGSMI/VBVA, VMMDev, HGCM, 3D host service |
 
 ## Building

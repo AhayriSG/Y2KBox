@@ -97,6 +97,12 @@ unsigned __attribute__((constructor)) cpuinfo_init(void)
     }
 #endif
 
+    /* Debug/benchmark switch: pretend the host has no AVX-512. */
+    if (getenv("XPQEMU_NO_AVX512")) {
+        info &= ~(CPUINFO_AVX512F | CPUINFO_AVX512VL | CPUINFO_AVX512BW |
+                  CPUINFO_AVX512DQ | CPUINFO_AVX512VBMI2);
+    }
+
     {
         /* XP fork: x86-64-v3 is the hard baseline (AVX2, BMI1/2, FMA, F16C,
          * LZCNT, MOVBE, POPCNT). The binary is built with -march flags that
