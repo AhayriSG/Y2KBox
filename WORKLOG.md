@@ -34,3 +34,5 @@ their exact state. Anything not committed on a `task/*` branch was lost - check 
 | (this push) | T01 part 2b: single machine type. pc_piix.c 553 -> ~325 lines; 88 compat tables removed. `-machine help` shows `pc` (alias of pc-i440fx-11.2) and `none`. e820 2 GiB, vectest OK. |
 
 | (this push) | T04 session started: claimed T04 on main (`a264499096d9f39dfa89884ac193a9f2005e9677`) and created `task/T04-inline-xmm-shuffles`. Inspected HANDOFF/TASKS, current TCG SSE helper declarations and emit paths, x86_64 target vector op inventory, and benchmark harness. No source changes or baseline tests: local `git clone` failed because this shell could not resolve `github.com`; GitHub connector file access does not provide an executable checkout. T04 paused; resume after a working local checkout/build environment is available. |
+
+| 2026-11-14 | Resumed T04 after owner clarified local PC is unavailable. Added branch-scoped `.github/workflows/t04-ci.yml` to provide an Ubuntu build runner and baseline/regression checks; run #43638713937 queued on commit `4cd38fbe137e7a946f034776a1c35b4e2a5f320f`. This avoids relying on local shell network access; baseline results pending. |
