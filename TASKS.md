@@ -69,7 +69,8 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
   meson_options.txt; (2) **Windows build not verified** - see T07.
 
-## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: CLAIMED by ChatGPT session 2026-11-14
+## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: PAUSED
+Resume here: Claim commit is on main and branch `task/T04-inline-xmm-shuffles` exists, but no source changes have been made. The connected GitHub file API is available; this session's shell cannot resolve github.com, so no local checkout/build is available. First obtain a working local checkout/build environment, then pull/rebase main and this branch, run the HANDOFF.md §7 baseline checks before changes, inspect helper/TCG lowering paths, implement and benchmark.
 Currently out-of-line helpers (`pshufd_xmm` ...). The x86 backend already has target
 vector ops (`x86_shufps`, `x86_punpckl/h`, `x86_psrldq`, blend in
 `tcg/x86_64/tcg-target-opc.h.inc`). Add inline lowering (or a new TCG shuffle op).
