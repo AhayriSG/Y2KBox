@@ -3758,7 +3758,6 @@ common_ss.add(files('target-info.c'))
 system_ss.add(files('target-info-qom.c'))
 
 if 'CONFIG_TCG' in config_all_accel
-  subdir('contrib/plugins')
 endif
 
 common_user_inc = []
@@ -4461,18 +4460,12 @@ if have_tools
     }]
   endforeach
 
-  subdir('contrib/elf2dmp')
 
   executable('qemu-edid', files('qemu-edid.c', 'hw/display/edid-generate.c'),
              dependencies: [qemuutil, rt],
              install: true)
 
   if have_vhost_user
-    subdir('contrib/vhost-user-blk')
-    subdir('contrib/vhost-user-bridge')
-    subdir('contrib/vhost-user-gpu')
-    subdir('contrib/vhost-user-input')
-    subdir('contrib/vhost-user-scsi')
   endif
 
   if host_os == 'linux'
@@ -4495,8 +4488,6 @@ if have_tools
   endif
 
   if have_ivshmem
-    subdir('contrib/ivshmem-client')
-    subdir('contrib/ivshmem-server')
   endif
 
   if have_qemu_vnc

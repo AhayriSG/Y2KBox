@@ -114,6 +114,19 @@ text RAM (MMIO slow path) vs integer loads. Passes on the old reference binary a
 the new one, -smp 1 and -smp 2. SeaBIOS still boots. Not yet tested: real XP,
 AVX-guest atomicity path (MO_ATOM_IFALIGN), a stress test under MTTCG.
 
+## 5b. Config-driven pruning (done) and how to repeat it
+
+Because there is exactly ONE configuration, the build tells us what is dead:
+`ninja -t commands qemu-system-i386` gives the exact compiled C files and
+`ninja -t deps` the exact headers. `xp/strip/06-remove-dead-sources.py BUILD_DIR`
+deletes unbuilt C files in config-driven dirs only (hw/, target/, qga/, ebpf/,
+non-x86 disas) and strips their names from meson.build. **Do not** apply this to
+host-dependent backends (ui/, audio/, net/, block/, util/, crypto/, chardev/,
+io/): they look dead only because this sandbox lacks host libraries. `default.mak`
+now lists the XP device set; switching a family off needs any conflicting Kconfig
+`select` lines removed (see git history for the 12 removed). Lesson learned: run the
+boot/functional test after pruning - removing `efi-e1000.rom` broke the default NIC.
+
 ## 6. TODO after that (priority order)
 
 1. Inline PSHUFD/PSHUFLW/PSHUFHW/PUNPCK*/PACK*/SHUFPS (x86 backend already has

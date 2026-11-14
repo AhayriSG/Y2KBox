@@ -27,7 +27,7 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | Inline PSHUFD & other shuffles | in progress / next | currently out-of-line helpers |
 | Fixed XP machine (host-thread vCPUs, RAM <= 3.5 GB, below 4 GB only) | planned | no -smp/-cpu/-m flags |
 | Remove IOMMU/SEV/SGX/TDX/VFIO + remaining KVM call sites | planned | heavily entangled; see HANDOFF |
-| Device pruning (439 models remain) + old machine versions | planned | |
+| Device pruning | partly done | XP device set in `default.mak` (220 -> 91 enabled symbols, 439 -> ~247 listed devices); 1015 dead C files, 724 unused headers, non-x86 firmware removed (tree 171 MB -> 41 MB); machine-coupled pieces (DIMM/NVDIMM/CXL/ACPI hotplug) await the fixed-machine rework |
 | Boot Windows XP SP3 end to end | **not yet done** | only SeaBIOS boot verified so far |
 | VBoxVGA + HGSMI/VBVA + VMMDev/HGCM + 3D host service | planned | VirtualBox 5.2.x (GPLv2) as reference |
 | wxWidgets launcher (qcow2 disk, RAM, floppy, ISO) | planned (later) | |

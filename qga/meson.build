@@ -64,30 +64,19 @@ qga_qapi_files = custom_target('QGA QAPI files',
 qga_ss = ss.source_set()
 qga_ss.add(qga_qapi_files.to_list())
 qga_ss.add(files(
-  'commands.c',
-  'guest-agent-command-state.c',
-  'main.c',
-  'cutils.c',
-  'commands-common-ssh.c'
+  
 ))
 if host_os == 'windows'
   qga_ss.add(files(
-    'channel-win32.c',
-    'commands-win32.c',
-    'service-win32.c',
-    'vss-win32.c',
-    'commands-windows-ssh.c'
+    
   ))
 else
   qga_ss.add(files(
-    'channel-posix.c',
-    'commands-posix.c',
-    'commands-posix-ssh.c',
-  ))
+    ))
   if host_os == 'linux'
-    qga_ss.add(files('commands-linux.c'))
+    qga_ss.add(files())
   elif host_os in bsd_oses
-    qga_ss.add(files('commands-bsd.c'))
+    qga_ss.add(files())
   endif
 endif
 
@@ -191,7 +180,7 @@ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 # this when an alternative is implemented or when the underlying glib
 # issue is identified/fix
 if host_os != 'windows' and not get_option('fuzzing')
-  srcs = [files('commands-common-ssh.c', 'commands-posix-ssh.c')]
+  srcs = [files()]
   i = 0
   foreach output: qga_qapi_outputs
     if output.startswith('qga-qapi-types') or output.startswith('qga-qapi-visit')
