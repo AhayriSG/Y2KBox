@@ -19,18 +19,22 @@ files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TA
 ## 1. Project aim and non-negotiable constraints (owner decisions)
 
 * **Only Windows XP 32-bit guests.** Binary: `qemu-system-i386` only. No 64-bit guests.
-* **Guest hardware is fixed:**
-  - guest RAM **2048 MB**, all below 4 GB (GUI may later offer up to 3.5 GB; not now);
-  - guest CPU: **SSE2 is the maximum** (a Pentium-4-class model; no SSE3/SSSE3/SSE4/AVX
-    in the guest - so those translators can be deleted);
-  - vCPU count = **host thread count** (see open question Q1 in section 4);
-  - no user-facing QEMU flags (-smp, -cpu, -m, -machine ...). Our own front end will
-    pick: qcow2 disk (created with qemu-img), RAM, floppy image, CD/ISO.
+* **Guest hardware is fixed** (owner decisions, 2026-11-14):
+  - guest RAM **2048 MB, set automatically, NOT user-configurable** (no RAM option at all,
+    no 3.5 GB mode, no above-4G / 64-bit-hole logic);
+  - guest CPU: model `xp-p4` (Pentium 4 Northwood class), **SSE2 is the maximum**
+    (no SSE3/SSSE3/SSE4/AVX in the guest, so those translators can be deleted);
+  - **1 vCPU by default** (uniprocessor); 2 vCPUs possible later as an experimental option
+    (decision and reasoning in section 4, Q1);
+  - no user-facing QEMU flags (-smp, -cpu, -m, -machine ...). Our own front end will only
+    ask for: qcow2 disk (made with qemu-img), floppy image, CD/ISO image.
 * **Emulation, not virtualization:** TCG/MTTCG only. No KVM/WHPX/HVF/Xen/Hyper-V/
   IOMMU/SEV/SGX/TDX/VFIO.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
-* **Performance** is the point: SSE2/x87/memory paths under TCG/MTTCG.
+* **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
+  MMX/SSE/SSE2, string ops, memory/MMU, interrupts and ring transitions, I/O), not only
+  SSE2. SSE2 was merely the first thing measured. See T13.
 * **3D: VBoxVGA** (VirtualBox Guest Additions XPDM driver + a host 3D service).
   Rejected by owner: qemu-3dfx (per-game guest wrappers); virglrenderer / viogpu3d /
   SoftGPU / Wine9x are "not mature enough" for XP (they remain useful references).
@@ -39,9 +43,10 @@ files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TA
 
 ## 2. Current state snapshot (update when it changes)
 
-* Builds on Linux (native). Windows host build: not yet verified (T07).
+* Builds on Linux (native). Windows host build: not yet verified (T07). macOS/BSD code removed (T03 pass 1).
 * `qemu-system-i386 -accel help` -> only `tcg`. Only i440FX `pc` machines (19 versioned
-  variants still present). SeaBIOS boots under TCG with 2 vCPUs. **XP has not been
+  variants still present). Default CPU `xp-p4` (verified in-guest: family 15, SSE2 yes,
+  SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified); 1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. **XP has not been
   booted yet** (T08, needs an XP ISO).
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
@@ -58,16 +63,40 @@ files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TA
 * Option defaults: `meson_options.txt` (`x86_version` = 3), device set:
   `configs/devices/i386-softmmu/default.mak`.
 
-## 4. Open questions / decisions pending
+## 4. Decisions on the former open questions (owner answers + rationale)
 
-* **Q1 vCPU limit.** Owner wants "all host threads". My understanding (UNVERIFIED): XP Pro
-  licenses 2 sockets (Home: 1) and 32-bit Windows supports at most 32 logical CPUs, so
-  expose e.g. 2 sockets x N cores x 1 thread (cap 32). Verify before capping; also check
-  that XP's ACPI-APIC multiprocessor HAL is selected.
-* Q2 Direct3D for XP guests via VBox Guest Additions, or OpenGL only? Which GA version
-  (plan: 5.2.x; 3.2.28 as bring-up baseline)?
-* Q3 Which NIC to default to (rtl8139 has an in-box XP driver; e1000 needs a driver disk).
-* Q4 Is a 3.5 GB RAM option wanted later (needs the PCI hole at 0xE0000000)?
+**Q1 vCPUs / host threads / HAL (owner: unsure, "up to you").** Owner clarified he meant
+the *host threads QEMU uses*, not the guest vCPU count, and doubts multiple vCPUs are a
+good idea for XP. **Decision: 1 vCPU (uniprocessor) by default.** Reasons: XP's
+uniprocessor ACPI HAL has the least synchronisation overhead; TCG with 1 vCPU needs no
+MTTCG cross-vCPU locking/TLB-flush traffic; XP-era software gains little from 2 CPUs
+relative to the emulation cost. `max_cpus` is 2 (XP Pro's licensed socket count) so a 2-vCPU
+mode can be added later; if enabled, the user must choose the *ACPI Multiprocessor PC* HAL
+during setup - document this in the README then. (Unverified: that XP setup auto-selects
+the ACPI uniprocessor HAL for one CPU - verify in T08.) Host threads still matter: QEMU
+already runs the vCPU, main-loop/IO, audio and (later) the 3D render on separate host
+threads. **Thread pinning** (vCPU thread on a dedicated fast core, others elsewhere, Windows
+and Linux affinity APIs) is task T14. Note: "host passthrough" CPU models are a KVM
+concept and do not apply to TCG (the guest CPU is emulated); what we *can* do is use host
+CPU features inside TCG (AVX2/BMI/etc. already assumed) and pass host resources such as the
+GPU through our own 3D path.
+
+**Q2 3D method (owner: unsure).** Decision: **VBoxVGA, Guest Additions 5.2.x baseline**
+(newest series whose open source includes the Chromium-based host 3D service; 3.2.28 stays
+the bring-up baseline). Open sub-question (research, T09-T11): Direct3D for XP guests vs
+OpenGL only in 5.2.x.
+
+**Q3 NIC / drivers (owner: rtl8139 is fine; considered virtio-win).** Decision: default
+**RTL8139** (in-box XP driver, zero setup). Owner suggested virtio-win 0.1.141 (XP-capable
+x86 floppy `virtio-win-0.1.141_x86.vfd`: VirtIO Ethernet, VirtIO SCSI/block, ...) as an
+optional faster path. We switched ALL virtio devices off in `default.mak`; re-enabling
+`virtio-net` / `virtio-blk` / `virtio-scsi` as an *opt-in* is task T15 (benchmark vs
+IDE + RTL8139 under TCG first; verify which drivers that floppy really contains for XP).
+The floppy-driver route (XP setup F6 + our floppy mount) already works with our design.
+
+**Q4 RAM.** Decision (owner): always 2048 MB, automatic, no user setting. Implemented as
+`mc->default_ram_size = 2 GiB` in `hw/i386/pc.c`; the above-4G/hole64 code is dead and is
+removed by T01.
 
 ## 5. Findings and design notes (evidence)
 

@@ -1652,7 +1652,6 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     mc->has_hotpluggable_cpus = true;
     mc->default_boot_order = "cad";
     mc->block_default_type = IF_IDE;
-    mc->max_cpus = 255;
     mc->reset = pc_machine_reset;
     mc->wakeup = pc_machine_wakeup;
     hc->pre_plug = pc_machine_device_pre_plug_cb;
@@ -1668,6 +1667,10 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     mc->smp_props.cache_supported[CACHE_LEVEL_AND_TYPE_L2] = true;
     mc->smp_props.cache_supported[CACHE_LEVEL_AND_TYPE_L3] = true;
     mc->default_ram_id = "pc.ram";
+    /* XP fork: fixed guest memory (2 GiB, entirely below 4 GiB), uniprocessor by default. */
+    mc->default_ram_size = 2 * GiB;
+    mc->default_cpus = 1;
+    mc->max_cpus = 2;
     pcmc->default_smbios_ep_type = SMBIOS_ENTRY_POINT_TYPE_AUTO;
 
     object_class_property_add(oc, PC_MACHINE_MAX_RAM_BELOW_4G, "size",

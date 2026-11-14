@@ -3807,6 +3807,24 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         .cache_info = &legacy_intel_cpuid2_cache_info,
     },
     {
+        /*
+         * XP fork: the only guest CPU. Pentium 4 (Northwood) class with SSE2
+         * as the maximum SIMD level: no SSE3/SSSE3/SSE4/AVX in the guest.
+         */
+        .name = "xp-p4",
+        .level = 2,
+        .vendor = CPUID_VENDOR_INTEL,
+        .family = 15,
+        .model = 2,
+        .stepping = 9,
+        .features[FEAT_1_EDX] =
+            PENTIUM3_FEATURES | CPUID_SSE2 | CPUID_PSE36 | CPUID_VME |
+            CPUID_MTRR | CPUID_MCA | CPUID_CLFLUSH,
+        .xlevel = 0x80000004,
+        .model_id = "Intel(R) Pentium(R) 4 CPU 3.00GHz",
+        .cache_info = &legacy_intel_cpuid2_cache_info,
+    },
+    {
         .name = "athlon",
         .level = 2,
         .vendor = CPUID_VENDOR_AMD,

@@ -2808,7 +2808,7 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #ifdef TARGET_X86_64
 #define TARGET_DEFAULT_CPU_TYPE X86_CPU_TYPE_NAME("qemu64")
 #else
-#define TARGET_DEFAULT_CPU_TYPE X86_CPU_TYPE_NAME("qemu32")
+#define TARGET_DEFAULT_CPU_TYPE X86_CPU_TYPE_NAME("xp-p4")
 #endif
 
 /* MMU modes definitions */

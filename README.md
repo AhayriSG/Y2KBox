@@ -9,8 +9,8 @@ for XP, and a small wxWidgets launcher.
 [TASKS.md](TASKS.md) (claim by pushing) and log what you did in [WORKLOG.md](WORKLOG.md).
 Several AIs can work in parallel.
 
-Fixed target: guest RAM 2048 MB, guest CPU SSE2 maximum, vCPUs = host threads;
-hosts: Windows and Linux (x86-64-v3 or newer).
+Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
+(Pentium 4 class), 1 vCPU by default; hosts: Windows and Linux (x86-64-v3 or newer).
 
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
@@ -29,7 +29,10 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | Benchmarks + AVX-512 A/B | done | no AVX-512 gain for SSE2 guests; stay on v3 |
 | 128-bit guest memory ops (`qemu_ld_vec`/`qemu_st_vec`) | done | loads ~2.7x faster; `xp/bench/vectest.asm` |
 | Inline PSHUFD & other shuffles | in progress / next | currently out-of-line helpers |
-| Fixed XP machine (host-thread vCPUs, RAM <= 3.5 GB, below 4 GB only) | planned | no -smp/-cpu/-m flags |
+| Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | defaults done; dead-code removal + single machine type pending (T01) |
+| XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
+| Linux + Windows hosts only | in progress | macOS/BSD code removed, Linux verified; Windows build unverified (T03, T07) |
+| Thread pinning, general TCG performance (all instruction classes) | planned | T13, T14 |
 | Remove IOMMU/SEV/SGX/TDX/VFIO + remaining KVM call sites | planned | heavily entangled; see HANDOFF |
 | Device pruning | partly done | XP device set in `default.mak` (220 -> 91 enabled symbols, 439 -> ~247 listed devices); 1015 dead C files, 724 unused headers, non-x86 firmware removed (tree 171 MB -> 41 MB); machine-coupled pieces (DIMM/NVDIMM/CXL/ACPI hotplug) await the fixed-machine rework |
 | Boot Windows XP SP3 end to end | **not yet done** | only SeaBIOS boot verified so far |

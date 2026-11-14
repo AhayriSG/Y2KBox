@@ -20,28 +20,31 @@ Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
 
 ---
 
-## T01 (P0) Fixed XP machine  -  Status: CLAIMED by Claude (session 1) 2026-11-14
+## T01 (P0) Fixed XP machine  -  Status: PAUSED (part 1 done)
 Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
-* Guest RAM **fixed at 2048 MB**, entirely below 4 GB: delete above-4G RAM, 64-bit PCI
-  hole, `max_ram_below_4g`, ram-slots/maxmem logic in `hw/i386/pc.c` `pc_memory_init`.
-* vCPUs = number of host threads (check the XP limit first, see HANDOFF 4); MTTCG on.
-* Delete: memory hotplug, DIMM/NVDIMM/MEM_DEVICE, CXL, NUMA/HMAT, VIOT, VMGENID,
-  VMCLOCK, ERST, ACPI CPU/memory hotplug, versioned `pc-i440fx-X.Y` machines
-  (keep ONE machine type), then re-enable-off the matching `default.mak` lines
-  (see the "NOTE: ... still ON" comment there) and delete newly dead sources.
-* Definition of done: fresh configure+build; `qemu-system-i386 -machine help` shows
-  one machine; SeaBIOS boots; `xp/bench/vectest.asm` prints OK; `info mtree` shows
-  2 GiB RAM below 4 GiB; README/WORKLOG updated.
+* DONE: default RAM 2 GiB (`mc->default_ram_size`), default 1 vCPU, `max_cpus` 2
+  (`hw/i386/pc.c`); verified e820 = one 2 GiB RAM region at 0.
+* TODO: delete above-4G RAM, 64-bit PCI hole, `max_ram_below_4g`, ram-slots/maxmem logic in
+  `pc_memory_init`; delete memory hotplug, DIMM/NVDIMM/MEM_DEVICE, CXL, NUMA/HMAT, VIOT,
+  VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (callers in `hw/i386/pc.c`, `pc_piix.c`,
+  `acpi-build.c`: `memory_device_*`, `pc_dimm_*`, `nvdimm_*`, `build_cpus_aml`, `build_hmat`,
+  `build_viot`, `cxl_*`, `vmgenid_*`, `vmclock_*`, `machine_memory_devices_init`); remove the
+  ~19 versioned `pc-i440fx-X.Y` machines and keep ONE; then delete the `-m/-smp/-machine`
+  CLI paths; then remove the "still ON" lines/comment in `default.mak` and prune dead sources
+  (HANDOFF 5b).
+* DoD: fresh configure+build; one machine in `-machine help`; standard checks (HANDOFF 7);
+  `info mtree` shows 2 GiB below 4 GiB only.
 
-## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: TODO
-* Add one CPU model (Pentium 4 / "Northwood"-like: FPU,VME,DE,PSE,TSC,MSR,PAE,MCE,CX8,
-  APIC,SEP,MTRR,PGE,MCA,CMOV,PAT,PSE36,CLFLUSH,MMX,FXSR,SSE,SSE2) as the only/default
-  model; remove user `-cpu` selection and all other models.
-* Then delete translator code for ISA the guest can never execute: SSE3, SSSE3, SSE4.1/4.2,
-  AES/PCLMUL, AVX/AVX2/FMA/BMI, XSAVE/XSAVEOPT, RDRAND... in
-  `target/i386/tcg/` (decode-new.c.inc, emit.c.inc, translate.c, helpers). Make
-  `gen_ldo_env_A0`/`gen_sto_env_A0` always use pair atomicity.
-* DoD: build; XP-era SSE2 test passes; `-cpu` option gone; CPUID leaf 1 shows no SSE3+.
+## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: PAUSED (part 1 done)
+* DONE: model `xp-p4` (Pentium 4 Northwood: family 15 model 2 stepping 9, SSE2, no SSE3+) added
+  in `target/i386/cpu.c` and made the default (`TARGET_DEFAULT_CPU_TYPE` in `target/i386/cpu.h`).
+  Verified in-guest with `xp/bench/cpuid.asm`.
+* TODO: make it the ONLY model (delete the ~100 other models in `builtin_x86_defs`, `-cpu`
+  option, CPU feature properties/ `max`/`host` types); then delete translator code for ISA the
+  guest can never execute: SSE3, SSSE3, SSE4.1/4.2, AES/PCLMUL, AVX/AVX2/FMA/BMI, XSAVE,
+  RDRAND, ... in `target/i386/tcg/` (decode-new.c.inc, emit.c.inc, translate.c, helpers);
+  `gen_ldo_env_A0`/`gen_sto_env_A0` then always use pair atomicity. Keep x87/MMX/SSE/SSE2.
+* DoD: build; CPUID shows no SSE3+; vectest OK; XP boot still works once T08 exists.
 
 ## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done, Linux-verified)
 * Remove macOS/BSD/Solaris/Haiku/Emscripten/other-OS code: meson/configure branches,
@@ -103,10 +106,34 @@ v5.2.2, absent in 6.1.4). Port/replay GL stream on the host; consider a separate
 Open question: Direct3D for XP guests vs OpenGL only (see HANDOFF 8).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI: pick a qcow2 disk (made with qemu-img), RAM (the
-guest RAM is fixed at 2048 MB for now - revisit if the owner wants a slider, max 3.5 GB),
-floppy image, CD/ISO. Needs a display/input embedding path (DisplayChangeListener).
+Our own executable + wxWidgets GUI: pick a qcow2 disk (made with qemu-img), floppy image,
+CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
 
-## T13 (P2) TCG performance, round 2  -  Status: TODO
-Keep hot XMM regs in host registers across instructions; x87 speed; softmmu TLB fast
-path; MTTCG scaling for 2+ vCPUs; real workloads. Always A/B against a saved binary.
+## T13 (P1) TCG performance for ALL guest instruction classes  -  Status: TODO
+Scope (owner clarification): everything up to SSE2, not just SSE2. Suggested order - measure first
+(extend `xp/bench` with protected-mode/ring-0 loops; keep a saved old binary for A/B; also
+consider a real XP workload once T08 exists):
+* flags/condition codes (lazy CC), integer ALU/shift/mul/div helpers, `rep movs/stos/cmps`
+  string ops, `bswap/bt*`, `pushf/popf/cli/sti`;
+* x87 (uses softfloat floatx80 helpers - likely very slow; XP-era apps use x87 heavily);
+* softmmu: TLB fast-path size/associativity, page-crossing, segment-limit/privilege checks,
+  A20/real-mode paths, `invlpg`, CR3 switches (XP context switches);
+* control flow: TB chaining, indirect-jump lookup (`ret`/`call`), `sysenter/int 2e`, ring
+  transitions, exceptions/interrupt delivery, `hlt` idle;
+* system: PIT/RTC/HPET timers, `rdtsc`, I/O port dispatch, IDE PIO/DMA, VGA memory;
+* keep XMM/MMX state in host registers across instructions; PSHUFD & shuffles inline (T04).
+Every change: A/B numbers in WORKLOG + standard checks.
+
+## T14 (P1) Threading model and thread pinning  -  Status: TODO
+Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
+(vCPU thread to the fastest/performance core, others elsewhere) with Windows
+(`SetThreadAffinityMask`/`SetThreadIdealProcessorEx`, priority) and Linux (`sched_setaffinity`)
+APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
+Measure with and without (1 vCPU default; 2-vCPU experimental mode if added).
+
+## T15 (P2) Evaluate virtio for XP (opt-in)  -  Status: TODO
+Owner idea: virtio-win 0.1.141 x86 floppy drivers for XP (VirtIO Ethernet, SCSI/block).
+Re-enable `virtio-net`/`virtio-blk`/`virtio-scsi` (all virtio is OFF in `default.mak`; selects
+may need restoring), install the drivers in an XP guest (needs T08) and benchmark disk/network vs
+IDE + RTL8139 under TCG. Only adopt if clearly faster. Verify what that floppy really contains
+for XP. RTL8139 stays the default.
