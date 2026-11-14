@@ -54,7 +54,6 @@
 #include "system/runstate.h"
 #include "system/numa.h"
 #include "hw/hyperv/vmbus-bridge.h"
-#include "hw/mem/nvdimm.h"
 #include "hw/uefi/var-service-api.h"
 #include "hw/i386/acpi-build.h"
 #include "target/i386/cpu.h"
@@ -261,12 +260,6 @@ static void pc_init1(MachineState *machine, const char *pci_type)
 
         object_property_set_link(OBJECT(machine), PC_MACHINE_ACPI_DEVICE_PROP,
                                  piix4_pm, &error_abort);
-    }
-
-    if (machine->nvdimms_state->is_enabled) {
-        nvdimm_init_acpi_state(machine->nvdimms_state, system_io,
-                               x86_nvdimm_acpi_dsmio,
-                               x86ms->fw_cfg, OBJECT(pcms));
     }
 }
 

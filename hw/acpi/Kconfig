@@ -4,11 +4,7 @@ config ACPI
 config ACPI_X86
     bool
     select ACPI
-    select ACPI_NVDIMM
-    select ACPI_CXL
     select ACPI_CPU_HOTPLUG
-    select ACPI_MEMORY_HOTPLUG
-    select ACPI_HMAT
     select ACPI_PCIHP
     select ACPI_ERST
 
@@ -23,7 +19,6 @@ config ACPI_CPU_HOTPLUG
 
 config ACPI_MEMORY_HOTPLUG
     bool
-    select MEM_DEVICE
 
 config ACPI_NVDIMM
     bool
@@ -77,8 +72,6 @@ config ACPI_VIOT
 config ACPI_HW_REDUCED
     bool
     select ACPI
-    select ACPI_MEMORY_HOTPLUG
-    select ACPI_NVDIMM
 
 config ACPI_ERST
     bool

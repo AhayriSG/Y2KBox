@@ -50,8 +50,6 @@
 #include "hw/acpi/acpi.h"
 #include "hw/acpi/pc-hotplug.h"
 #include "acpi-build.h"
-#include "hw/mem/nvdimm.h"
-#include "hw/cxl/cxl_host.h"
 #include "hw/usb/usb.h"
 #include "hw/i386/intel_iommu.h"
 #include "hw/net/ne2000-isa.h"
@@ -520,13 +518,6 @@ void pc_machine_done(Notifier *notifier, void *data)
                                         PCMachineState, machine_done);
     X86MachineState *x86ms = X86_MACHINE(pcms);
 
-    cxl_hook_up_pxb_registers(pcms->pcibus, &pcms->cxl_devices_state,
-                              &error_fatal);
-
-    if (pcms->cxl_devices_state.is_enabled) {
-        cxl_fmws_link_targets(&error_fatal);
-    }
-
     /* set the number of CPUs */
     x86_rtc_set_cpus_count(x86ms->rtc, x86ms->boot_cpus);
 
@@ -564,110 +555,7 @@ static hwaddr pc_above_4g_end(PCMachineState *pcms)
 {
     X86MachineState *x86ms = X86_MACHINE(pcms);
 
-    if (pcms->sgx_epc.size != 0) {
-        return sgx_epc_above_4g_end(&pcms->sgx_epc);
-    }
-
     return x86ms->above_4g_mem_start + x86ms->above_4g_mem_size;
-}
-
-static void pc_get_device_memory_range(PCMachineState *pcms,
-                                       hwaddr *base,
-                                       ram_addr_t *device_mem_size)
-{
-    MachineState *machine = MACHINE(pcms);
-    ram_addr_t size;
-    hwaddr addr;
-
-    size = machine->maxram_size - machine->ram_size;
-    addr = ROUND_UP(pc_above_4g_end(pcms), 1 * GiB);
-
-    /* size device region assuming 1G page max alignment per slot */
-    size += (1 * GiB) * machine->ram_slots;
-
-    *base = addr;
-    *device_mem_size = size;
-}
-
-static uint64_t pc_get_cxl_range_start(PCMachineState *pcms)
-{
-    PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
-    MachineState *ms = MACHINE(pcms);
-    hwaddr cxl_base;
-    ram_addr_t size;
-
-    if (pcmc->has_reserved_memory &&
-        (ms->ram_size < ms->maxram_size)) {
-        pc_get_device_memory_range(pcms, &cxl_base, &size);
-        cxl_base += size;
-    } else {
-        cxl_base = pc_above_4g_end(pcms);
-    }
-
-    return cxl_base;
-}
-
-static int cxl_get_fmw_end(Object *obj, void *opaque)
-{
-    struct CXLFixedWindow *fw;
-    uint64_t *start = opaque;
-
-    if (!object_dynamic_cast(obj, TYPE_CXL_FMW)) {
-        return 0;
-    }
-    fw = CXL_FMW(obj);
-
-    *start += fw->size;
-
-    return 0;
-}
-
-static uint64_t pc_get_cxl_range_end(PCMachineState *pcms)
-{
-    uint64_t start = pc_get_cxl_range_start(pcms) + MiB;
-
-    /* Ordering doesn't matter so no need to build a sorted list */
-    object_child_foreach_recursive(object_get_root(), cxl_get_fmw_end,
-                                   &start);
-    return start;
-}
-
-static hwaddr pc_max_used_gpa(PCMachineState *pcms, uint64_t pci_hole64_size)
-{
-    X86CPU *cpu = X86_CPU(first_cpu);
-    PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
-    MachineState *ms = MACHINE(pcms);
-
-    if (cpu->env.features[FEAT_8000_0001_EDX] & CPUID_EXT2_LM) {
-        /* 64-bit systems */
-        return pc_pci_hole64_start() + pci_hole64_size - 1;
-    }
-
-    /* 32-bit systems */
-    if (pcmc->broken_32bit_mem_addr_check) {
-        /* old value for compatibility reasons */
-        return ((hwaddr)1 << cpu->phys_bits) - 1;
-    }
-
-    /*
-     * 32-bit systems don't have hole64 but they might have a region for
-     * memory devices. Even if additional hotplugged memory devices might
-     * not be usable by most guest OSes, we need to still consider them for
-     * calculating the highest possible GPA so that we can properly report
-     * if someone configures them on a CPU that cannot possibly address them.
-     */
-    if (pcmc->has_reserved_memory &&
-        (ms->ram_size < ms->maxram_size)) {
-        hwaddr devmem_start;
-        ram_addr_t devmem_size;
-
-        pc_get_device_memory_range(pcms, &devmem_start, &devmem_size);
-        devmem_start += devmem_size;
-        return devmem_start - 1;
-    }
-
-    /* configuration without any memory hotplug */
-    return pc_above_4g_end(pcms) - 1;
 }
 
 /*
@@ -711,171 +599,43 @@ void pc_memory_init(PCMachineState *pcms,
 {
     int linux_boot, i;
     MemoryRegion *option_rom_mr;
-    MemoryRegion *ram_below_4g, *ram_above_4g;
+    MemoryRegion *ram_below_4g;
     FWCfgState *fw_cfg;
     MachineState *machine = MACHINE(pcms);
-    MachineClass *mc = MACHINE_GET_CLASS(machine);
     PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
     X86MachineState *x86ms = X86_MACHINE(pcms);
-    hwaddr maxphysaddr, maxusedaddr;
-    hwaddr cxl_base, cxl_resv_end = 0;
-    X86CPU *cpu = X86_CPU(first_cpu);
-    uint64_t res_mem_end;
 
-    assert(machine->ram_size == x86ms->below_4g_mem_size +
-                                x86ms->above_4g_mem_size);
+    /*
+     * XP fork: fixed machine. All guest RAM is below 4 GiB; there is no
+     * hotplug, device memory, CXL, NVDIMM or 64-bit PCI hole logic.
+     */
+    assert(machine->ram_size == x86ms->below_4g_mem_size);
+    assert(x86ms->above_4g_mem_size == 0);
 
     linux_boot = (machine->kernel_filename != NULL);
 
-    /*
-     * The HyperTransport range close to the 1T boundary is unique to AMD
-     * hosts with IOMMUs enabled. Restrict the ram-above-4g relocation
-     * to above 1T to AMD vCPUs only. @enforce_amd_1tb_hole is only false in
-     * older machine types (<= 7.0) for compatibility purposes.
-     */
-    if (IS_AMD_CPU(&cpu->env) && pcmc->enforce_amd_1tb_hole) {
-        /* Bail out if max possible address does not cross HT range */
-        if (pc_max_used_gpa(pcms, pci_hole64_size) >= AMD_HT_START) {
-            x86ms->above_4g_mem_start = AMD_ABOVE_1TB_START;
-        }
-
-        /*
-         * Advertise the HT region if address space covers the reserved
-         * region or if we relocate.
-         */
-        if (cpu->phys_bits >= 40) {
-            e820_add_entry(AMD_HT_START, AMD_HT_SIZE, E820_RESERVED);
-        }
-    }
-
-    /*
-     * phys-bits is required to be appropriately configured
-     * to make sure max used GPA is reachable.
-     */
-    maxusedaddr = pc_max_used_gpa(pcms, pci_hole64_size);
-    maxphysaddr = ((hwaddr)1 << cpu->phys_bits) - 1;
-    if (maxphysaddr < maxusedaddr) {
-        error_report("Address space limit 0x%"PRIx64" < 0x%"PRIx64
-                     " phys-bits too low (%u)",
-                     maxphysaddr, maxusedaddr, cpu->phys_bits);
-        exit(EXIT_FAILURE);
-    }
-
-    /*
-     * Split single memory region and use aliases to address portions of it,
-     * done for backwards compatibility with older qemus.
-     */
     ram_below_4g = g_malloc(sizeof(*ram_below_4g));
     memory_region_init_alias(ram_below_4g, NULL, "ram-below-4g", machine->ram,
                              0, x86ms->below_4g_mem_size);
     memory_region_add_subregion(system_memory, 0, ram_below_4g);
     e820_add_entry(0, x86ms->below_4g_mem_size, E820_RAM);
-    if (x86ms->above_4g_mem_size > 0) {
-        ram_above_4g = g_malloc(sizeof(*ram_above_4g));
-        memory_region_init_alias(ram_above_4g, NULL, "ram-above-4g",
-                                 machine->ram,
-                                 x86ms->below_4g_mem_size,
-                                 x86ms->above_4g_mem_size);
-        memory_region_add_subregion(system_memory, x86ms->above_4g_mem_start,
-                                    ram_above_4g);
-        e820_add_entry(x86ms->above_4g_mem_start, x86ms->above_4g_mem_size,
-                       E820_RAM);
-    }
-
-    if (pcms->sgx_epc.size != 0) {
-        e820_add_entry(pcms->sgx_epc.base, pcms->sgx_epc.size, E820_RESERVED);
-    }
-
-    if (!pcmc->has_reserved_memory &&
-        (machine->ram_slots ||
-         (machine->maxram_size > machine->ram_size))) {
-
-        error_report("\"-memory 'slots|maxmem'\" is not supported by: %s",
-                     mc->name);
-        exit(EXIT_FAILURE);
-    }
-
-    /* initialize device memory address space */
-    if (pcmc->has_reserved_memory &&
-        (machine->ram_size < machine->maxram_size)) {
-        ram_addr_t device_mem_size;
-        hwaddr device_mem_base;
-
-        if (machine->ram_slots > ACPI_MAX_RAM_SLOTS) {
-            error_report("unsupported amount of memory slots: %"PRIu64,
-                         machine->ram_slots);
-            exit(EXIT_FAILURE);
-        }
-
-        if (QEMU_ALIGN_UP(machine->maxram_size,
-                          TARGET_PAGE_SIZE) != machine->maxram_size) {
-            error_report("maximum memory size must by aligned to multiple of "
-                         "%d bytes", TARGET_PAGE_SIZE);
-            exit(EXIT_FAILURE);
-        }
-
-        pc_get_device_memory_range(pcms, &device_mem_base, &device_mem_size);
-
-        if (device_mem_base + device_mem_size < device_mem_size) {
-            error_report("unsupported amount of maximum memory: " RAM_ADDR_FMT,
-                         machine->maxram_size);
-            exit(EXIT_FAILURE);
-        }
-        machine_memory_devices_init(machine, device_mem_base, device_mem_size);
-    }
-
-    if (pcms->cxl_devices_state.is_enabled) {
-        MemoryRegion *mr = &pcms->cxl_devices_state.host_mr;
-        hwaddr cxl_size = MiB;
-
-        cxl_base = pc_get_cxl_range_start(pcms);
-        memory_region_init(mr, OBJECT(machine), "cxl_host_reg", cxl_size);
-        memory_region_add_subregion(system_memory, cxl_base, mr);
-        cxl_base = ROUND_UP(cxl_base + cxl_size, 256 * MiB);
-        cxl_resv_end = cxl_fmws_set_memmap(cxl_base, maxphysaddr);
-        cxl_fmws_update_mmio();
-    }
 
     /* Initialize PC system firmware */
     pc_system_firmware_init(pcms, rom_memory);
 
-    if (!is_tdx_vm()) {
-        option_rom_mr = g_malloc(sizeof(*option_rom_mr));
-        if (machine_require_guest_memfd_private(machine)) {
-            memory_region_init_ram_guest_memfd_private(
-                option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE, &error_fatal);
-        } else {
-            memory_region_init_ram(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE,
-                                &error_fatal);
-            if (pcmc->pci_enabled) {
-                memory_region_set_readonly(option_rom_mr, true);
-            }
-        }
-        memory_region_add_subregion_overlap(rom_memory,
-                                            PC_ROM_MIN_VGA,
-                                            option_rom_mr,
-                                            1);
+    option_rom_mr = g_malloc(sizeof(*option_rom_mr));
+    memory_region_init_ram(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE,
+                           &error_fatal);
+    if (pcmc->pci_enabled) {
+        memory_region_set_readonly(option_rom_mr, true);
     }
+    memory_region_add_subregion_overlap(rom_memory, PC_ROM_MIN_VGA,
+                                        option_rom_mr, 1);
 
     fw_cfg = fw_cfg_arch_create(machine,
                                 x86ms->boot_cpus, x86ms->apic_id_limit);
 
     rom_set_fw(fw_cfg);
-
-    if (pcms->cxl_devices_state.is_enabled) {
-        res_mem_end = cxl_resv_end;
-    } else if (machine->device_memory) {
-        res_mem_end = machine->device_memory->base
-                      + memory_region_size(&machine->device_memory->mr);
-    } else {
-        res_mem_end = 0;
-    }
-
-    if (res_mem_end) {
-        uint64_t *val = g_malloc(sizeof(*val));
-        *val = cpu_to_le64(ROUND_UP(res_mem_end, 1 * GiB));
-        fw_cfg_add_file(fw_cfg, "etc/reserved-memory-end", val, sizeof(*val));
-    }
 
     if (linux_boot) {
         x86_load_linux(x86ms, fw_cfg, PC_FW_DATA);
@@ -889,7 +649,7 @@ void pc_memory_init(PCMachineState *pcms,
     /* Init default IOAPIC address space */
     x86ms->ioapic_as = &address_space_memory;
 
-    /* Init ACPI memory hotplug IO base address */
+    /* Init ACPI memory hotplug IO base address (still read by ACPI/PM code) */
     pcms->memhp_io_base = ACPI_MEMORY_HOTPLUG_BASE;
 }
 
@@ -900,21 +660,8 @@ void pc_memory_init(PCMachineState *pcms,
 uint64_t pc_pci_hole64_start(void)
 {
     PCMachineState *pcms = PC_MACHINE(qdev_get_machine());
-    PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
-    MachineState *ms = MACHINE(pcms);
-    uint64_t hole64_start = 0;
-    ram_addr_t size = 0;
 
-    if (pcms->cxl_devices_state.is_enabled) {
-        hole64_start = pc_get_cxl_range_end(pcms);
-    } else if (pcmc->has_reserved_memory && (ms->ram_size < ms->maxram_size)) {
-        pc_get_device_memory_range(pcms, &hole64_start, &size);
-        hole64_start += size;
-    } else {
-        hole64_start = pc_above_4g_end(pcms);
-    }
-
-    return ROUND_UP(hole64_start, 1 * GiB);
+    return ROUND_UP(pc_above_4g_end(pcms), 1 * GiB);
 }
 
 DeviceState *pc_vga_init(ISABus *isa_bus, PCIBus *pci_bus)
@@ -1132,151 +879,10 @@ void pc_i8259_create(ISABus *isa_bus, qemu_irq *i8259_irqs)
     g_free(i8259);
 }
 
-static void pc_memory_pre_plug(const HotplugHandler *hotplug_dev, DeviceState *dev,
-                               Error **errp)
-{
-    const X86MachineState *x86ms = X86_MACHINE(hotplug_dev);
-    const MachineState *ms = MACHINE(hotplug_dev);
-    const bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
-    Error *local_err = NULL;
-
-    /*
-     * When "acpi=off" is used with the Q35 machine type, no ACPI is built,
-     * but pcms->acpi_dev is still created. Check !acpi_enabled in
-     * addition to cover this case.
-     */
-    if (!x86ms->acpi_dev || !x86_machine_is_acpi_enabled(x86ms)) {
-        error_setg(errp,
-                   "memory hotplug is not enabled: missing acpi device or acpi disabled");
-        return;
-    }
-
-    if (is_nvdimm && !ms->nvdimms_state->is_enabled) {
-        error_setg(errp, "nvdimm is not enabled: missing 'nvdimm' in '-M'");
-        return;
-    }
-
-    hotplug_handler_pre_plug(x86ms->acpi_dev, dev, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
-        return;
-    }
-
-    pc_dimm_pre_plug(PC_DIMM(dev), MACHINE(hotplug_dev), errp);
-}
-
-static void pc_memory_plug(const HotplugHandler *hotplug_dev,
-                           DeviceState *dev, Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(hotplug_dev);
-    X86MachineState *x86ms = X86_MACHINE(hotplug_dev);
-    MachineState *ms = MACHINE(hotplug_dev);
-    bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
-
-    pc_dimm_plug(PC_DIMM(dev), MACHINE(pcms));
-
-    if (is_nvdimm) {
-        nvdimm_plug(ms->nvdimms_state);
-    }
-
-    hotplug_handler_plug(x86ms->acpi_dev, dev, &error_abort);
-}
-
-static void pc_memory_unplug_request(const HotplugHandler *hotplug_dev,
-                                     DeviceState *dev, Error **errp)
-{
-    X86MachineState *x86ms = X86_MACHINE(hotplug_dev);
-
-    /*
-     * When "acpi=off" is used with the Q35 machine type, no ACPI is built,
-     * but pcms->acpi_dev is still created. Check !acpi_enabled in
-     * addition to cover this case.
-     */
-    if (!x86ms->acpi_dev || !x86_machine_is_acpi_enabled(x86ms)) {
-        error_setg(errp,
-                   "memory hotplug is not enabled: missing acpi device or acpi disabled");
-        return;
-    }
-
-    if (object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM)) {
-        error_setg(errp, "nvdimm device hot unplug is not supported yet.");
-        return;
-    }
-
-    hotplug_handler_unplug_request(x86ms->acpi_dev, dev,
-                                   errp);
-}
-
-static void pc_memory_unplug(const HotplugHandler *hotplug_dev,
-                             DeviceState *dev, Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(hotplug_dev);
-    X86MachineState *x86ms = X86_MACHINE(hotplug_dev);
-    Error *local_err = NULL;
-
-    hotplug_handler_unplug(x86ms->acpi_dev, dev, &local_err);
-    if (local_err) {
-        goto out;
-    }
-
-    pc_dimm_unplug(PC_DIMM(dev), MACHINE(pcms));
-    qdev_unrealize(dev);
- out:
-    error_propagate(errp, local_err);
-}
-
-static void pc_hv_balloon_pre_plug(const HotplugHandler *hotplug_dev,
-                                   DeviceState *dev, Error **errp)
-{
-    /* The vmbus handler has no hotplug handler; we should never end up here. */
-    g_assert(!dev->hotplugged);
-    memory_device_pre_plug(MEMORY_DEVICE(dev), MACHINE(hotplug_dev), errp);
-}
-
-static void pc_hv_balloon_plug(const HotplugHandler *hotplug_dev,
-                               DeviceState *dev, Error **errp)
-{
-    memory_device_plug(MEMORY_DEVICE(dev), MACHINE(hotplug_dev));
-}
-
-static void pc_sp_mem_pre_plug(const HotplugHandler *hotplug_dev,
-                               DeviceState *dev, Error **errp)
-{
-    MachineState *ms = MACHINE(hotplug_dev);
-    SpMemDevice *spm = SP_MEM(dev);
-
-    if (ms->numa_state && spm->node >= ms->numa_state->num_nodes) {
-        error_setg(errp,
-                   "'node' property value %" PRIu32
-                   " exceeds the number of NUMA nodes (%d)",
-                   spm->node, ms->numa_state->num_nodes);
-        return;
-    }
-    memory_device_pre_plug(MEMORY_DEVICE(dev), ms, errp);
-}
-
-static void pc_sp_mem_plug(const HotplugHandler *hotplug_dev,
-                           DeviceState *dev, Error **errp)
-{
-    SpMemDevice *spm = SP_MEM(dev);
-    MemoryDeviceClass *mdc = MEMORY_DEVICE_GET_CLASS(MEMORY_DEVICE(dev));
-    uint64_t addr, size;
-
-    memory_device_plug(MEMORY_DEVICE(dev), MACHINE(hotplug_dev));
-
-    addr = mdc->get_addr(MEMORY_DEVICE(dev));
-    size = memory_region_size(host_memory_backend_get_memory(spm->hostmem));
-    e820_add_entry(addr, size, E820_SOFT_RESERVED);
-}
-
 static void pc_machine_device_pre_plug_cb(const HotplugHandler *hotplug_dev,
                                           DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        pc_memory_pre_plug(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_SP_MEM)) {
-        pc_sp_mem_pre_plug(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
         x86_cpu_pre_plug(hotplug_dev, dev, errp);
     } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         virtio_md_pci_pre_plug(VIRTIO_MD_PCI(dev), MACHINE(hotplug_dev), errp);
@@ -1302,33 +908,23 @@ static void pc_machine_device_pre_plug_cb(const HotplugHandler *hotplug_dev,
             return;
         }
         pcms->iommu = dev;
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_HV_BALLOON)) {
-        pc_hv_balloon_pre_plug(hotplug_dev, dev, errp);
     }
 }
 
 static void pc_machine_device_plug_cb(const HotplugHandler *hotplug_dev,
                                       DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        pc_memory_plug(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_SP_MEM)) {
-        pc_sp_mem_plug(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
         x86_cpu_plug(hotplug_dev, dev, errp);
     } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         virtio_md_pci_plug(VIRTIO_MD_PCI(dev), MACHINE(hotplug_dev), errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_HV_BALLOON)) {
-        pc_hv_balloon_plug(hotplug_dev, dev, errp);
     }
 }
 
 static void pc_machine_device_unplug_request_cb(const HotplugHandler *hotplug_dev,
                                                 DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        pc_memory_unplug_request(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
         x86_cpu_unplug_request_cb(hotplug_dev, dev, errp);
     } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         virtio_md_pci_unplug_request(VIRTIO_MD_PCI(dev), MACHINE(hotplug_dev),
@@ -1342,9 +938,7 @@ static void pc_machine_device_unplug_request_cb(const HotplugHandler *hotplug_de
 static void pc_machine_device_unplug_cb(const HotplugHandler *hotplug_dev,
                                         DeviceState *dev, Error **errp)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
-        pc_memory_unplug(hotplug_dev, dev, errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
         x86_cpu_unplug_cb(hotplug_dev, dev, errp);
     } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         virtio_md_pci_unplug(VIRTIO_MD_PCI(dev), MACHINE(hotplug_dev), errp);
@@ -1357,12 +951,9 @@ static void pc_machine_device_unplug_cb(const HotplugHandler *hotplug_dev,
 static const HotplugHandler *pc_get_hotplug_handler(MachineState *machine,
                                                     DeviceState *dev)
 {
-    if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_SP_MEM) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_CPU) ||
+    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU) ||
         object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI) ||
         object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_HV_BALLOON) ||
         object_dynamic_cast(OBJECT(dev), TYPE_X86_IOMMU_DEVICE)) {
         return HOTPLUG_HANDLER(machine);
     }
@@ -1591,9 +1182,6 @@ static void pc_machine_initfn(Object *obj)
     pcms->pcspk = isa_new(TYPE_PC_SPEAKER);
     object_property_set_alias(OBJECT(pcms), "pcspk-audiodev",
                               OBJECT(pcms->pcspk));
-    if (pcmc->pci_enabled) {
-        cxl_machine_init(obj, &pcms->cxl_devices_state);
-    }
 }
 
 static void pc_machine_finalize(Object *obj)
@@ -1659,7 +1247,6 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     hc->unplug_request = pc_machine_device_unplug_request_cb;
     hc->unplug = pc_machine_device_unplug_cb;
     mc->default_cpu_type = TARGET_DEFAULT_CPU_TYPE;
-    mc->nvdimm_supported = true;
     mc->smp_props.dies_supported = true;
     mc->smp_props.modules_supported = true;
     mc->smp_props.cache_supported[CACHE_LEVEL_AND_TYPE_L1D] = true;

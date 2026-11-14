@@ -49,7 +49,6 @@ config VIRTIO_MD_SUPPORTED
 config VIRTIO_MD
     bool
     depends on VIRTIO_MD_SUPPORTED
-    select MEM_DEVICE
 
 # selected by the board if it has the required support code
 config VIRTIO_PMEM_SUPPORTED

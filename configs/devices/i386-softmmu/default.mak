@@ -61,9 +61,19 @@ CONFIG_VHOST_VSOCK=n
 CONFIG_VHOST_SCSI=n
 CONFIG_FSDEV_9P=n
 
-# passthrough / IOMMU. NOTE: DIMM/NVDIMM/CXL/HMAT/VIOT/VMGENID/VMCLOCK/ERST and CPU/memory
-# hotplug are still ON: hw/i386/pc.c and acpi-build.c call them directly. They go away
-# with the dedicated fixed XP machine rework (see HANDOFF.md).
+# memory hotplug / NVDIMM / CXL / table builders removed with the fixed machine (T01)
+CONFIG_DIMM=n
+CONFIG_MEM_DEVICE=n
+CONFIG_NVDIMM=n
+CONFIG_ACPI_NVDIMM=n
+CONFIG_ACPI_HMAT=n
+CONFIG_ACPI_VIOT=n
+CONFIG_ACPI_CXL=n
+CONFIG_ACPI_VMGENID=n
+CONFIG_ACPI_VMCLOCK=n
+CONFIG_ACPI_MEMORY_HOTPLUG=n
+CONFIG_HV_BALLOON_SUPPORTED=n
+# passthrough / IOMMU
 CONFIG_VFIO=n
 CONFIG_VFIO_PCI=n
 CONFIG_VFIO_IGD=n

@@ -29,7 +29,7 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | Benchmarks + AVX-512 A/B | done | no AVX-512 gain for SSE2 guests; stay on v3 |
 | 128-bit guest memory ops (`qemu_ld_vec`/`qemu_st_vec`) | done | loads ~2.7x faster; `xp/bench/vectest.asm` |
 | Inline PSHUFD & other shuffles | in progress / next | currently out-of-line helpers |
-| Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | defaults done; dead-code removal + single machine type pending (T01) |
+| Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | fixed 2 GiB memory model done, hotplug/NVDIMM/CXL removed; single machine type + CLI removal pending (T01) |
 | XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
 | Linux + Windows hosts only | in progress | macOS/BSD code removed, Linux verified; Windows build unverified (T03, T07) |
 | Thread pinning, general TCG performance (all instruction classes) | planned | T13, T14 |

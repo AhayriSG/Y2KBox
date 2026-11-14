@@ -28,7 +28,6 @@
 #include "qemu/bitmap.h"
 #include "qemu/error-report.h"
 #include "hw/pci/pci_bridge.h"
-#include "hw/cxl/cxl.h"
 #include "hw/core/cpu.h"
 #include "target/i386/cpu.h"
 #include "hw/timer/hpet.h"
@@ -43,15 +42,12 @@
 #include "hw/acpi/memory_hotplug.h"
 #include "system/tpm.h"
 #include "hw/acpi/tpm.h"
-#include "hw/acpi/vmgenid.h"
-#include "hw/acpi/vmclock.h"
 #include "hw/acpi/erst.h"
 #include "hw/acpi/piix4.h"
 #include "system/tpm_backend.h"
 #include "hw/rtc/mc146818rtc_regs.h"
 #include "migration/vmstate.h"
 #include "hw/mem/memory-device.h"
-#include "hw/mem/nvdimm.h"
 #include "hw/mem/sp-mem.h"
 #include "system/numa.h"
 #include "system/reset.h"
@@ -70,7 +66,6 @@
 #include "hw/acpi/aml-build.h"
 #include "hw/acpi/utils.h"
 #include "hw/acpi/pci.h"
-#include "hw/acpi/cxl.h"
 
 #include "qom/qom-qobject.h"
 #include "hw/i386/amd_iommu.h"
@@ -129,12 +124,6 @@ typedef struct FwCfgTPMConfig {
 } QEMU_PACKED FwCfgTPMConfig;
 
 static bool acpi_get_mcfg(AcpiMcfgInfo *mcfg);
-
-const struct AcpiGenericAddress x86_nvdimm_acpi_dsmio = {
-    .space_id = AML_AS_SYSTEM_IO,
-    .address = NVDIMM_ACPI_IO_BASE,
-    .bit_width = NVDIMM_ACPI_IO_LEN << 3
-};
 
 static void init_common_fadt_data(MachineState *ms, Object *o,
                                   AcpiFadtData *data)
@@ -835,23 +824,6 @@ static Aml *build_q35_dram_controller(const AcpiMcfgInfo *mcfg)
     return dev;
 }
 
-static void build_acpi0017(Aml *table)
-{
-    Aml *dev, *scope, *method;
-
-    scope =  aml_scope("_SB");
-    dev = aml_device("CXLM");
-    aml_append(dev, aml_name_decl("_HID", aml_string("ACPI0017")));
-
-    method = aml_method("_STA", 0, AML_NOTSERIALIZED);
-    aml_append(method, aml_return(aml_int(0x0B)));
-    aml_append(dev, method);
-    build_cxl_dsm_method(dev);
-
-    aml_append(scope, dev);
-    aml_append(table, scope);
-}
-
 static void
 build_dsdt(GArray *table_data, BIOSLinker *linker,
            AcpiPmInfo *pm, AcpiMiscInfo *misc,
@@ -868,13 +840,11 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
     X86MachineState *x86ms = X86_MACHINE(machine);
     AcpiMcfgInfo mcfg;
     bool mcfg_valid = !!acpi_get_mcfg(&mcfg);
-    uint32_t nr_mem = machine->ram_slots;
     int root_bus_limit = 0xFF;
     PCIBus *bus = NULL;
 #ifdef CONFIG_TPM
     TPMIf *tpm = tpm_find();
 #endif
-    bool cxl_present = false;
     int i;
     VMBusBridge *vmbus_bridge = vmbus_bridge_find();
     AcpiTable table = { .sig = "DSDT", .rev = 1, .oem_id = x86ms->oem_id,
@@ -958,12 +928,6 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
     scope =  aml_scope("_GPE");
     {
         aml_append(scope, aml_name_decl("_HID", aml_string("ACPI0006")));
-        if (machine->nvdimms_state->is_enabled) {
-            method = aml_method("_E04", 0, AML_NOTSERIALIZED);
-            aml_append(method, aml_notify(aml_name("\\_SB.NVDR"),
-                                          aml_int(0x80)));
-            aml_append(scope, method);
-        }
     }
     aml_append(dsdt, scope);
 
@@ -976,12 +940,6 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
         build_cpus_aml(dsdt, machine, opts, pc_madt_cpu_entry,
                        pm->cpu_hp_io_base, "\\_SB.PCI0", "\\_GPE._E02",
                        AML_SYSTEM_IO);
-    }
-
-    if (pcms->memhp_io_base && nr_mem) {
-        build_memory_hotplug_aml(dsdt, nr_mem, "\\_SB.PCI0",
-                                 "\\_GPE._E03", AML_SYSTEM_IO,
-                                 pcms->memhp_io_base);
     }
 
     crs_range_set_init(&crs_range_set);
@@ -1005,22 +963,10 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
                                            &error_fatal);
             scope = aml_scope("\\_SB");
 
-            if (pci_bus_is_cxl(bus)) {
-                dev = aml_device("CL%.02X", bus_num);
-            } else {
-                dev = aml_device("PC%.02X", bus_num);
-            }
+            dev = aml_device("PC%.02X", bus_num);
             aml_append(dev, aml_name_decl("_UID", aml_int(uid)));
             aml_append(dev, aml_name_decl("_BBN", aml_int(bus_num)));
-            if (pci_bus_is_cxl(bus)) {
-                struct Aml *aml_pkg = aml_package(2);
-
-                aml_append(dev, aml_name_decl("_HID", aml_string("ACPI0016")));
-                aml_append(aml_pkg, aml_eisaid("PNP0A08"));
-                aml_append(aml_pkg, aml_eisaid("PNP0A03"));
-                aml_append(dev, aml_name_decl("_CID", aml_pkg));
-                build_cxl_osc_method(dev);
-            } else if (pci_bus_is_express(bus)) {
+            if (pci_bus_is_express(bus)) {
                 aml_append(dev, aml_name_decl("_HID", aml_eisaid("PNP0A08")));
                 aml_append(dev, aml_name_decl("_CID", aml_eisaid("PNP0A03")));
 
@@ -1041,20 +987,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
             aml_append(scope, dev);
             aml_append(dsdt, scope);
 
-            /* Handle the ranges for the PXB expanders */
-            if (pci_bus_is_cxl(bus)) {
-                MemoryRegion *mr = &pcms->cxl_devices_state.host_mr;
-                uint64_t base = mr->addr;
-
-                cxl_present = true;
-                crs_range_insert(crs_range_set.mem_ranges, base,
-                                 base + memory_region_size(mr) - 1);
-            }
         }
-    }
-
-    if (cxl_present) {
-        build_acpi0017(dsdt);
     }
 
     /*
@@ -1395,56 +1328,6 @@ static gint sp_mem_range_compare(gconstpointer a, gconstpointer b)
     return 0;
 }
 
-/*
- * Emit SRAT memory-affinity entries covering the device_memory region.
- *
- * For each plugged TYPE_SP_MEM device, emit an ENABLED entry at the
- * device's own proximity_domain.  All remaining sub-ranges (gaps
- * between sp-mem devices, leading and trailing padding, and ranges
- * occupied by other memory devices) are covered by HOTPLUGGABLE |
- * ENABLED placeholder entries at PXM = nb_numa_nodes - 1.
- */
-static void build_srat_device_memory(GArray *table_data, MachineState *ms)
-{
-    g_autoptr(GArray) ranges = g_array_new(FALSE, TRUE, sizeof(SpMemRange));
-    uint32_t hotplug_pxm = ms->numa_state->num_nodes - 1;
-    uint64_t region_start, region_end;
-    guint i;
-
-    region_start = ms->device_memory->base;
-    region_end = region_start + memory_region_size(&ms->device_memory->mr);
-
-    object_child_foreach_recursive(qdev_get_machine(),
-                                   sp_mem_collect_ranges_cb, ranges);
-    g_array_sort(ranges, sp_mem_range_compare);
-
-    for (i = 0; i < ranges->len; i++) {
-        SpMemRange *r = &g_array_index(ranges, SpMemRange, i);
-
-        if (region_start < r->addr) {
-            build_srat_memory(table_data, region_start, r->addr - region_start,
-                              hotplug_pxm,
-                              MEM_AFFINITY_HOTPLUGGABLE |
-                              MEM_AFFINITY_ENABLED);
-        }
-        build_srat_memory(table_data, r->addr, r->size, r->node,
-                          MEM_AFFINITY_ENABLED);
-        region_start = r->addr + r->size;
-    }
-
-    /*
-     * Cover the rest of the device_memory window that no sp-mem device
-     * occupies. Keeping it HOTPLUGGABLE preserves the umbrella entry's
-     * role for future pc-dimm / virtio-mem hot-add into this window.
-     */
-    if (region_start < region_end) {
-        build_srat_memory(table_data, region_start, region_end - region_start,
-                          hotplug_pxm,
-                          MEM_AFFINITY_HOTPLUGGABLE |
-                          MEM_AFFINITY_ENABLED);
-    }
-}
-
 #define HOLE_640K_START  (640 * KiB)
 #define HOLE_640K_END   (1 * MiB)
 
@@ -1553,10 +1436,6 @@ build_srat(GArray *table_data, BIOSLinker *linker, MachineState *machine)
         }
     }
 
-    if (machine->nvdimms_state->is_enabled) {
-        nvdimm_build_srat(table_data);
-    }
-
     sgx_epc_build_srat(table_data);
 
     /*
@@ -1571,18 +1450,6 @@ build_srat(GArray *table_data, BIOSLinker *linker, MachineState *machine)
     }
 
     build_srat_generic_affinity_structures(table_data);
-
-    /*
-     * Entry is required for Windows to enable memory hotplug in OS
-     * and for Linux to enable SWIOTLB when booted with less than
-     * 4G of RAM. Windows works better if the entry sets proximity
-     * to the highest NUMA node in the machine.
-     * Memory devices may override proximity set by this entry,
-     * providing _PXM method if necessary.
-     */
-    if (machine->device_memory) {
-        build_srat_device_memory(table_data, machine);
-    }
 
     acpi_table_end(linker, &table);
 }
@@ -2058,7 +1925,6 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
     uint8_t *u;
     GArray *tables_blob = tables->table_data;
     AcpiSlicOem slic_oem = { .id = NULL, .table_id = NULL };
-    Object *vmgenid_dev, *vmclock_dev;
     char *oem_id;
     char *oem_table_id;
 
@@ -2124,20 +1990,6 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
     }
 #endif
 
-    vmgenid_dev = find_vmgenid_dev();
-    if (vmgenid_dev) {
-        acpi_add_table(table_offsets, tables_blob);
-        vmgenid_build_acpi(VMGENID(vmgenid_dev), tables_blob,
-                           tables->vmgenid, tables->linker, x86ms->oem_id);
-    }
-
-    vmclock_dev = find_vmclock_dev();
-    if (vmclock_dev) {
-        acpi_add_table(table_offsets, tables_blob);
-        vmclock_build_acpi(VMCLOCK(vmclock_dev), tables_blob, tables->linker,
-                           x86ms->oem_id);
-    }
-
     if (misc.has_hpet) {
         acpi_add_table(table_offsets, tables_blob);
         build_hpet(tables_blob, tables->linker, x86ms->oem_id,
@@ -2164,11 +2016,6 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
             build_slit(tables_blob, tables->linker, machine, x86ms->oem_id,
                        x86ms->oem_table_id);
         }
-        if (machine->numa_state->hmat_enabled) {
-            acpi_add_table(table_offsets, tables_blob);
-            build_hmat(tables_blob, tables->linker, machine->numa_state,
-                       x86ms->oem_id, x86ms->oem_table_id);
-        }
     }
     if (acpi_get_mcfg(&mcfg)) {
         acpi_add_table(table_offsets, tables_blob);
@@ -2183,21 +2030,6 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
         acpi_add_table(table_offsets, tables_blob);
         build_dmar_q35(tables_blob, tables->linker, x86ms->oem_id,
                        x86ms->oem_table_id);
-    } else if (object_dynamic_cast(OBJECT(iommu), TYPE_VIRTIO_IOMMU_PCI)) {
-        PCIDevice *pdev = PCI_DEVICE(iommu);
-
-        acpi_add_table(table_offsets, tables_blob);
-        build_viot(machine, tables_blob, tables->linker, pci_get_bdf(pdev),
-                   x86ms->oem_id, x86ms->oem_table_id);
-    }
-    if (machine->nvdimms_state->is_enabled) {
-        nvdimm_build_acpi(table_offsets, tables_blob, tables->linker,
-                          machine->nvdimms_state, machine->ram_slots,
-                          x86ms->oem_id, x86ms->oem_table_id);
-    }
-    if (pcms->cxl_devices_state.is_enabled) {
-        cxl_build_cedt(table_offsets, tables_blob, tables->linker,
-                       x86ms->oem_id, x86ms->oem_table_id, &pcms->cxl_devices_state);
     }
 
     acpi_add_table(table_offsets, tables_blob);
@@ -2309,7 +2141,6 @@ void acpi_setup(void)
     X86MachineState *x86ms = X86_MACHINE(pcms);
     AcpiBuildTables tables;
     AcpiBuildState *build_state;
-    Object *vmgenid_dev;
 #ifdef CONFIG_TPM
     TPMIf *tpm;
     static FwCfgTPMConfig tpm_config;
@@ -2360,12 +2191,6 @@ void acpi_setup(void)
                         &tpm_config, sizeof tpm_config);
     }
 #endif
-
-    vmgenid_dev = find_vmgenid_dev();
-    if (vmgenid_dev) {
-        vmgenid_add_fw_cfg(VMGENID(vmgenid_dev), x86ms->fw_cfg,
-                           tables.vmgenid);
-    }
 
     build_state->rsdp_mr = acpi_add_rom_blob(acpi_build_update,
                                              build_state, tables.rsdp,
