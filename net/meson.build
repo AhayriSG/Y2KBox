@@ -56,10 +56,6 @@ if host_os == 'windows'
   system_ss.add(files('tap-win32.c'))
 elif host_os == 'linux'
   system_ss.add(files('tap.c', 'tap-linux.c'))
-elif host_os in bsd_oses
-  system_ss.add(files('tap.c', 'tap-bsd.c'))
-elif host_os == 'sunos'
-  system_ss.add(files('tap.c', 'tap-solaris.c'))
 else
   system_ss.add(files('tap.c', 'tap-stub.c'))
 endif
@@ -68,11 +64,4 @@ if have_vhost_net_vdpa
 endif
 stub_ss.add(files('vhost-vdpa-stub.c'))
 
-vmnet_files = files(
-  'vmnet-common.m',
-  'vmnet-bridged.m',
-  'vmnet-host.c',
-  'vmnet-shared.c'
-)
-system_ss.add(when: vmnet, if_true: vmnet_files)
 subdir('can')

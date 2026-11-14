@@ -27,3 +27,5 @@ only apply to a FRESH configure; `ninja -t compdb` lists non-default targets (us
 ### Open at end of session 1
 T01 (fixed machine) and T03 (Linux+Windows hosts only) were started; see TASKS.md for
 their exact state. Anything not committed on a `task/*` branch was lost - check branches.
+
+| (this push) | T03 pass 1: macOS/BSD/Solaris/WASM code removed (`xp/strip/07-*`); Linux fresh configure+full build+SeaBIOS+vectest green. Windows build NOT verified. |

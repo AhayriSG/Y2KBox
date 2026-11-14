@@ -16,7 +16,6 @@ endif
 audio_modules = {}
 foreach m : [
   ['alsa', alsa, files('alsaaudio.c')],
-  ['coreaudio', coreaudio, files('coreaudio.m')],
   ['dsound', dsound, files('dsoundaudio.c', 'audio_win_int.c')],
   ['oss', oss, files('ossaudio.c')],
   ['pa', pulse, files('paaudio.c')],

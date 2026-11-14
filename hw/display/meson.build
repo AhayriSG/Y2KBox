@@ -64,8 +64,6 @@ system_ss.add(when: 'CONFIG_ARTIST', if_true: files())
 
 system_ss.add(when: 'CONFIG_ATI_VGA', if_true: [files(), pixman])
 
-system_ss.add(when: [pvg, 'CONFIG_MAC_PVG_PCI'],     if_true: [files('apple-gfx.m', 'apple-gfx-pci.m')])
-system_ss.add(when: [pvg, 'CONFIG_MAC_PVG_MMIO'],    if_true: [files('apple-gfx.m', 'apple-gfx-mmio.m')])
 
 if config_all_devices.has_key('CONFIG_VIRTIO_GPU')
   virtio_gpu_ss = ss.source_set()

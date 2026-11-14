@@ -111,9 +111,7 @@ meson_options_help() {
   printf "%s\n" '  cap-ng          cap_ng support'
   printf "%s\n" '  capstone        Whether and how to find the capstone library'
   printf "%s\n" '  cloop           cloop image format support'
-  printf "%s\n" '  cocoa           Cocoa user interface (macOS only)'
   printf "%s\n" '  colo-proxy      colo-proxy support'
-  printf "%s\n" '  coreaudio       CoreAudio sound support'
   printf "%s\n" '  crypto-afalg    Linux AF_ALG crypto backend driver'
   printf "%s\n" '  curl            CURL block device driver'
   printf "%s\n" '  curses          curses UI'
@@ -174,7 +172,6 @@ meson_options_help() {
   printf "%s\n" '  pixman          pixman support'
   printf "%s\n" '  plugins         TCG plugins via shared library loading'
   printf "%s\n" '  png             PNG support with libpng'
-  printf "%s\n" '  pvg             macOS paravirtualized graphics support'
   printf "%s\n" '  qatzip          QATzip compression support'
   printf "%s\n" '  qcow1           qcow1 image format support'
   printf "%s\n" '  qed             qed image format support'
@@ -224,7 +221,6 @@ meson_options_help() {
   printf "%s\n" '  virglrenderer   virgl rendering support'
   printf "%s\n" '  virtfs          virtio-9p support'
   printf "%s\n" '  vmdk            vmdk image format support'
-  printf "%s\n" '  vmnet           vmnet.framework network backend support'
   printf "%s\n" '  vnc             VNC server'
   printf "%s\n" '  vnc-jpeg        JPEG lossy compression for VNC server'
   printf "%s\n" '  vnc-sasl        SASL authentication for VNC server'
@@ -281,16 +277,12 @@ _meson_option_parse() {
     --disable-cfi-debug) printf "%s" -Dcfi_debug=false ;;
     --enable-cloop) printf "%s" -Dcloop=enabled ;;
     --disable-cloop) printf "%s" -Dcloop=disabled ;;
-    --enable-cocoa) printf "%s" -Dcocoa=enabled ;;
-    --disable-cocoa) printf "%s" -Dcocoa=disabled ;;
     --enable-colo-proxy) printf "%s" -Dcolo_proxy=enabled ;;
     --disable-colo-proxy) printf "%s" -Dcolo_proxy=disabled ;;
     --container-command=*) quote_sh "-Dcontainer_command=$2" ;;
     --container-registry=*) quote_sh "-Dcontainer_registry=$2" ;;
     --enable-containers) printf "%s" -Dcontainers=true ;;
     --disable-containers) printf "%s" -Dcontainers=false ;;
-    --enable-coreaudio) printf "%s" -Dcoreaudio=enabled ;;
-    --disable-coreaudio) printf "%s" -Dcoreaudio=disabled ;;
     --with-coroutine=*) quote_sh "-Dcoroutine_backend=$2" ;;
     --enable-coroutine-pool) printf "%s" -Dcoroutine_pool=true ;;
     --disable-coroutine-pool) printf "%s" -Dcoroutine_pool=false ;;
@@ -451,8 +443,6 @@ _meson_option_parse() {
     --enable-png) printf "%s" -Dpng=enabled ;;
     --disable-png) printf "%s" -Dpng=disabled ;;
     --prefix=*) quote_sh "-Dprefix=$2" ;;
-    --enable-pvg) printf "%s" -Dpvg=enabled ;;
-    --disable-pvg) printf "%s" -Dpvg=disabled ;;
     --enable-qatzip) printf "%s" -Dqatzip=enabled ;;
     --disable-qatzip) printf "%s" -Dqatzip=disabled ;;
     --enable-qcow1) printf "%s" -Dqcow1=enabled ;;
@@ -628,8 +618,6 @@ _meson_option_parse() {
     --disable-virtfs) printf "%s" -Dvirtfs=disabled ;;
     --enable-vmdk) printf "%s" -Dvmdk=enabled ;;
     --disable-vmdk) printf "%s" -Dvmdk=disabled ;;
-    --enable-vmnet) printf "%s" -Dvmnet=enabled ;;
-    --disable-vmnet) printf "%s" -Dvmnet=disabled ;;
     --enable-vnc) printf "%s" -Dvnc=enabled ;;
     --disable-vnc) printf "%s" -Dvnc=disabled ;;
     --enable-vnc-jpeg) printf "%s" -Dvnc_jpeg=enabled ;;

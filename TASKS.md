@@ -43,13 +43,22 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   `gen_ldo_env_A0`/`gen_sto_env_A0` always use pair atomicity.
 * DoD: build; XP-era SSE2 test passes; `-cpu` option gone; CPUID leaf 1 shows no SSE3+.
 
-## T03 (P0) Hosts: Windows and Linux only  -  Status: CLAIMED by Claude (session 1) 2026-11-14
+## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done, Linux-verified)
 * Remove macOS/BSD/Solaris/Haiku/Emscripten/other-OS code: meson/configure branches,
   `util/` `ui/` `audio/` `net/` `block/` files for those OSes (cocoa, coreaudio, vmnet,
   kqueue, ...), headers, docs mentions.
 * Verify BOTH hosts: native Linux build, and a Windows cross build
   (`x86_64-w64-mingw32-gcc`, see T07).
 * DoD: both configure+build; no `darwin|freebsd|netbsd|openbsd|sunos|haiku` branches left.
+* Done (xp/strip/07-linux-windows-hosts-only.py, Linux configure+build+checks green): cocoa,
+  coreaudio, vmnet, apple-gfx/pvg, hw/vmapple, tap-bsd/solaris, os-wasm, emscripten.cfg;
+  `supported_oses = ['windows','linux']`; macOS dependency blocks and the darwin/sunos/
+  haiku/openbsd branches in the dependency and flags chains.
+* Resume here: (1) remaining `host_os` dead branches/`bsd_oses` in meson.build (grep
+  `darwin|bsd|sunos|haiku|emscripten`), configure (`host_os=` detection), util/, include/qemu/
+  (`osdep.h` etc.), qapi/ (`@if CONFIG_DARWIN`...), chardev/, hw/9pfs, fsdev (macOS/BSD
+  xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
+  meson_options.txt; (2) **Windows build not verified** - see T07.
 
 ## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: TODO
 Currently out-of-line helpers (`pshufd_xmm` ...). The x86 backend already has target

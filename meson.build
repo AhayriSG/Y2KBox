@@ -54,7 +54,7 @@ genh = []
 qapi_trace_events = []
 
 bsd_oses = ['gnu/kfreebsd', 'freebsd', 'netbsd', 'openbsd', 'dragonfly', 'darwin']
-supported_oses = ['windows', 'freebsd', 'netbsd', 'openbsd', 'darwin', 'sunos', 'linux', 'emscripten']
+supported_oses = ['windows', 'linux']
 supported_cpus = ['x86_64']
 
 cpu = host_machine.cpu_family()
@@ -354,20 +354,7 @@ qemu_common_flags = [
 qemu_cflags = []
 qemu_ldflags = []
 
-if host_os == 'darwin'
-  # Disable attempts to use ObjectiveC features in os/object.h since they
-  # won't work when we're compiling with gcc as a C compiler.
-  if compiler.get_id() == 'gcc'
-    qemu_common_flags += '-DOS_OBJECT_USE_OBJC=0'
-  endif
-elif host_os == 'sunos'
-  # needed for CMSG_ macros in sys/socket.h
-  qemu_common_flags += '-D_XOPEN_SOURCE=600'
-  # needed for TIOCWIN* defines in termios.h
-  qemu_common_flags += '-D__EXTENSIONS__'
-elif host_os == 'haiku'
-  qemu_common_flags += ['-DB_USE_POSITIVE_POSIX_ERRORS', '-D_BSD_SOURCE', '-fPIC']
-elif host_os == 'windows'
+if host_os == 'windows'
   # plugins use delaylib, and clang needs to be used with lld to make it work.
   if compiler.get_id() == 'clang' and compiler.get_linker_id() != 'ld.lld'
     error('On windows, you need to use lld with clang - use msys2 clang64/clangarm64 env')
@@ -849,25 +836,6 @@ if host_os == 'windows'
                                       depend_files: files('pc-bios/qemu-nsis.ico'),
                                       include_directories: include_directories('.'))
   host_dsosuf = '.dll'
-elif host_os == 'darwin'
-  coref = dependency('appleframeworks', modules: 'CoreFoundation')
-  iokit = dependency('appleframeworks', modules: 'IOKit', required: false)
-  host_dsosuf = '.dylib'
-  pvg = dependency('appleframeworks', modules: ['ParavirtualizedGraphics', 'Metal'],
-                   required: get_option('pvg'))
-elif host_os == 'sunos'
-  socket = [cc.find_library('socket'),
-            cc.find_library('nsl'),
-            cc.find_library('resolv')]
-elif host_os == 'haiku'
-  socket = [cc.find_library('posix_error_mapper'),
-            cc.find_library('network'),
-            cc.find_library('bsd')]
-elif host_os == 'openbsd'
-  if have_tcg
-    # Disable OpenBSD W^X if available
-    emulator_link_args = cc.get_supported_link_arguments('-Wl,-z,wxneeded')
-  endif
 endif
 
 ###############################################
@@ -1121,21 +1089,9 @@ if get_option('attr').allowed()
   endif
 endif
 
-cocoa = dependency('appleframeworks',
-                   modules: ['Cocoa', 'CoreVideo', 'QuartzCore'],
-                   required: get_option('cocoa'))
+cocoa = not_found  # macOS removed
 
-vmnet = dependency('appleframeworks', modules: 'vmnet', required: get_option('vmnet'))
-if vmnet.found() and not cc.has_header_symbol('vmnet/vmnet.h',
-                                              'VMNET_BRIDGED_MODE',
-                                              dependencies: vmnet)
-  vmnet = not_found
-  if get_option('vmnet').enabled()
-    error('vmnet.framework API is outdated')
-  else
-    warning('vmnet.framework API is outdated, disabling')
-  endif
-endif
+vmnet = not_found  # macOS removed
 
 seccomp = not_found
 seccomp_has_sysrawrc = false
@@ -1665,11 +1621,7 @@ if not get_option('dsound').auto() or (host_os == 'windows' and have_system)
   endif
 endif
 
-coreaudio = not_found
-if not get_option('coreaudio').auto() or (host_os == 'darwin' and have_system)
-  coreaudio = dependency('appleframeworks', modules: 'CoreAudio',
-                         required: get_option('coreaudio'))
-endif
+coreaudio = not_found  # macOS removed
 
 opengl = not_found
 if not get_option('opengl').auto() or have_system or have_vhost_user_gpu
@@ -3561,7 +3513,6 @@ if have_system
     'hw/vfio',
     'hw/vfio-user',
     'hw/virtio',
-    'hw/vmapple',
     'hw/watchdog',
     'hw/gpio',
     'migration',
@@ -3723,8 +3674,6 @@ if have_block
   # os-win32.c does not
   if host_os == 'windows'
     system_ss.add(files('os-win32.c'))
-  elif host_os == 'emscripten'
-    blockdev_ss.add(files('os-wasm.c'))
   else
     blockdev_ss.add(files('os-posix.c'))
   endif
