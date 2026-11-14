@@ -5,8 +5,12 @@ A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 Long-term goals: fast SSE2 under TCG, VirtualBox-style **VBoxVGA 3D acceleration**
 for XP, and a small wxWidgets launcher.
 
-**Contributors / LLMs: read [HANDOFF.md](HANDOFF.md) first** - aim, decisions,
-findings, design notes and exact next steps.
+**Contributors / LLMs: read [HANDOFF.md](HANDOFF.md) first**, then pick work from
+[TASKS.md](TASKS.md) (claim by pushing) and log what you did in [WORKLOG.md](WORKLOG.md).
+Several AIs can work in parallel.
+
+Fixed target: guest RAM 2048 MB, guest CPU SSE2 maximum, vCPUs = host threads;
+hosts: Windows and Linux (x86-64-v3 or newer).
 
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).

@@ -1,0 +1,29 @@
+# Y2KBox work log (newest entries at the bottom; append, never rewrite history)
+
+Format: `date | who | commit | what / result / evidence`.
+Every session MUST append here before stopping (see HANDOFF.md section 10).
+
+## Session 1 (Claude), 2026-11-13 .. 2026-11-14
+Base: upstream QEMU 9d7d057 (11.1.90). Sandbox: 1 core, 3 GB RAM (builds ~10 min at -j2).
+
+| commit | what |
+|--------|------|
+| 74e26e7 | remove `tests/` |
+| ca31674 | remove `docs/` (build_docs=false) |
+| 2d22bf2 | remove all non-x86 targets/boards, linux-user/bsd-user/common-user; configure patched; Kconfig stubs for dangling symbols (`xp/strip/02-*`) |
+| e9c3a24 | i440FX `pc` only (default.mak disables q35/microvm/isapc/nitro/SEV/SGX/TDX/IOMMU/OVMF) |
+| c3bc2f6 | full TCG: remove KVM/HVF/WHPX/NVMM/MSHV/Nitro accelerators, Xen/Hyper-V implementations (`xp/strip/03-*`) |
+| 0dd67e4 | x86-64 hosts only; non-x86 TCG backends + TCI removed; `x86_version=3` default; startup v3 check; v3 features constant in `tcg/x86_64`; fixed CPUID leaf typo (`xp/strip/04-*`) |
+| 5091ce3 | Xen removed completely incl. QAPI/HMP/CLI (`xp/strip/05-remove-xen.py`) |
+| ffc195e | SSE2 benchmark (`xp/bench/`), `XPQEMU_NO_AVX512=1` switch. Result: AVX-512 gives no gain for SSE2 guests -> stay on v3 |
+| abae63c | **`qemu_ld_vec`/`qemu_st_vec` TCG ops**: 128-bit guest loads 1.56s->0.58s, mixed mem loop 6.20s->2.82s; `xp/bench/vectest.asm` functional test |
+| 0ab9db8 | XP device set in default.mak (220->91 symbols); 1015 dead C files, 724 headers, non-x86 firmware, contrib removed (tree 88MB->41MB); `xp/strip/06-*`; qemu-img verified |
+
+Notable lessons: removing option ROMs broke the default NIC (caught by the boot test);
+`git grep` on a blobless clone downloads everything (timeouts); meson option defaults
+only apply to a FRESH configure; `ninja -t compdb` lists non-default targets (use
+`ninja -t commands <target>` for the real compile set).
+
+### Open at end of session 1
+T01 (fixed machine) and T03 (Linux+Windows hosts only) were started; see TASKS.md for
+their exact state. Anything not committed on a `task/*` branch was lost - check branches.
