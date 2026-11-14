@@ -20,7 +20,7 @@ Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
 
 ---
 
-## T01 (P0) Fixed XP machine  -  Status: PAUSED (parts 1 and 2a done)
+## T01 (P0) Fixed XP machine  -  Status: PAUSED (parts 1, 2a, 2b done)
 Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
 * DONE part 1: default RAM 2 GiB, default 1 vCPU, `max_cpus` 2 (`hw/i386/pc.c`).
 * DONE part 2a (`xp/strip/08-fixed-machine-memory.py`): minimal `pc_memory_init` (all RAM below 4 GiB,
@@ -30,14 +30,14 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   ACPI_NVDIMM/HMAT/VIOT/CXL/VMGENID/VMCLOCK/MEMORY_HOTPLUG, HV_BALLOON_SUPPORTED = n
   (10 stale Kconfig `select` lines removed); 11 dead C files deleted. Checks green: e820 = one
   2 GiB entry, vectest OK, `-smp 2` boots, no pc-dimm/nvdimm devices.
-* Resume here (part 2b): (1) delete the remaining ~18 versioned `pc-i440fx-X.Y` machine types in
-  `hw/i386/pc_piix.c` + `hw/core/machine.c` compat arrays (`hw_compat_*`, `pc_compat_*` in
-  `hw/i386/pc.c`/`include/hw/i386/pc.h`) and keep ONE machine type; (2) remove dead above-4G /
+* DONE part 2b (`xp/strip/09-single-machine-type.py`): only `pc-i440fx-11.2` (alias `pc`) remains; 88 compat
+  tables (`pc_compat_*`, `hw_compat_*`) deleted. `-machine help` = pc + none.
+* Resume here (part 2c): (2) remove dead above-4G /
   hole64 / `max_ram_below_4g` / ram-slots/maxmem fields and code (`x86_machine_*`, `pc_init1`
   memory split in `hw/i386/pc_piix.c`, `hw/i386/x86.c`); (3) remove the `-m/-smp/-machine/-cpu`
-  CLI paths (qemu-options.hx, system/vl.c, `-smp` parsing) now that defaults are fixed; (4) ACPI
+  CLI paths (qemu-options.hx, system/vl.c, `-smp` parsing) now that defaults are fixed; (4) rename the machine to something like `xp` (drop the version suffix); (5) ACPI
   CPU hotplug AML (`build_cpus_aml`) is still needed for the CPU objects - keep it, drop the
-  hotplug-only parts later; (5) re-run dead-source pass (HANDOFF 5b), standard checks.
+  hotplug-only parts later; (6) re-run dead-source pass (HANDOFF 5b), standard checks.
 * DoD: fresh configure+build; one machine in `-machine help`; standard checks (HANDOFF 7);
   `info mtree` shows 2 GiB below 4 GiB only.
 

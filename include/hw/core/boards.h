@@ -830,70 +830,26 @@ compat_props_add(GPtrArray *arr,
     }
 }
 
-extern GlobalProperty hw_compat_11_1[];
-extern const size_t hw_compat_11_1_len;
 
-extern GlobalProperty hw_compat_11_0[];
-extern const size_t hw_compat_11_0_len;
 
-extern GlobalProperty hw_compat_10_2[];
-extern const size_t hw_compat_10_2_len;
 
-extern GlobalProperty hw_compat_10_1[];
-extern const size_t hw_compat_10_1_len;
 
-extern GlobalProperty hw_compat_10_0[];
-extern const size_t hw_compat_10_0_len;
 
-extern GlobalProperty hw_compat_9_2[];
-extern const size_t hw_compat_9_2_len;
 
-extern GlobalProperty hw_compat_9_1[];
-extern const size_t hw_compat_9_1_len;
 
-extern GlobalProperty hw_compat_9_0[];
-extern const size_t hw_compat_9_0_len;
 
-extern GlobalProperty hw_compat_8_2[];
-extern const size_t hw_compat_8_2_len;
 
-extern GlobalProperty hw_compat_8_1[];
-extern const size_t hw_compat_8_1_len;
 
-extern GlobalProperty hw_compat_8_0[];
-extern const size_t hw_compat_8_0_len;
 
-extern GlobalProperty hw_compat_7_2[];
-extern const size_t hw_compat_7_2_len;
 
-extern GlobalProperty hw_compat_7_1[];
-extern const size_t hw_compat_7_1_len;
 
-extern GlobalProperty hw_compat_7_0[];
-extern const size_t hw_compat_7_0_len;
 
-extern GlobalProperty hw_compat_6_2[];
-extern const size_t hw_compat_6_2_len;
 
-extern GlobalProperty hw_compat_6_1[];
-extern const size_t hw_compat_6_1_len;
 
-extern GlobalProperty hw_compat_6_0[];
-extern const size_t hw_compat_6_0_len;
 
-extern GlobalProperty hw_compat_5_2[];
-extern const size_t hw_compat_5_2_len;
 
-extern GlobalProperty hw_compat_5_1[];
-extern const size_t hw_compat_5_1_len;
 
-extern GlobalProperty hw_compat_5_0[];
-extern const size_t hw_compat_5_0_len;
 
-extern GlobalProperty hw_compat_4_2[];
-extern const size_t hw_compat_4_2_len;
 
-extern GlobalProperty hw_compat_4_1[];
-extern const size_t hw_compat_4_1_len;
 
 #endif

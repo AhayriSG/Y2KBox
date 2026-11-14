@@ -213,71 +213,27 @@ void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size);
 /* sgx.c */
 void pc_machine_init_sgx_epc(PCMachineState *pcms);
 
-extern GlobalProperty pc_compat_11_1[];
-extern const size_t pc_compat_11_1_len;
 
-extern GlobalProperty pc_compat_11_0[];
-extern const size_t pc_compat_11_0_len;
 
-extern GlobalProperty pc_compat_10_2[];
-extern const size_t pc_compat_10_2_len;
 
-extern GlobalProperty pc_compat_10_1[];
-extern const size_t pc_compat_10_1_len;
 
-extern GlobalProperty pc_compat_10_0[];
-extern const size_t pc_compat_10_0_len;
 
-extern GlobalProperty pc_compat_9_2[];
-extern const size_t pc_compat_9_2_len;
 
-extern GlobalProperty pc_compat_9_1[];
-extern const size_t pc_compat_9_1_len;
 
-extern GlobalProperty pc_compat_9_0[];
-extern const size_t pc_compat_9_0_len;
 
-extern GlobalProperty pc_compat_8_2[];
-extern const size_t pc_compat_8_2_len;
 
-extern GlobalProperty pc_compat_8_1[];
-extern const size_t pc_compat_8_1_len;
 
-extern GlobalProperty pc_compat_8_0[];
-extern const size_t pc_compat_8_0_len;
 
-extern GlobalProperty pc_compat_7_2[];
-extern const size_t pc_compat_7_2_len;
 
-extern GlobalProperty pc_compat_7_1[];
-extern const size_t pc_compat_7_1_len;
 
-extern GlobalProperty pc_compat_7_0[];
-extern const size_t pc_compat_7_0_len;
 
-extern GlobalProperty pc_compat_6_2[];
-extern const size_t pc_compat_6_2_len;
 
-extern GlobalProperty pc_compat_6_1[];
-extern const size_t pc_compat_6_1_len;
 
-extern GlobalProperty pc_compat_6_0[];
-extern const size_t pc_compat_6_0_len;
 
-extern GlobalProperty pc_compat_5_2[];
-extern const size_t pc_compat_5_2_len;
 
-extern GlobalProperty pc_compat_5_1[];
-extern const size_t pc_compat_5_1_len;
 
-extern GlobalProperty pc_compat_5_0[];
-extern const size_t pc_compat_5_0_len;
 
-extern GlobalProperty pc_compat_4_2[];
-extern const size_t pc_compat_4_2_len;
 
-extern GlobalProperty pc_compat_4_1[];
-extern const size_t pc_compat_4_1_len;
 
 #define DEFINE_PC_MACHINE_EXTENDED(suffix, namestr, initfn, optsfn, issecure) \
     static void pc_machine_##suffix##_class_init(ObjectClass *oc, \
