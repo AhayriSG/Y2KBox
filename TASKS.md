@@ -69,7 +69,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
   meson_options.txt; (2) **Windows build not verified** - see T07.
 
-## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: TODO
+## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: CLAIMED by ChatGPT session 2026-11-14
 Currently out-of-line helpers (`pshufd_xmm` ...). The x86 backend already has target
 vector ops (`x86_shufps`, `x86_punpckl/h`, `x86_psrldq`, blend in
 `tcg/x86_64/tcg-target-opc.h.inc`). Add inline lowering (or a new TCG shuffle op).
