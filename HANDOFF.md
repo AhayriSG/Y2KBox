@@ -179,12 +179,14 @@ idempotent (`git checkout` touched files first).
 
 ## 9. References and resources for development
 
-QEMU / x86 emulation
+QEMU-based x86 emulation
 * QEMU upstream: https://github.com/qemu/QEMU (TCG: `tcg/`, `target/i386/tcg/`,
   `accel/tcg/`; the new x86 decoder is `target/i386/tcg/decode-new.c.inc`).
 * xemu (original Xbox, Pentium III class CPU + NV2A GPU emulation, QEMU based):
   https://github.com/xemu-project/xemu - reference for a trimmed single-purpose
   QEMU fork, a PIII-era CPU model, and host-GL-backed guest GPU emulation.
+
+Misc x86 emulation
 * xbased (same focus as xemu): https://github.com/crazyriddler/xbased
 * Bochs PR "Improve glxgears support for GeForce":
   https://github.com/bochs-emu/Bochs/pull/574 - guest GL on an emulated GPU.
