@@ -20,7 +20,7 @@ Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
 
 ---
 
-## T01 (P0) Fixed XP machine  -  Status: PAUSED (part 1 done)
+## T01 (P0) Fixed XP machine  -  Status: CLAIMED by Claude (session 2) 2026-11-14 (part 2)
 Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
 * DONE: default RAM 2 GiB (`mc->default_ram_size`), default 1 vCPU, `max_cpus` 2
   (`hw/i386/pc.c`); verified e820 = one 2 GiB RAM region at 0.
