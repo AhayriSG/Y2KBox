@@ -34,3 +34,16 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 
 Verified so far: fresh configure + full build; `-accel help` lists only `tcg`;
 SeaBIOS boots under TCG with 2 vCPUs; SSE2 memory-op functional test passes.
+
+## References
+
+QEMU: https://github.com/qemu/QEMU - xemu: https://github.com/xemu-project/xemu -
+xbased: https://github.com/crazyriddler/xbased - 86Box VBoxVGA PR:
+https://github.com/86Box/86Box/pull/6183 - VirtualBox mirror (use v5.2.x/v6.1.x,
+GPLv2): https://github.com/VirtualBox/virtualbox - Bochs GeForce PR:
+https://github.com/bochs-emu/Bochs/pull/574 - wine9x: https://github.com/JHRobotics/wine9x -
+SoftGPU: https://github.com/JHRobotics/softgpu - DXVK: https://github.com/doitsujin/DXVK -
+d3d8to9: https://github.com/crosire/d3d8to9/ - viogpu3d:
+https://github.com/virtio-win/kvm-guest-drivers-windows/pull/943 - virglrenderer:
+https://github.com/utmapp/virglrenderer - Yttrium: https://github.com/arehnman/yttrium-virtio-gpu.
+Details and how each is useful: HANDOFF.md section 9.

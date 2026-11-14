@@ -164,14 +164,46 @@ AVX-guest atomicity path (MO_ATOM_IFALIGN), a stress test under MTTCG.
   XP guests (vs OpenGL only), which GA version to target (plan: 5.2.x, with 3.2.28
   as the bring-up baseline).
 
-## 8. Publishing note
+## 8. Repository and workflow
 
-The owner's GitHub repo is https://github.com/AhayriSG/Y2KBox (initial commit
-only). The assistant that wrote this had no GitHub write access, so the work was
-delivered as `y2kbox.bundle` (branch `xp-fork`, requires upstream commit 9d7d057):
+Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (the only branch).
+History: owner's "Initial commit" -> snapshot import of upstream QEMU `9d7d057`
+(tree identical to qemu/qemu 9d7d057a558b9a1c232cea390b4481dd20d9c9ce; upstream
+history itself is not included) -> Y2KBox commits. To merge newer upstream QEMU:
+add `qemu/qemu` as a remote and merge with `--allow-unrelated-histories`.
 
-    git init Y2KBox && cd Y2KBox
-    git fetch --depth 1 https://github.com/qemu/qemu.git 9d7d057a558b9a1c232cea390b4481dd20d9c9ce
-    git fetch /path/to/y2kbox.bundle xp-fork:main && git checkout main
-    git remote add origin https://github.com/AhayriSG/Y2KBox.git
-    git push --force origin main     # replaces the repo's lone "Initial commit"
+Work happens by committing to `main` and pushing (fast-forward, no force needed).
+Keep README.md's status table and this file in sync with what you change.
+
+## 9. References and resources for development
+
+QEMU / x86 emulation
+* QEMU upstream: https://github.com/qemu/QEMU (TCG: `tcg/`, `target/i386/tcg/`,
+  `accel/tcg/`; the new x86 decoder is `target/i386/tcg/decode-new.c.inc`).
+* xemu (original Xbox, Pentium III class CPU + NV2A GPU emulation, QEMU based):
+  https://github.com/xemu-project/xemu - reference for a trimmed single-purpose
+  QEMU fork, a PIII-era CPU model, and host-GL-backed guest GPU emulation.
+* xbased (same focus as xemu): https://github.com/crazyriddler/xbased
+* Bochs PR "Improve glxgears support for GeForce":
+  https://github.com/bochs-emu/Bochs/pull/574 - guest GL on an emulated GPU.
+
+VBoxVGA / VirtualBox
+* 86Box PR #6183 "Add Initial Support for VBoxVGA Emulation":
+  https://github.com/86Box/86Box/pull/6183 (VBE side of the device; see sec. 7).
+* VirtualBox display device source (modern, 7.x, GPL-3.0 - read only, do not copy):
+  https://github.com/CE1CECL/vbox/blob/master/src/VBox/Devices/Graphics/DevVGA.cpp
+  Prefer the official mirror tags v5.2.2 / v6.1.x (GPLv2) for porting:
+  https://github.com/VirtualBox/virtualbox
+
+Guest-side 3D stacks for old Windows (alternatives / building blocks)
+* wine9x (Wine wrapper for Win9x/XP era): https://github.com/JHRobotics/wine9x
+* SoftGPU (guest software 3D driver): https://github.com/JHRobotics/softgpu
+* DXVK: https://github.com/doitsujin/DXVK ; d3d8to9: https://github.com/crosire/d3d8to9/
+  (D3D8/9 -> modern API translation ideas for an XP D3D path).
+* viogpu3d (Virtio GPU 3D for Windows) PR:
+  https://github.com/virtio-win/kvm-guest-drivers-windows/pull/943
+* virglrenderer: https://github.com/utmapp/virglrenderer (host-side virtual GL;
+  guest drivers are WDDM, so not directly usable by XP).
+* Yttrium (D3D GPU driver for KVM/QEMU Windows guests):
+  https://github.com/arehnman/yttrium-virtio-gpu
+
