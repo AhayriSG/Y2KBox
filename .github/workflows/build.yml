@@ -55,9 +55,26 @@ jobs:
       - name: Configure
         run: |
           mkdir build && cd build
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror
+          set +e
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror 2>&1 | tee configure.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            { tail -n 30 configure.log; echo '--- meson-log'; tail -n 25 meson-logs/meson-log.txt 2>/dev/null; } > err.txt
+            msg=$(sed 's/%/%25/g' err.txt | awk '{printf "%s%%0A", $0}')
+            echo "::error title=configure-failed::$msg"
+            exit $rc
+          fi
       - name: Build
-        run: ninja -C build qemu-system-i386.exe qemu-img.exe
+        run: |
+          set +e
+          ninja -C build qemu-system-i386.exe qemu-img.exe 2>&1 | tee build.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            grep -n -E "error|FAILED|undefined" build.log | head -25 > err.txt
+            msg=$(sed 's/%/%25/g' err.txt | awk '{printf "%s%%0A", $0}')
+            echo "::error title=build-failed::$msg"
+            exit $rc
+          fi
       - name: Checks
         run: |
           cd build
