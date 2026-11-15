@@ -1,0 +1,69 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build python3-pip libglib2.0-dev libpixman-1-dev \
+            libfdt-dev libslirp-dev nasm pkg-config
+          pip install --break-system-packages meson tomli || pip install meson tomli
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror
+      - name: Build
+        run: ninja -C build qemu-system-i386 qemu-img
+      - name: Checks (boot + memory-op test + CPUID)
+        run: |
+          cd build
+          ./qemu-system-i386 -accel help | tee accel.txt; grep -qx tcg accel.txt
+          nasm -fbin ../xp/bench/vectest.asm -o vectest.img
+          ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vectest.img,format=raw,if=ide \
+            -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee vectest.out || true
+          grep -q '^OK' vectest.out
+          ./qemu-img create -f qcow2 t.qcow2 1G
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git base-devel
+            mingw-w64-x86_64-toolchain mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-python mingw-w64-x86_64-python-pip
+            mingw-w64-x86_64-ninja mingw-w64-x86_64-meson
+            mingw-w64-x86_64-glib2 mingw-w64-x86_64-pixman
+            mingw-w64-x86_64-libslirp mingw-w64-x86_64-dtc
+            mingw-w64-x86_64-zlib mingw-w64-x86_64-nasm
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror
+      - name: Build
+        run: ninja -C build qemu-system-i386.exe qemu-img.exe
+      - name: Checks
+        run: |
+          cd build
+          ./qemu-system-i386.exe -accel help
+          nasm -fbin ../xp/bench/vectest.asm -o vectest.img
+          ./qemu-system-i386.exe -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vectest.img,format=raw,if=ide \
+            -chardev file,id=d,path=vectest.out -device isa-debugcon,iobase=0x402,chardev=d || true
+          cat vectest.out; grep -q '^OK' vectest.out
