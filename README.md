@@ -31,7 +31,7 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | Inline PSHUFD & other shuffles | in progress / next | currently out-of-line helpers |
 | Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | fixed 2 GiB memory model done, hotplug/NVDIMM/CXL removed; single machine type done; CLI flag removal + dead above-4G code pending (T01) |
 | XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
-| Linux + Windows hosts only | in progress | macOS/BSD code removed, Linux verified; Windows build unverified (T03, T07) |
+| Linux + Windows hosts only | in progress | macOS/BSD code removed; Linux and Windows builds verified by CI (T03 pass 2 pending, T07 done) |
 | Thread pinning, general TCG performance (all instruction classes) | planned | T13, T14 |
 | Remove IOMMU/SEV/SGX/TDX/VFIO + remaining KVM call sites | planned | heavily entangled; see HANDOFF |
 | Device pruning | partly done | XP device set in `default.mak` (220 -> 91 enabled symbols, 439 -> ~247 listed devices); 1015 dead C files, 724 unused headers, non-x86 firmware removed (tree 171 MB -> 41 MB); machine-coupled pieces (DIMM/NVDIMM/CXL/ACPI hotplug) await the fixed-machine rework |
@@ -39,7 +39,7 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | VBoxVGA + HGSMI/VBVA + VMMDev/HGCM + 3D host service | planned | VirtualBox 5.2.x (GPLv2) as reference |
 | wxWidgets launcher (qcow2 disk, RAM, floppy, ISO) | planned (later) | |
 
-Verified so far: fresh configure + full build; `-accel help` lists only `tcg`;
+Verified so far: CI builds on Linux and Windows (MSYS2); fresh configure + full build; `-accel help` lists only `tcg`;
 SeaBIOS boots under TCG with 2 vCPUs; SSE2 memory-op functional test passes.
 
 ## References

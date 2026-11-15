@@ -56,7 +56,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   `gen_ldo_env_A0`/`gen_sto_env_A0` then always use pair atomicity. Keep x87/MMX/SSE/SSE2.
 * DoD: build; CPUID shows no SSE3+; vectest OK; XP boot still works once T08 exists.
 
-## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done, Linux-verified)
+## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done; Linux + Windows CI verified)
 * Remove macOS/BSD/Solaris/Haiku/Emscripten/other-OS code: meson/configure branches,
   `util/` `ui/` `audio/` `net/` `block/` files for those OSes (cocoa, coreaudio, vmnet,
   kqueue, ...), headers, docs mentions.
@@ -71,7 +71,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   `darwin|bsd|sunos|haiku|emscripten`), configure (`host_os=` detection), util/, include/qemu/
   (`osdep.h` etc.), qapi/ (`@if CONFIG_DARWIN`...), chardev/, hw/9pfs, fsdev (macOS/BSD
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
-  meson_options.txt; (2) **Windows build not verified** - see T07.
+  meson_options.txt; (2) Windows build is verified by CI (T07).
 
 ## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: TODO
 Currently out-of-line helpers (`pshufd_xmm` ...). The x86 backend already has target
@@ -91,10 +91,12 @@ keep savevm snapshots), vhost/vhost-user, block formats other than raw/qcow2/vvf
 net backends other than user/slirp(+socket?), `scripts/`, `python/`, `rust/`, `qga/`.
 Use the dead-code technique in HANDOFF 5b. Re-run the boot + vectest checks.
 
-## T07 (P1) Windows host build  -  Status: TODO
-Cross-compile `qemu-system-i386.exe` and `qemu-img.exe` with mingw-w64
-(`apt install mingw-w64`; deps via MSYS2 pkgs or a cross sysroot). Fix breakage caused
-by pruning. Add a GitHub Actions workflow building Linux and Windows.
+## T07 (P1) Windows host build  -  Status: DONE 2026-11-14 (CI green at 92dbf22, run 43695682586)
+GitHub Actions (`.github/workflows/build.yml`) builds and checks BOTH hosts natively: Linux (ubuntu-24.04)
+and Windows (MSYS2 UCRT64): configure, build `qemu-system-i386[.exe]` + `qemu-img[.exe]`, `-accel help`,
+boot + `xp/bench/vectest.asm` (prints OK on both). Windows needed `pc-bios/qemu-nsis.ico` restored (agent fix
+92dbf22). Keep CI green: check the Actions tab / API (`/repos/AhayriSG/Y2KBox/actions/runs`) after every push.
+Follow-ups (not blocking): upload build artifacts; cache MSYS2 packages; add a Windows `vectest` timing run.
 
 ## T08 (P1) Boot Windows XP SP3 end to end  -  Status: TODO (needs an XP ISO from the owner)
 Install to a qcow2 disk (`qemu-img create -f qcow2`), IDE CD-ROM, floppy; measure install time;

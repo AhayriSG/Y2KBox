@@ -43,7 +43,7 @@ files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TA
 
 ## 2. Current state snapshot (update when it changes)
 
-* Builds on Linux (native). Windows host build: not yet verified (T07). macOS/BSD code removed (T03 pass 1).
+* Builds and passes the checks on Linux AND Windows (GitHub Actions, MSYS2 UCRT64) - keep CI green. macOS/BSD code removed (T03 pass 1).
 * `qemu-system-i386 -accel help` -> only `tcg`. Only i440FX `pc` machines (19 versioned
   variants still present). Default CPU `xp-p4` (verified in-guest: family 15, SSE2 yes,
   SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified); 1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. **XP has not been
@@ -169,6 +169,9 @@ or meson files (old build dirs keep old option values). Strip script `05` is not
 idempotent (`git checkout` touched files first).
 
 ## 7. Standard checks ("green" = all pass; run after every change)
+
+CI (`.github/workflows/build.yml`) runs configure+build+boot+vectest on Linux and Windows for every push;
+check it after pushing (Actions tab or `GET /repos/AhayriSG/Y2KBox/actions/runs`).
 
     ./qemu-system-i386 -accel help                       # only: tcg
     # SeaBIOS boot, 2 vCPUs:
