@@ -31,3 +31,25 @@ AVX-512 makes no measurable difference for SSE2 guest code.
 
 Candidate work: a qemu_ld_vec/qemu_st_vec op for the x86_64 backend; inline
 PSHUFD/PSHUFLW/PSHUFHW/PUNPCK*/PACK*/SHUFPS; keeping hot XMM regs in host regs.
+
+## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
+
+Real-mode boot sectors (register loop counter `ebp`; keep loop state off the code page - a counter
+on the code page triggers self-modifying-code retranslation and makes everything 50x slower).
+`perf.py QEMU PCBIOS` builds each with an iteration count, subtracts an empty loop of the same
+length, and prints net ns/iteration (min of 3 runs). The sandbox is noisy: use >= 1 s runs.
+
+Baseline (2026-11-14, sandbox, xp-p4 CPU, TCG, 1 vCPU), net ns per iteration:
+
+| bench | what | ns/iter | note |
+|-------|------|---------|------|
+| alu | 10 ALU insns incl. adc/ror/neg | ~0 | at noise floor: ~native |
+| imul / div | mul/imul/div chains | ~0 / ~1 | fine |
+| branch | 3 conditional jumps | 2.5 | |
+| memalu | 6 memory-operand ALU ops | 4.5 | ~0.75 ns/op |
+| pushpop | 3 push + 3 pop | 4.5 | |
+| **callret** | 2x (call, inc, ret) | **24.6** | ~12 ns per call+ret pair |
+| **strmov / strset** | `rep movsd` / `rep stosd`, 1 KB | **509 / 536** | ~2 GB/s |
+| **x87add** | fld m64; fmul m64; faddp | **72** | ~24 ns per x87 insn |
+| **x87div** | fld; fdiv; fsqrt; faddp | **157** | |
+| x87trig | fld; fsin; faddp | 84 | |

@@ -109,6 +109,9 @@ removed by T01.
 * The load hotspot (fixed, below): int-pair load + two 64-bit env stores + 128-bit
   reload = store-forwarding stall (~15-20 cycles).
 
+### 5a1. General-instruction baseline (see xp/bench/README.md)
+Near native: integer ALU, imul/div, branches, memory-operand ops, push/pop. Slow: x87 (softfloat), call/ret, rep string ops. Plan in TASKS T13a-c.
+
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
 New TCG ops (include/tcg/tcg-opc.h) used by `gen_ldo_env_A0`/`gen_sto_env_A0`

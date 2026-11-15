@@ -121,20 +121,28 @@ Open question: Direct3D for XP guests vs OpenGL only (see HANDOFF 8).
 Our own executable + wxWidgets GUI: pick a qcow2 disk (made with qemu-img), floppy image,
 CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
 
-## T13 (P1) TCG performance for ALL guest instruction classes  -  Status: TODO
-Scope (owner clarification): everything up to SSE2, not just SSE2. Suggested order - measure first
-(extend `xp/bench` with protected-mode/ring-0 loops; keep a saved old binary for A/B; also
-consider a real XP workload once T08 exists):
-* flags/condition codes (lazy CC), integer ALU/shift/mul/div helpers, `rep movs/stos/cmps`
-  string ops, `bswap/bt*`, `pushf/popf/cli/sti`;
-* x87 (uses softfloat floatx80 helpers - likely very slow; XP-era apps use x87 heavily);
-* softmmu: TLB fast-path size/associativity, page-crossing, segment-limit/privilege checks,
-  A20/real-mode paths, `invlpg`, CR3 switches (XP context switches);
-* control flow: TB chaining, indirect-jump lookup (`ret`/`call`), `sysenter/int 2e`, ring
-  transitions, exceptions/interrupt delivery, `hlt` idle;
-* system: PIT/RTC/HPET timers, `rdtsc`, I/O port dispatch, IDE PIO/DMA, VGA memory;
-* keep XMM/MMX state in host registers across instructions; PSHUFD & shuffles inline (T04).
-Every change: A/B numbers in WORKLOG + standard checks.
+## T13 (P1) TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
+Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
+`xp/bench/README.md` for the baseline table). Measured hotspots, in priority order - each is a
+separate sub-task (T13a..c), claim one:
+* **T13a x87 (~24 ns per instruction, ~40+ for fdiv/fsqrt).** All x87 goes through softfloat
+  `floatx80` helpers (`target/i386/tcg/fpu_helper.c`). Host is x86-64, so use the host x87 unit:
+  implement helpers with `long double` / inline asm (`fadd`, `fmul`, `fdiv`, `fsqrt`, loads/stores,
+  compares) after loading the guest control word (precision + rounding) into the host FPU with
+  exceptions masked, then merge the host status-word flags into the guest SW. Must stay bit-exact
+  (same hardware semantics). Validate against the softfloat path with a differential test (random
+  operands, all rounding/precision modes, denormals/NaN/inf/overflow/underflow). Keep softfloat as
+  fallback for anything unusual (unmasked exceptions, rare ops).
+* **T13b call/ret (~12 ns per call+ret pair).** `ret` = indirect jump through
+  `tcg_gen_lookup_and_goto_ptr`/`lookup_tb_ptr`. Ideas: return-address shadow stack verified on `ret`,
+  bigger/cheaper `tb_jmp_cache`, direct chaining for `call` targets; profile first.
+* **T13c rep movs/stos/cmps/scas (~2 GB/s).** Fast path: when source/dest are plain RAM within a page
+  (DF=0, no watchpoints) use host `memmove`/`memset` for the whole span; keep the generic loop for
+  MMIO/page crossings/self-modifying-code pages.
+* Then: lazy flags and softmmu TLB fast path checks, TB chaining/cache sizing, interrupt/ring
+  transition costs, `sysenter/int 2e`, PIT/RTC/HPET timers, IDE PIO/DMA, VGA memory, MTTCG scaling.
+* Keep XMM/MMX state in host registers across instructions; PSHUFD & shuffles inline (T04).
+Every change: A/B numbers in WORKLOG + standard checks + CI green.
 
 ## T14 (P1) Threading model and thread pinning  -  Status: TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
