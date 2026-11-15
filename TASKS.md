@@ -41,12 +41,16 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
 * DoD: fresh configure+build; one machine in `-machine help`; standard checks (HANDOFF 7);
   `info mtree` shows 2 GiB below 4 GiB only.
 
-## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: CLAIMED by Claude (session 2) 2026-11-14 (part 2)
+## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: PAUSED (parts 1 and 2a done)
 * DONE: model `xp-p4` (Pentium 4 Northwood: family 15 model 2 stepping 9, SSE2, no SSE3+) added
   in `target/i386/cpu.c` and made the default (`TARGET_DEFAULT_CPU_TYPE` in `target/i386/cpu.h`).
   Verified in-guest with `xp/bench/cpuid.asm`.
-* TODO: make it the ONLY model (delete the ~100 other models in `builtin_x86_defs`, `-cpu`
-  option, CPU feature properties/ `max`/`host` types); then delete translator code for ISA the
+* DONE part 2a (`xp/strip/10-only-xp-p4-cpu.py`, `10b-drop-unused-statics.py`): `builtin_x86_defs` holds only
+  `xp-p4` (46 other models deleted) and 17 now-unused cache/version tables; `cpu.c` 11085 -> 6205 lines;
+  `-cpu help` = xp-p4, base, max. CPUID output unchanged.
+* Resume here (part 2b): delete the `max`/`base` CPU types and the `-cpu` option / CPU feature-property
+  machinery (`x86_cpu_...` feature words, `FeatureWordInfo` tables for features we can never expose);
+  then delete translator code for ISA the
   guest can never execute: SSE3, SSSE3, SSE4.1/4.2, AES/PCLMUL, AVX/AVX2/FMA/BMI, XSAVE,
   RDRAND, ... in `target/i386/tcg/` (decode-new.c.inc, emit.c.inc, translate.c, helpers);
   `gen_ldo_env_A0`/`gen_sto_env_A0` then always use pair atomicity. Keep x87/MMX/SSE/SSE2.
