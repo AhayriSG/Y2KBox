@@ -35,7 +35,10 @@ files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TA
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
   MMX/SSE/SSE2, string ops, memory/MMU, interrupts and ring transitions, I/O), not only
   SSE2. SSE2 was merely the first thing measured. See T13.
-* **3D: VBoxVGA** (VirtualBox Guest Additions XPDM driver + a host 3D service).
+* **3D: VMware SVGA3D via qemu-vmvga** (https://github.com/qemus/qemu-vmvga: VMware SVGA II
+  device with SVGA3D rendered through DXVK; XP driver = VMware Tools 10.0.12, SVGA driver 12.01.08).
+  Owner proposed this on 2026-11-14 instead of the VBoxVGA 5.2.x plan; evaluated in section 8a.
+  **VBoxVGA 5.2.x remains the documented fallback/alternative** (task T16, notes in 8b).
   Rejected by owner: qemu-3dfx (per-game guest wrappers); virglrenderer / viogpu3d /
   SoftGPU / Wine9x are "not mature enough" for XP (they remain useful references).
 * Delete unrelated QEMU code freely as long as XP-32 + TCG keep working.
@@ -81,10 +84,12 @@ concept and do not apply to TCG (the guest CPU is emulated); what we *can* do is
 CPU features inside TCG (AVX2/BMI/etc. already assumed) and pass host resources such as the
 GPU through our own 3D path.
 
-**Q2 3D method (owner: unsure).** Decision: **VBoxVGA, Guest Additions 5.2.x baseline**
-(newest series whose open source includes the Chromium-based host 3D service; 3.2.28 stays
-the bring-up baseline). Open sub-question (research, T09-T11): Direct3D for XP guests vs
-OpenGL only in 5.2.x.
+**Q2 3D method (owner: unsure, then proposed qemu-vmvga).** Decision (updated 2026-11-14):
+**primary = qemu-vmvga (VMware SVGA II + SVGA3D, DXVK backend)**, tasks T09-T11; VBoxVGA 5.2.x
+(Chromium-based host service) is the frozen alternative, task T16. Reasoning in 8a: an
+implementation already exists for the same QEMU generation, GPL-2.0-or-later, XP explicitly
+supported, no 100k-line port of legacy VirtualBox/Chromium code. Still unverified until tested in an
+XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windows-host backend.
 
 **Q3 NIC / drivers (owner: rtl8139 is fine; considered virtio-win).** Decision: default
 **RTL8139** (in-box XP driver, zero setup). Owner suggested virtio-win 0.1.141 (XP-capable
@@ -188,8 +193,36 @@ check it after pushing (Actions tab or `GET /repos/AhayriSG/Y2KBox/actions/runs`
       -device isa-debugcon,iobase=0x402,chardev=d        # expect "OK"
     # perf (A/B against a saved binary): xp/bench/run.sh
 
-## 8. VBoxVGA / 3D research notes
+## 8. 3D research notes
 
+### 8a. PRIMARY: qemu-vmvga (VMware SVGA II / SVGA3D)  - evaluation 2026-11-14 (read from the repo)
+* Repo https://github.com/qemus/qemu-vmvga : a 44-file **overlay** for a QEMU tree (`hw/display/vmware_vga.c`,
+  `vmware_vga_3d*.c`, `vmware_vga_vgpu9/10/11.c`, `vmware_vga_dxvk*.c`, `vmware_vga_gmr.c`,
+  `hw/display/include/svga*.h` (public VMware SVGA3D headers), `hw/i386/vmport.c`). Prebuilt binary is based on
+  QEMU 11.1.1 (our base is 11.1.90, so the overlay should apply with modest adaptation). License:
+  GPL-2.0-or-later (compatible). Derived from QEMU's own `vmware_vga.c` (Zaborowski) plus later work
+  (Christopher Eric Lentocha).
+* Provides the full legacy 2D FIFO command set and SVGA3D (D3D9-level vgpu9; vgpu10/11 for newer guests);
+  3D is rendered via DXVK -> Vulkan. README host requirements: Vulkan-capable GPU + `dxvk-native`.
+  Usage: `-device vmvga` and `-machine ...,vmport=on` (VMware backdoor port).
+* **XP is explicitly supported:** README table: Windows XP / Server 2003 -> SVGA driver 12.01.08 from VMware
+  Tools 10.0.12 (`https://packages.vmware.com/tools/frozen/windows/winPreVista.iso`; also Win2000 11.09.01).
+  Other rows (Vista 8.16.01, 7/8 8.17.03, 10/11 9.17.11, 95/98/ME 10.7.0) are not our concern.
+* **The KVM "backdoor" note applies to TCG too, but is easy for us.** The README says KVM raises #GP when the
+  driver's *user-mode* component touches the VMware backdoor port, so the driver disables 3D. In our TCG
+  code the same happens: `gen_check_io` (`target/i386/tcg/translate.c`) calls `helper_check_io`
+  (`target/i386/tcg/system/seg_helper.c`) when CPL > IOPL, and that raises #GP unless the TSS I/O bitmap
+  allows the port (as on bare metal). The fix is ours to make: exempt ports 0x5658/0x5659 from that check
+  when vmport is enabled. No host kernel module option is involved (that option is KVM-only). Part of T09.
+  (Analysis from reading the code; confirm with a ring-3 test or the real driver.)
+* Host-side questions for T10: on Windows we probably do not need `dxvk-native` (Linux-native build) - use
+  host Direct3D directly, or DXVK's Windows DLLs next to our executable; on Linux use dxvk-native + Vulkan
+  (lavapipe as GPU-less fallback). Check how tied `vmware_vga_dxvk*.c` is to the dxvk-native API/WSI.
+* Risks: single small upstream; D3D9 is the ceiling for the XP driver (no DX10+); D3D8 and DirectDraw/D3D7
+  coverage unknown (T11: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
+  under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.
+
+### 8b. ALTERNATIVE (frozen, task T16): VBoxVGA 5.2.x
 * 86Box PR #6183 ("Add Initial Support for VBoxVGA Emulation") extends the Bochs
   VBE device; it is early/stalled, shows no 3D, XP BSODs without one register; it
   reports Guest Additions < 4.0.0 only (3.2.28 best) because of 86Box's missing
@@ -212,6 +245,16 @@ check it after pushing (Actions tab or `GET /repos/AhayriSG/Y2KBox/actions/runs`
   as the bring-up baseline).
 
 
+
+### 8c. Owner's Gemini conversation (summarised; NOT verified, some claims are outdated or wrong)
+The owner shared a conversation arguing VBoxVGA is "the" XP 3D option and that qemu-vmvga would need
+reverse-engineering. Checked against the repo: qemu-vmvga already implements SVGA3D (so that part is
+wrong), and it lists an XP driver. Useful, plausible points kept: with either approach the guest driver is a
+fixed protocol client, so the host side (renderer, display resize, batching) can be modernised without
+touching guest binaries, but the binary protocol must be matched exactly; VirtualBox 6.1 removed the legacy
+VBoxVGA 3D path, tying that route to Guest Additions <= 5.2.x. Claims about XP D3D8/9 via the Chromium
+bridge were not verified. Treat that conversation as opinion, this section as evidence.
+
 ## 9. References and resources for development
 
 QEMU-based x86 emulation
@@ -226,7 +269,21 @@ Misc x86 emulation
 * Bochs PR "Improve glxgears support for GeForce":
   https://github.com/bochs-emu/Bochs/pull/574 - guest GL on an emulated GPU.
 
-VBoxVGA / VirtualBox
+3D: VMware SVGA3D (primary plan)
+* qemu-vmvga: https://github.com/qemus/qemu-vmvga - VMware SVGA II/SVGA3D device for QEMU with DXVK rendering
+  (section 8a). Also useful: open-vm-tools / Mesa `svga3d_*.h` headers (already in the overlay).
+
+x87 / soft-float references (for T13a and any FPU fast path)
+* PCSX2 PR #12001, PS2 FPU soft-float interpreter: https://github.com/PCSX2/pcsx2/pull/12001 and its recompiler
+  PRs https://github.com/DiscoStarslayer/pcsx2-reliquary/pull/17 , /pull/18 , /pull/29 . The PS2 EE FPU is NOT
+  IEEE-754/x87 (no NaN/Inf, truncating), so the semantics are not reusable, but the technique - turning a
+  soft-float interpreter into a recompiler with branch-free SSE sequences and cheap flag handling - is a useful
+  model for an exact fast path for the common x87 cases.
+* xemu `fpu/`: https://github.com/xemu-project/xemu/tree/master/fpu - checked: it is QEMU's softfloat
+  (floatx80 included), an older copy of the same code as ours; no Xbox-specific x87 changes found (the history
+  was not examined in depth). Reference for comparison only.
+
+VBoxVGA / VirtualBox (alternative 3D path)
 * 86Box PR #6183 "Add Initial Support for VBoxVGA Emulation":
   https://github.com/86Box/86Box/pull/6183 (VBE side of the device; see sec. 7).
 * VirtualBox display device source (modern, 7.x, GPL-3.0 - read only, do not copy):

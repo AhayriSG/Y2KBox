@@ -103,19 +103,44 @@ Install to a qcow2 disk (`qemu-img create -f qcow2`), IDE CD-ROM, floppy; measur
 fix whatever breaks (ACPI HAL choice, SMP/APIC, TPR patching via kvmvapic option ROM,
 RTC/PIT timing). Record the working command line in HANDOFF.
 
-## T09 (P2) VBoxVGA device: VBE + HGSMI/VBVA  -  Status: TODO
-Port from VirtualBox v5.2.x/v6.1.x (GPLv2; audit headers) `DevVGA*.cpp`, `HGSMI/`.
-Start from QEMU `hw/display/vga*.c`, `vga-pci.c`, `vmware_vga.c` as templates.
-Guest Additions 3.2.28 as bring-up baseline, then 5.2.x.
+## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: TODO
+PRIMARY 3D plan (owner proposal 2026-11-14, evaluated and agreed; see HANDOFF 8a).
+Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for QEMU 11.1.x: device
+`vmvga`, SVGA3D vgpu9/vgpu10/vgpu11, DXVK-based rendering, `hw/i386/vmport.c`).
+* Overlay its `hw/display/vmware_vga*.c` + `hw/display/include/*` and `hw/i386/vmport.*` onto our tree
+  (replaces the stock `vmware_vga.c`/`vmport.c`); fix meson/Kconfig hooks; re-enable `CONFIG_VMPORT`
+  and the vmware display device in `default.mak` (both are OFF now; `hw/i386/meson.build` has an
+  empty `CONFIG_VMPORT` stub from the dead-source pass); build with the 3D backend initially DISABLED
+  to get the 2D device + backdoor working first; keep it building on Linux and Windows CI.
+* **TCG backdoor fix (required, tiny):** in TCG a ring-3 `in/out` with CPL>IOPL goes through
+  `gen_check_io` -> `helper_check_io` (`target/i386/tcg/system/seg_helper.c`) and raises #GP unless the TSS
+  I/O bitmap allows the port - exactly the failure the README describes for KVM, so the VMware driver's
+  user-mode part would disable 3D. Exempt the backdoor ports (0x5658 and 0x5659) from the check when the
+  vmport device is enabled (a global flag set by the device). No host kernel/module setting is needed.
+  Verify with a ring-3 test program or the real driver.
+* Make `vmvga` the default and only display device; keep the 2D path fully working without 3D.
+* DoD: Linux+Windows CI green; device present; backdoor exemption in place; XP guest (T08) loads the
+  VMware SVGA driver (VMware Tools 10.0.12, SVGA driver 12.01.08) at 1024x768x32 with 2D acceleration.
 
-## T10 (P2) VMMDev + HGCM  -  Status: TODO
-PCI 80ee:cafe, request protocol, HGCM service dispatch. Source: VirtualBox 5.2.x
-`Devices/VMMDev`.
+## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: TODO
+qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
+* Linux: build/ship `dxvk-native` + Vulkan; software fallback (lavapipe) for GPU-less hosts.
+* **Windows (open question):** `dxvk-native` is a Linux-native build. On Windows we can likely skip it:
+  call the host Direct3D 9/11 directly, or use DXVK's Windows `d3d9.dll`/`d3d11.dll` next to our executable
+  to get Vulkan. Decide after reading `vmware_vga_dxvk*.c` (how tightly the device is tied to the
+  dxvk-native API/WSI). Also design the render thread(s) and the pinning interaction (T14).
+* DoD: SVGA3D rendering works on both hosts with the same guest driver; documented requirements.
 
-## T11 (P2) 3D host service  -  Status: TODO
-Chromium-based `HostServices/SharedOpenGL` + `GuestHost/OpenGL` (exists in tag
-v5.2.2, absent in 6.1.4). Port/replay GL stream on the host; consider a separate process.
-Open question: Direct3D for XP guests vs OpenGL only (see HANDOFF 8).
+## T11 (P2) XP guest driver validation and D3D coverage  -  Status: TODO (needs T08 + T09)
+Install VMware Tools 10.0.12 (`winPreVista.iso`) in XP; verify SVGA3D D3D9 apps (e.g. DX9 sample/game);
+find the gaps: Direct3D 8 and DirectDraw/Direct3D 7 apps (try `d3d8to9` and a ddraw wrapper in the guest),
+shader model limits, resolution/mouse integration (vmmouse), performance on TCG. Record results.
+
+## T16 (P3, frozen alternative) VBoxVGA 5.2.x path  -  Status: TODO (not planned; kept as fallback)
+If qemu-vmvga proves unworkable on XP: VBoxVGA (VBE dispi + HGSMI/VBVA) + VMMDev (PCI 80ee:cafe) + HGCM +
+the Chromium-based 3D host service from VirtualBox v5.2.x (GPLv2; the service is absent from 6.1.4).
+Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA, T16b VMMDev+HGCM,
+T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
 Our own executable + wxWidgets GUI: pick a qcow2 disk (made with qemu-img), floppy image,
