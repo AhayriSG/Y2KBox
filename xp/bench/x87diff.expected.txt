@@ -1,0 +1,5 @@
+x87diff (guest-visible results, softfloat with exact loads == host-x87 fast path):
+TRIALS=20000 F5042A13   (30 ops x 12 precision/rounding modes x 20000 random operand sets)
+NOTE: the pre-fix softfloat reference (09345915 / 73044A54) is obsolete: it rounded fld m32/m64 to the
+control-word precision, which real x87 hardware does not do.
+Run: xp/bench/x87cmp.sh [TRIALS]  (per-operation checksums, fast vs XPQEMU_NO_HX87=1)

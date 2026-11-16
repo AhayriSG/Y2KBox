@@ -2971,6 +2971,9 @@ static inline void cpu_set_mxcsr(CPUX86State *env, uint32_t mxcsr)
     }
 }
 
+/* XP fork: host x87 fast path (fpu_helper.c) - guest FPU exception flags were cleared/loaded */
+void x86_hx87_flags_changed(void);
+
 static inline void cpu_set_fpuc(CPUX86State *env, uint16_t fpuc)
 {
      env->fpuc = fpuc;

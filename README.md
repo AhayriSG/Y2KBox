@@ -1,5 +1,7 @@
 # Y2KBox
 
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/d0d7875bcbfb40428c030025425f775f)](https://app.codacy.com/gh/AhayriSG/Y2KBox/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+
 A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 **x86-64-v3 (or newer) hosts**, using **TCG / MTTCG only** (no KVM/WHPX/HVF/Xen).
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
@@ -32,7 +34,8 @@ _Last updated: 2026-11-14. Legend: done / in progress / planned._
 | Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | fixed 2 GiB memory model done, hotplug/NVDIMM/CXL removed; single machine type done; CLI flag removal + dead above-4G code pending (T01) |
 | XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
 | Linux + Windows hosts only | in progress | macOS/BSD code removed; Linux and Windows builds verified by CI (T03 pass 2 pending, T07 done) |
-| Thread pinning, general TCG performance (all instruction classes) | planned | T13, T14 |
+| x87 host fast path (add/sub/mul/div/sqrt, exact loads) | done (part 1) | 3.0-4.6x on x87 microbenchmarks, bit-identical to softfloat on 7.2M random ops (T13a) |
+| General TCG performance: call/ret, rep string ops, more x87, thread pinning | planned | T13b, T13c, T14 |
 | Remove IOMMU/SEV/SGX/TDX/VFIO + remaining KVM call sites | planned | heavily entangled; see HANDOFF |
 | Device pruning | partly done | XP device set in `default.mak` (220 -> 91 enabled symbols, 439 -> ~247 listed devices); 1015 dead C files, 724 unused headers, non-x86 firmware removed (tree 171 MB -> 41 MB); machine-coupled pieces (DIMM/NVDIMM/CXL/ACPI hotplug) await the fixed-machine rework |
 | Boot Windows XP SP3 end to end | **not yet done** | only SeaBIOS boot verified so far |
@@ -53,7 +56,8 @@ https://github.com/bochs-emu/Bochs/pull/574 - wine9x: https://github.com/JHRobot
 SoftGPU: https://github.com/JHRobotics/softgpu - DXVK: https://github.com/doitsujin/DXVK -
 d3d8to9: https://github.com/crosire/d3d8to9/ - viogpu3d:
 https://github.com/virtio-win/kvm-guest-drivers-windows/pull/943 - virglrenderer:
-https://github.com/utmapp/virglrenderer - Yttrium: https://github.com/arehnman/yttrium-virtio-gpu.
+https://github.com/utmapp/virglrenderer - Yttrium: https://github.com/arehnman/yttrium-virtio-gpu - PCBox NV11 (GeForce2 MX) PR, real-GPU route:
+https://github.com/PCBox/PCBox/pull/202 .
 x87/soft-float references: PCSX2 soft-float interpreter https://github.com/PCSX2/pcsx2/pull/12001 and recompiler
 PRs https://github.com/DiscoStarslayer/pcsx2-reliquary/pull/17 , /pull/18 , /pull/29 ; xemu's fpu/:
 https://github.com/xemu-project/xemu/tree/master/fpu .

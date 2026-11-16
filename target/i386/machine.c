@@ -382,6 +382,7 @@ static int cpu_post_load(void *opaque, int version_id)
 
     env->fpstt = (env->fpus_vmstate >> 11) & 7;
     env->fpus = env->fpus_vmstate & ~0x3800;
+    x86_hx87_flags_changed();
     env->fptag_vmstate ^= 0xff;
     for(i = 0; i < 8; i++) {
         env->fptags[i] = (env->fptag_vmstate >> i) & 1;

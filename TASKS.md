@@ -150,14 +150,17 @@ CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a 
 Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
 `xp/bench/README.md` for the baseline table). Measured hotspots, in priority order - each is a
 separate sub-task (T13a..c), claim one:
-* **T13a x87 (~24 ns per instruction, ~40+ for fdiv/fsqrt).** All x87 goes through softfloat
-  `floatx80` helpers (`target/i386/tcg/fpu_helper.c`). Host is x86-64, so use the host x87 unit:
-  implement helpers with `long double` / inline asm (`fadd`, `fmul`, `fdiv`, `fsqrt`, loads/stores,
-  compares) after loading the guest control word (precision + rounding) into the host FPU with
-  exceptions masked, then merge the host status-word flags into the guest SW. Must stay bit-exact
-  (same hardware semantics). Validate against the softfloat path with a differential test (random
-  operands, all rounding/precision modes, denormals/NaN/inf/overflow/underflow). Keep softfloat as
-  fallback for anything unusual (unmasked exceptions, rare ops).
+* **T13a x87 - Status: PAUSED (part 1 DONE).** DONE: host-x87 fast path for fadd/fsub/fsubr/fmul/fdiv/fdivr
+  (ST0/FT0 and STN/ST0 forms) and fsqrt on NORMAL FINITE operands, integer-only `fld m32/m64` for normal and
+  zero operands, plus an exact-load fix for the softfloat fallback (see HANDOFF 5a3). Result: x87add 65->22 ns,
+  x87div 154->34 ns per iteration (3.0x / 4.6x); bit-identical to softfloat on 7.2M randomized operations
+  (`xp/bench/x87cmp.sh`, `XPQEMU_NO_HX87=1` kill switch). TODO (each is separate): `fst/fstp m32/m64` (needs
+  correct rounding + flags), `fild/fist/fistt`, `fcom/fucom/fcomi` compares, `frndint`, `fscale`, `fprem`,
+  transcendental ops (`fsin/fcos/fptan/fpatan/f2xm1/fyl2x`), `fadd m80`; denormal/zero/inf/NaN operands for the
+  arithmetic ops (currently softfloat); then the remaining overhead (~7 ns/insn: helper call + env memory
+  traffic) by emitting the common ops inline or keeping ST registers in host x87 registers across a block.
+  Also audit other conversions for the same bug class: any load/conversion that wrongly honours precision
+  control (e.g. `fild m64` with PC=24).
 * **T13b call/ret (~12 ns per call+ret pair).** `ret` = indirect jump through
   `tcg_gen_lookup_and_goto_ptr`/`lookup_tb_ptr`. Ideas: return-address shadow stack verified on `ret`,
   bigger/cheaper `tb_jmp_cache`, direct chaining for `call` targets; profile first.

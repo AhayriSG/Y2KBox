@@ -117,6 +117,28 @@ removed by T01.
 ### 5a1. General-instruction baseline (see xp/bench/README.md)
 Near native: integer ALU, imul/div, branches, memory-operand ops, push/pop. Slow: x87 (softfloat), call/ret, rep string ops. Plan in TASKS T13a-c.
 
+### 5a3. DONE (part 1): x87 host fast path (T13a)
+Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env `XPQEMU_NO_HX87=1`.
+* **Idea:** host is x86-64, so its x87 unit has exactly the guest's semantics. Measured: `fldt,fldt,faddp,fstpt` =
+  2.6 ns (softfloat ~24 ns), BUT `fnclex` costs ~60 ns on this CPU - never use it per operation.
+* **Fast path conditions:** both operands normal finite (exp not 0/0x7fff, integer bit set); guest CW has all
+  exceptions masked (`fpuc & 0x3f == 0x3f`); precision field != reserved 01. Otherwise softfloat (unchanged).
+  Host CW = guest `fpuc & 0xf00 | 0x3f`, cached per host thread (`fldcw` only when it changes).
+* **Flags invariant:** host sticky SW bits are always a subset of the guest's; after each op the host bits are
+  OR-ed into the guest SW via `fpu_set_exception`. Anything that clears/loads guest exception flags
+  (fclex, fninit, do_fldenv, do_fxrstor, cpu reset, vmstate post_load) calls `x86_hx87_flags_changed()`,
+  which bumps a global epoch; each host thread runs `fnclex` lazily when its epoch/owner differs (also covers
+  two vCPUs sharing one host thread). If you add a new place that clears guest FPU flags, call it there.
+* **Inline asm note:** AT&T `fsub/fdiv` forms with a `%st(i)` DESTINATION are swapped by GNU as; the code uses
+  only the `... %st(1), %st` (destination st0) forms, which are unambiguous. Verified by the tests.
+* **Accuracy bug found in stock QEMU:** `fld m32/m64` honoured precision control (rounded + inexact flag). Real
+  x87 loads are exact; XP/Direct3D runs at 24-bit PC, so upstream gave wrong values. Fixed (`fx_exact_conv*`).
+  Other conversions may share this bug (`fild` etc.) - see T13a TODO.
+* **Tests:** `xp/bench/x87diff.asm` (+ `x87diff_ops.asm` per-op variant, `x87cmp.sh`): random operands x 12
+  precision/rounding modes x 30 ops; compare the same binary with and without `XPQEMU_NO_HX87=1`. Expected
+  checksum for TRIALS=20000 is in `xp/bench/x87diff.expected.txt`. Run it after ANY x87 change.
+* **Results:** x87add 65.3 -> 21.7 ns, x87div 153.9 -> 33.5 ns per iteration (3.0x / 4.6x).
+
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
 New TCG ops (include/tcg/tcg-opc.h) used by `gen_ldo_env_A0`/`gen_sto_env_A0`
@@ -282,6 +304,15 @@ x87 / soft-float references (for T13a and any FPU fast path)
 * xemu `fpu/`: https://github.com/xemu-project/xemu/tree/master/fpu - checked: it is QEMU's softfloat
   (floatx80 included), an older copy of the same code as ours; no Xbox-specific x87 changes found (the history
   was not examined in depth). Reference for comparison only.
+
+Real-GPU emulation route (alternative/third 3D idea)
+* PCBox PR #202 "Added NVIDIA GeForce2 MX (NV11) emulation support": https://github.com/PCBox/PCBox/pull/202
+  (merged; 6 files, +130/-6, on top of PCBox's NV10/Celsius emulation, Vulkan 3D; NV11 PCI ID 0x0110; stock
+  NVIDIA Detonator drivers on XP give hardware T&L D3D7/8 and OpenGL; also notes a Windows XP BSOD (0x50) fix by
+  disabling PCI D3hot for NV11; author says it was AI-assisted and tested locally). PCBox is an 86Box fork
+  (GPL). Different approach from paravirtual SVGA3D: emulate real hardware so unmodified vendor drivers work.
+  Relevant if the VMware driver's Direct3D 7/8 / DirectDraw coverage proves insufficient. Not evaluated in
+  depth (read the PR summary only); the NV register/method emulation is large.
 
 VBoxVGA / VirtualBox (alternative 3D path)
 * 86Box PR #6183 "Add Initial Support for VBoxVGA Emulation":

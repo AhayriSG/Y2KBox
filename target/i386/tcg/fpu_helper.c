@@ -218,10 +218,221 @@ static void merge_exception_flags(CPUX86State *env, int old_flags)
                        (new_flags & float_flag_input_denormal_used ? FPUS_DE : 0)));
 }
 
+
+/*
+ * XP fork (T13a): host x87 fast path.
+ *
+ * x86-64 hosts have a real x87 unit with exactly the guest's semantics, so for NORMAL FINITE operands we run
+ * add/sub/mul/div/sqrt on it (precision and rounding taken from the guest control word, all host exceptions
+ * masked) instead of softfloat (~24 ns -> ~3 ns). Zero, denormal, NaN, infinity and unnormal operands, any
+ * guest-unmasked exception, and the reserved precision value use the unchanged softfloat path.
+ *
+ * Exception flags: host SW flags are sticky. They are merged into the guest SW (union), so the host flags are
+ * always a subset of the guest's. Whenever the guest clears/loads its exception flags (fnclex, fninit, fldenv,
+ * frstor, fxrstor, reset, vmstate load) x86_hx87_flags_changed() bumps a global epoch and every host thread
+ * runs the (slow, ~60 ns) fnclex lazily the next time it uses the fast path. Do not call fnclex per operation.
+ */
+typedef struct HostX87 {
+    CPUX86State *owner;     /* guest CPU whose flags the host SW currently tracks */
+    unsigned epoch;
+    uint16_t cw;            /* host control word currently loaded */
+} HostX87;
+
+static __thread HostX87 hx87 = { .cw = 0x37f };
+static unsigned hx87_epoch;
+static bool hx87_off;           /* XPQEMU_NO_HX87=1 disables the fast path (A/B tests, safety valve) */
+
+static void __attribute__((constructor)) hx87_init(void)
+{
+    hx87_off = getenv("XPQEMU_NO_HX87") != NULL;
+}
+
+void x86_hx87_flags_changed(void)
+{
+    qatomic_inc(&hx87_epoch);
+}
+
+static inline bool hx87_prepare(CPUX86State *env)
+{
+    uint16_t want;
+    unsigned ep;
+
+    if (hx87_off || (env->fpuc & 0x3f) != 0x3f || (env->fpuc & 0x300) == 0x100) {
+        return false;                       /* unmasked exception or reserved precision: softfloat */
+    }
+    want = (env->fpuc & 0xf00) | 0x3f;
+    ep = qatomic_read(&hx87_epoch);
+    if (hx87.owner != env || hx87.epoch != ep) {
+        asm volatile("fnclex");
+        hx87.owner = env;
+        hx87.epoch = ep;
+    }
+    if (hx87.cw != want) {
+        asm volatile("fldcw %0" : : "m"(want));
+        hx87.cw = want;
+    }
+    return true;
+}
+
+static inline bool fx_normal(floatx80 v)
+{
+    uint16_t e = v.high & 0x7fff;
+
+    return e != 0 && e != 0x7fff && (v.low >> 63);
+}
+
+enum { HX_ADD, HX_SUB, HX_MUL, HX_DIV };
+
+typedef struct __attribute__((packed)) { uint64_t m; uint16_t se; } HxRaw;
+
+static inline bool hx87_arith(CPUX86State *env, int op, floatx80 a, floatx80 b, floatx80 *res)
+{
+    HxRaw tmp;
+    uint16_t sw;
+
+    if (!fx_normal(a) || !fx_normal(b) || !hx87_prepare(env)) {
+        return false;
+    }
+    switch (op) {
+    case HX_ADD:
+        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfadd %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
+                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
+        break;
+    case HX_SUB:
+        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfsub %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
+                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
+        break;
+    case HX_MUL:
+        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfmul %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
+                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
+        break;
+    default:
+        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfdiv %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
+                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
+        break;
+    }
+    res->low = tmp.m;
+    res->high = tmp.se;
+    fpu_set_exception(env, sw & 0x3f);
+    return true;
+}
+
+static inline bool hx87_sqrt(CPUX86State *env, floatx80 a, floatx80 *res)
+{
+    HxRaw tmp;
+    uint16_t sw;
+
+    if (!fx_normal(a) || (a.high & 0x8000) || !hx87_prepare(env)) {
+        return false;
+    }
+    asm volatile("fldt %[a]\n\tfsqrt\n\tfnstsw %%ax\n\tfstpt %[r]"
+                 : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a) : "st");
+    res->low = tmp.m;
+    res->high = tmp.se;
+    fpu_set_exception(env, sw & 0x3f);
+    return true;
+}
+
+static inline floatx80 fx_add(CPUX86State *env, floatx80 a, floatx80 b)
+{
+    floatx80 r;
+    return hx87_arith(env, HX_ADD, a, b, &r) ? r : floatx80_add(a, b, &env->fp_status);
+}
+
+static inline floatx80 fx_sub(CPUX86State *env, floatx80 a, floatx80 b)
+{
+    floatx80 r;
+    return hx87_arith(env, HX_SUB, a, b, &r) ? r : floatx80_sub(a, b, &env->fp_status);
+}
+
+static inline floatx80 fx_mul(CPUX86State *env, floatx80 a, floatx80 b)
+{
+    floatx80 r;
+    return hx87_arith(env, HX_MUL, a, b, &r) ? r : floatx80_mul(a, b, &env->fp_status);
+}
+
+static inline floatx80 fx_div(CPUX86State *env, floatx80 a, floatx80 b)
+{
+    floatx80 r;
+    return hx87_arith(env, HX_DIV, a, b, &r) ? r : floatx80_div(a, b, &env->fp_status);
+}
+
+static inline floatx80 fx_sqrt(CPUX86State *env, floatx80 a)
+{
+    floatx80 r;
+    return hx87_sqrt(env, a, &r) ? r : floatx80_sqrt(a, &env->fp_status);
+}
+
+/*
+ * Real x87 loads (fld m32/m64) are exact: precision control affects arithmetic only. Upstream's
+ * float{32,64}_to_floatx80 round to the status precision (24/53-bit PC => wrong value + spurious
+ * inexact), which matters for XP (Direct3D runs with 24-bit PC). Convert with full precision.
+ */
+static floatx80 fx_exact_conv64(CPUX86State *env, float64 f)
+{
+    float_status st = env->fp_status;
+    floatx80 r;
+
+    st.floatx80_rounding_precision = floatx80_precision_x;
+    st.float_exception_flags = 0;
+    r = float64_to_floatx80(f, &st);
+    float_raise(st.float_exception_flags, &env->fp_status);
+    return r;
+}
+
+static floatx80 fx_exact_conv32(CPUX86State *env, float32 f)
+{
+    float_status st = env->fp_status;
+    floatx80 r;
+
+    st.floatx80_rounding_precision = floatx80_precision_x;
+    st.float_exception_flags = 0;
+    r = float32_to_floatx80(f, &st);
+    float_raise(st.float_exception_flags, &env->fp_status);
+    return r;
+}
+
+/* exact, flag-free conversions for normal and zero inputs (integer only) */
+static inline floatx80 fx_ld64(CPUX86State *env, uint64_t i, float64 f)
+{
+    uint32_t e = (i >> 52) & 0x7ff;
+    floatx80 r;
+
+    if (!hx87_off && e != 0 && e != 0x7ff) {
+        r.low = (1ULL << 63) | ((i & 0xfffffffffffffULL) << 11);
+        r.high = ((i >> 63) << 15) | (e - 1023 + 16383);
+        return r;
+    }
+    if (!hx87_off && (i << 1) == 0) {
+        r.low = 0;
+        r.high = (i >> 63) << 15;
+        return r;
+    }
+    return fx_exact_conv64(env, f);
+}
+
+static inline floatx80 fx_ld32(CPUX86State *env, uint32_t i, float32 f)
+{
+    uint32_t e = (i >> 23) & 0xff;
+    floatx80 r;
+
+    if (!hx87_off && e != 0 && e != 0xff) {
+        r.low = (1ULL << 63) | ((uint64_t)(i & 0x7fffff) << 40);
+        r.high = ((i >> 31) << 15) | (e - 127 + 16383);
+        return r;
+    }
+    if (!hx87_off && (i << 1) == 0) {
+        r.low = 0;
+        r.high = (i >> 31) << 15;
+        return r;
+    }
+    return fx_exact_conv32(env, f);
+}
+
 static inline floatx80 helper_fdiv(CPUX86State *env, floatx80 a, floatx80 b)
 {
     int old_flags = save_exception_flags(env);
-    floatx80 ret = floatx80_div(a, b, &env->fp_status);
+    floatx80 ret = fx_div(env, a, b);
     merge_exception_flags(env, old_flags);
     return ret;
 }
@@ -247,7 +458,7 @@ void HELPER(flds_FT0)(CPUX86State *env, uint32_t val)
     } u;
 
     u.i = val;
-    FT0 = float32_to_floatx80(u.f, &env->fp_status);
+    FT0 = fx_ld32(env, u.i, u.f);
     merge_exception_flags(env, old_flags);
 }
 
@@ -260,7 +471,7 @@ void HELPER(fldl_FT0)(CPUX86State *env, uint64_t val)
     } u;
 
     u.i = val;
-    FT0 = float64_to_floatx80(u.f, &env->fp_status);
+    FT0 = fx_ld64(env, u.i, u.f);
     merge_exception_flags(env, old_flags);
 }
 
@@ -280,7 +491,7 @@ void HELPER(flds_ST0)(CPUX86State *env, uint32_t val)
 
     new_fpstt = (env->fpstt - 1) & 7;
     u.i = val;
-    env->fpregs[new_fpstt].d = float32_to_floatx80(u.f, &env->fp_status);
+    env->fpregs[new_fpstt].d = fx_ld32(env, u.i, u.f);
     env->fpstt = new_fpstt;
     env->fptags[new_fpstt] = 0; /* validate stack entry */
     merge_exception_flags(env, old_flags);
@@ -297,7 +508,7 @@ void HELPER(fldl_ST0)(CPUX86State *env, uint64_t val)
 
     new_fpstt = (env->fpstt - 1) & 7;
     u.i = val;
-    env->fpregs[new_fpstt].d = float64_to_floatx80(u.f, &env->fp_status);
+    env->fpregs[new_fpstt].d = fx_ld64(env, u.i, u.f);
     env->fpstt = new_fpstt;
     env->fptags[new_fpstt] = 0; /* validate stack entry */
     merge_exception_flags(env, old_flags);
@@ -583,28 +794,28 @@ void HELPER(fucomi_ST0_FT0)(CPUX86State *env)
 void HELPER(fadd_ST0_FT0)(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
-    ST0 = floatx80_add(ST0, FT0, &env->fp_status);
+    ST0 = fx_add(env, ST0, FT0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fmul_ST0_FT0)(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
-    ST0 = floatx80_mul(ST0, FT0, &env->fp_status);
+    ST0 = fx_mul(env, ST0, FT0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fsub_ST0_FT0)(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
-    ST0 = floatx80_sub(ST0, FT0, &env->fp_status);
+    ST0 = fx_sub(env, ST0, FT0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fsubr_ST0_FT0)(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
-    ST0 = floatx80_sub(FT0, ST0, &env->fp_status);
+    ST0 = fx_sub(env, FT0, ST0);
     merge_exception_flags(env, old_flags);
 }
 
@@ -623,28 +834,28 @@ void HELPER(fdivr_ST0_FT0)(CPUX86State *env)
 void HELPER(fadd_STN_ST0)(CPUX86State *env, int st_index)
 {
     int old_flags = save_exception_flags(env);
-    ST(st_index) = floatx80_add(ST(st_index), ST0, &env->fp_status);
+    ST(st_index) = fx_add(env, ST(st_index), ST0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fmul_STN_ST0)(CPUX86State *env, int st_index)
 {
     int old_flags = save_exception_flags(env);
-    ST(st_index) = floatx80_mul(ST(st_index), ST0, &env->fp_status);
+    ST(st_index) = fx_mul(env, ST(st_index), ST0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fsub_STN_ST0)(CPUX86State *env, int st_index)
 {
     int old_flags = save_exception_flags(env);
-    ST(st_index) = floatx80_sub(ST(st_index), ST0, &env->fp_status);
+    ST(st_index) = fx_sub(env, ST(st_index), ST0);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fsubr_STN_ST0)(CPUX86State *env, int st_index)
 {
     int old_flags = save_exception_flags(env);
-    ST(st_index) = floatx80_sub(ST0, ST(st_index), &env->fp_status);
+    ST(st_index) = fx_sub(env, ST0, ST(st_index));
     merge_exception_flags(env, old_flags);
 }
 
@@ -808,6 +1019,7 @@ void HELPER(fldcw)(CPUX86State *env, uint32_t val)
 void HELPER(fclex)(CPUX86State *env)
 {
     env->fpus &= 0x7f00;
+    x86_hx87_flags_changed();
 }
 
 void HELPER(fwait)(CPUX86State *env)
@@ -820,6 +1032,7 @@ void HELPER(fwait)(CPUX86State *env)
 static void do_fninit(CPUX86State *env)
 {
     env->fpus = 0;
+    x86_hx87_flags_changed();
     env->fpstt = 0;
     env->fpcs = 0;
     env->fpds = 0;
@@ -2318,7 +2531,7 @@ void HELPER(fsqrt)(CPUX86State *env)
         env->fpus &= ~0x4700;  /* (C3,C2,C1,C0) <-- 0000 */
         env->fpus |= 0x400;
     }
-    ST0 = floatx80_sqrt(ST0, &env->fp_status);
+    ST0 = fx_sqrt(env, ST0);
     merge_exception_flags(env, old_flags);
 }
 
@@ -2516,6 +2729,7 @@ static void cpu_set_fpus(CPUX86State *env, uint16_t fpus)
 {
     env->fpstt = (fpus >> 11) & 7;
     env->fpus = fpus & ~0x3800 & ~FPUS_B;
+    x86_hx87_flags_changed();
     env->fpus |= env->fpus & FPUS_SE ? FPUS_B : 0;
 #if !defined(CONFIG_USER_ONLY)
     if (!(env->fpus & FPUS_SE)) {
@@ -2981,6 +3195,7 @@ static void do_xrstor_pkru(X86Access *ac, target_ulong ptr)
 
 static void do_fxrstor(X86Access *ac, target_ulong ptr)
 {
+    x86_hx87_flags_changed();
     CPUX86State *env = ac->env;
 
     do_xrstor_fpu(ac, ptr);
