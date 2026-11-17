@@ -8,6 +8,7 @@
 #include "hw/block/fdc.h"
 #include "hw/block/flash.h"
 #include "hw/i386/x86.h"
+#include "hw/i386/sgx-epc.h"
 
 #include "hw/core/hotplug.h"
 #include "qom/object.h"
@@ -60,6 +61,7 @@ typedef struct PCMachineState {
     /* ACPI Memory hotplug IO base address */
     hwaddr memhp_io_base;
 
+    SGXEPCState sgx_epc;
     CXLState cxl_devices_state;
 } PCMachineState;
 
