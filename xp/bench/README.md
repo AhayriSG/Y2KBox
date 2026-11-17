@@ -3,7 +3,7 @@
 `sse2.asm` is a 512-byte real-mode boot sector. It enables SSE, runs LOOPS
 iterations of a fixed mix (paddd, pmullw, pxor, pshufd, pcmpeqb, pand, por,
 psrld, paddw, psubb), optionally with 128-bit loads/stores (`-DMEM`), and exits
-through isa-debug-exit. `run.sh` times it from the host (min of N runs).
+through isa-debug-exit. `run.sh` times it from the host (median of N runs).
 
     nasm -fbin -DLOOPS=300000000 sse2.asm -o reg.img
     nasm -fbin -DLOOPS=300000000 -DMEM sse2.asm -o mem.img
@@ -35,17 +35,21 @@ PSHUFD/PSHUFLW/PSHUFHW/PUNPCK*/PACK*/SHUFPS; keeping hot XMM regs in host regs.
 ## Isolated PSHUFD XMM benchmark
 
 `pshufd.asm` runs a dependent register-form `PSHUFD xmm,xmm,imm8` loop.
-Build an instruction and empty-loop control with the same iteration count:
+The CI A/B test builds one identical 300-million-iteration image and runs it
+with the pre-T04 and current QEMU binaries on the same Linux runner:
 
-    nasm -fbin -DLOOPS=1000000000 pshufd.asm -o pshufd.img
-    nasm -fbin -DLOOPS=300000000 -DEMPTY pshufd.asm -o empty.img
-    Q=build/qemu-system-i386 PCBIOS=build/pc-bios ./run.sh pshufd.img
-    Q=build/qemu-system-i386 PCBIOS=build/pc-bios ./run.sh empty.img
+    nasm -fbin -DLOOPS=300000000 pshufd.asm -o pshufd.img
+    Q=build/qemu-system-i386 PCBIOS=build/pc-bios N=5 ./run.sh pshufd.img
 
-Use the minimum of five runs for each image and subtract the empty-loop
-time. `run.sh` prints six decimal places. Keep the host, QEMU build, CPU affinity, and iteration count identical
-when comparing revisions. This isolates the guest instruction loop but is not
-a substitute for a broader SSE2 workload benchmark.
+`run.sh` reports the median of five successful wall-clock runs (six decimal
+places). Compare the raw medians; do **not** subtract a separate empty-loop
+measurement. QEMU TCG's translation-block shape, dispatch and host scheduling
+make an empty loop a different workload, not a stable additive timing overhead.
+The earlier subtraction produced negative net times and is invalid.
+
+Keep the host, QEMU build, CPU affinity, image and iteration count identical
+when comparing revisions. This measures the isolated dependent PSHUFD loop,
+not a broad SSE2 workload or the user's local CPU performance.
 
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 
