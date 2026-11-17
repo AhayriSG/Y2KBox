@@ -229,3 +229,28 @@ five-register pressure guard; profile generated host code and add broader
 representative workloads before attempting further cache-policy changes.
 
 No local build/test was run and no CI was polled.
+
+
+## Session 10 (ChatGPT), 2026-11-18 - T13d profiling gate and T05 SGX call-site cleanup
+
+The owner asked that the previously recommended next-step gate for T13d be
+recorded before continuing T05. Updated the T13d task notes: do not expand the
+XMM cache based on near-neutral microbenchmarks. First profile generated host
+code to distinguish guest XMM state traffic, TCG register allocation/spills,
+translation/dispatch overhead, or another source; then create a benchmark that
+isolates the measured cost and retain a representative end-to-end guard.
+
+T05 audit found that the PC machine's SGX EPC initialization function was a
+no-op stub which only zeroed PCMachineState.sgx_epc. Removed the call,
+prototype, and stub. An initial attempt to remove the SGX EPC state member was
+reversed after the source audit showed that hw/i386/acpi-build.c still reads
+that member. The include and state field are retained; SGX CPUID/query stubs
+and the ACPI SRAT no-op also remain because active code still references them.
+This preserves the live ACPI data path while removing only the redundant
+initialization. No local build/test was run and no CI was polled.
+
+| commit | change |
+|--------|--------|
+| 2d2e7dd | Recorded the explicit T13d profiling/benchmark gate in TASKS.md. |
+| 2b6593f, 521b1f7, 7afca6c, b7928ac | Removed redundant SGX EPC initialization while retaining the ACPI-consumed state field; corrected the initial over-prune before proceeding. |
+| 9440999 | Documented T05 SGX dependency findings and next audit scope. |
