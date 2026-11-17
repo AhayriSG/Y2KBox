@@ -82,10 +82,12 @@ using the pre-cache Linux artifact from run 44156398064 and the current build
 on the same runner. Each side is measured three times and compared by median
 wall time. Windows CI additionally compares the pre-cache Windows artifact from
 the same run against the current build using an identical 300-million-iteration
-image and three-run medians. These are separate host measurements; do not
-compare their absolute runtimes across operating systems. Both are mixed
+image and three-run medians. The runner uses `awk` for timestamp subtraction
+(no `bc` dependency); the Windows job adds the UCRT64 runtime directory to
+`PATH` before launching the not-yet-packaged current executable. Both are mixed
 register-only SSE2 workloads, not broad application benchmarks or measurements
-of the user's local CPU.
+of the user's local CPU. These are separate host measurements; do not compare
+their absolute runtimes across operating systems.
 
 The Win64 cache budget is five live guest XMM values: the x86-64 TCG backend
 reserves XMM5 as a scratch register and does not allocate XMM6-XMM15 under the
@@ -109,9 +111,10 @@ Relative change: **+0.58%** (1.006x; 0.005102 s faster). This is a marginal
 difference on a shared CI runner, effectively near-neutral rather than a
 demonstrated performance improvement. It is not evidence of a broad SSE2
 speedup or regression, and does not predict performance on other host CPUs.
-Linux benchmark completed successfully. No local build/test was run. The
-Windows capacity-aware A/B benchmark is automated in the Windows CI job; its
-result must be reviewed separately.
+Linux benchmark completed successfully. The first Windows attempt did not
+produce a measurement: the runner lacked `bc`, and the current build's UCRT64
+DLL directory was not on `PATH`. Both CI setup issues are corrected; a valid
+Windows A/B result is still pending. No local build/test was run.
 
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 

@@ -150,7 +150,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-meson
             mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-pixman
             mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm bc
+            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm
       - name: Configure
         run: |
           mkdir build && cd build
@@ -203,6 +203,12 @@ jobs:
       - name: T13 Windows register-only SSE2 A/B benchmark
         run: |
           set -euo pipefail
+          # The current build is not packaged yet, so its MSYS2 runtime DLLs
+          # must be discoverable through PATH. The downloaded baseline carries
+          # its DLLs beside the executable.
+          export PATH="/ucrt64/bin:$PWD/t13-baseline:$PWD/build:$PATH"
+          "$PWD/t13-baseline/qemu-system-i386.exe" -accel help >/dev/null
+          "$PWD/build/qemu-system-i386.exe" -accel help >/dev/null
           nasm -fbin -DLOOPS=300000000 xp/bench/sse2.asm -o sse2-reg.img
           before=$(Q="$PWD/t13-baseline/qemu-system-i386.exe" PCBIOS="$PWD/t13-baseline/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)
           after=$(Q="$PWD/build/qemu-system-i386.exe" PCBIOS="$PWD/build/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)

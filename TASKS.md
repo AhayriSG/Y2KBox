@@ -206,7 +206,10 @@ Every change: A/B numbers in WORKLOG + standard checks + CI green.
   before exceeding five live cached guest XMM values, preventing an oversized cache from
   forcing vector-register spills. Linux behavior is unchanged. Windows CI now compares the
   pre-cache artifact from run 44156398064 with the capacity-aware build using the same
-  300M-iteration `sse2.asm` image (median of three runs). No local build/test was run.
+  300M-iteration `sse2.asm` image (median of three runs). The first attempt failed before
+  producing timings because `bc` was unavailable and the current executable could not find
+  `libz-1.dll`; the runner now uses awk and explicitly adds the UCRT64 DLL directory to
+  `PATH`, with executable preflight checks. No valid Windows measurement exists yet.
   Resume here: review the Windows A/B result and retain or revise the capacity limit based
   on measurement. Do not extrapolate these microbenchmarks to broad SSE2 workloads or other
   host CPUs.

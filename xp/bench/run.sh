@@ -18,7 +18,8 @@ for i in $(seq "$N"); do
     [ ! -s "$err" ] || cat "$err" >&2
     exit 1
   fi
-  t=$(echo "$e - $s" | bc -l)
+  # awk arithmetic avoids a bc dependency (not installed in the Windows MSYS2 image).
+  t=$(awk -v start="$s" -v end="$e" 'BEGIN { printf "%.9f", end - start }')
   times+=( "$t" )
 done
 printf "%s\n" "${times[@]}" | sort -n | awk '{ a[NR]=$1 } END { if (NR % 2) printf "%.6f\n", a[(NR+1)/2]; else printf "%.6f\n", (a[NR/2]+a[NR/2+1])/2 }'

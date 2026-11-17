@@ -178,3 +178,24 @@ test was run; review the CI benchmark output supplied by the owner before
 claiming a performance result.
 
 | (this commit) | T13d Win64 cache-capacity refinement and Windows A/B benchmark automation; documentation updated. |
+
+
+## Session 8 (ChatGPT), 2026-11-18 - Fix Windows T13d benchmark environment
+
+The owner's Windows CI output showed two setup failures before a valid A/B
+measurement: `xp/bench/run.sh` called `bc`, which was not available in the
+MSYS2 UCRT64 job, and the current un-packaged build could not locate
+`libz-1.dll`. No benchmark timing was produced.
+
+The shared runner now uses awk for timestamp subtraction, removing the external
+`bc` dependency on both platforms. The Windows workflow no longer requests the
+unavailable package; before benchmarking, it prepends the UCRT64 runtime
+directory plus the baseline/build directories to `PATH`, then starts both
+executables with `-accel help` as a dependency-resolution preflight. The
+downloaded baseline artifact already carries its packaged runtime DLLs.
+
+No local build/test was run and no CI was polled. The next owner-supplied run
+must complete both preflight commands and all six benchmark runs before any
+Windows performance result is recorded.
+
+| (this commit) | Replaced bc timing arithmetic with awk; fixed Windows runtime DLL search path and added executable preflight; documented the failed attempt without recording a timing. |
