@@ -53,12 +53,14 @@ jobs:
           path: baseline
           run-id: 44148654097
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore baseline executable permission
+        run: chmod +x baseline/qemu-system-i386
       - name: T04 PSHUFD A/B benchmark (same Linux runner)
         run: |
           set -euo pipefail
           mkdir -p baseline
           echo "Baseline artifact: commit c5ef98e840ac83ea800ec7dfeb6d38731c964a4a"
-          lscpu | grep -E 'Model name|Architecture|CPU\(s\)' | head -3
+          lscpu | grep -E 'Model name|Architecture|CPU\\(s\\)' | head -3
           uname -a
           nasm -fbin -DLOOPS=300000000 xp/bench/pshufd.asm -o pshufd.img
           nasm -fbin -DLOOPS=300000000 -DEMPTY xp/bench/pshufd.asm -o empty.img

@@ -26,66 +26,53 @@ License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 ## Download
 
-Every green CI run uploads Linux and Windows builds as Actions Artifacts (open the latest run on the Actions tab):
-`qemu-system-i386[.exe]`, `qemu-img[.exe]`, a `pc-bios/` folder and, on Windows, the required runtime DLLs (incl. SDL2).
-Unzip the **whole** archive and keep `pc-bios/` next to the executable; it is found automatically (no `-L` needed).
+Every green CI run uploads Linux and Windows builds as Actions Artifacts. Open the
+[latest successful run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
+and download the artifact for your platform:
 
-    qemu-img create -f qcow2 xp.qcow2 10G
-    qemu-system-i386 -drive file=xp.qcow2,format=qcow2 -cdrom xp.iso -boot d -display sdl      # or: -display vnc=:0
+- Linux: `qemu-system-i386`, `qemu-img`, and `pc-bios/`.
+- Windows: `qemu-system-i386.exe`, `qemu-img.exe`, `pc-bios/`, and the required
+  runtime DLLs, including SDL2.
 
-* **Display:** `-display sdl` (SDL2 is part of the build) or `-display vnc=:0`. A wxWidgets front end is planned (T12).
-* **"could not load PC BIOS 'bios-256k.bin'":** the `pc-bios` folder is missing or incomplete (e.g. only the .exe was copied).
-  Copy the whole `pc-bios` folder from the artifact next to the executable. As a fallback you can copy the firmware files
-  (`bios-256k.bin`, `vgabios-*.bin`, `kvmvapic.bin`, `linuxboot_dma.bin`, `efi-*.rom`, `keymaps/`, ...) from an official
-  QEMU installation into Y2KBox's `pc-bios` folder; or point to any firmware folder with `-L <dir>`.
-* **Linux:** the binary needs the usual shared libraries (glib2, pixman, libslirp, libfdt, SDL2) from your distribution.
+Extract the **entire** archive. Keep `pc-bios/` beside the executable; QEMU finds
+it automatically, so you do not need `-L` when launching from that directory.
+
+Create a 10 GB QCOW2 disk image:
+
+```console
+qemu-img create -f qcow2 xp.qcow2 10G
+```
+
+Check the build version:
+
+```console
+qemu-system-i386 --version
+```
+
+Example Windows Command Prompt launch for a Windows XP VM:
+
+```bat
+qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
+  -name "Windows XP" ^
+  -M pc,kernel-irqchip=off ^
+  -device VGA ^
+  -audiodev sdl,id=audio0,in.voices=0 ^
+  -device AC97,audiodev=audio0 ^
+  -nic user,model=rtl8139 ^
+  -drive id=fld01,if=floppy,format=raw,file="virtio-win-0.1.141_x86.vfd" ^
+  -drive file=xp.qcow2,format=qcow2 ^
+  -drive media=cdrom,readonly=on ^
+  -boot menu=on -trace "vdagent*"
+```
+
+The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
+or remove that floppy drive if you do not need it. To boot an installer ISO, attach
+it to the CD-ROM drive with `-drive file="xp.iso",media=cdrom,readonly=on` and
+select the CD-ROM from the boot menu.
+
+A wxWidgets front end is planned (T12). Linux binaries require the usual shared
+libraries from your distribution, including glib2, pixman, libslirp, libfdt, and SDL2.
 
 | Windows XP SP3 - Desktop |
 | :--------------------------------------------------------------------------------------------: |
-| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="500" alt="Screenshot description"> |
-
-## Development status
-
-_Last updated: 2026-11-17. Legend: done / in progress / planned._
-
-| Area | Status | Notes |
-|------|--------|-------|
-| Strip: tests, docs, non-x86 targets/boards, user-mode | done | `xp/strip/02-*` |
-| i440FX `pc` machine only | done | q35/microvm/isapc/nitro off |
-| Full TCG (no KVM/HVF/WHPX/NVMM/MSHV/Nitro) | done | `xp/strip/03-*` |
-| Xen removed completely | done | `xp/strip/05-remove-xen.py` |
-| x86-64 hosts only, x86-64-v3 baseline enforced | done | other TCG backends + TCI removed |
-| Benchmarks + AVX-512 A/B | done | no AVX-512 gain for SSE2 guests; stay on v3 |
-| 128-bit guest memory ops (`qemu_ld_vec`/`qemu_st_vec`) | done | loads ~2.7x faster; `xp/bench/vectest.asm` |
-| Inline SSE2 shuffle / unpack / pack ops | in progress | Legacy XMM PSHUFD/PSHUFLW/PSHUFHW/PUNPCK/PACK/SHUFPS lowering; Linux + Windows CI functional tests pass; automated Linux baseline-vs-current PSHUFD benchmark wired into CI; result pending |
-| Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | fixed 2 GiB memory model done, hotplug/NVDIMM/CXL removed; single machine type done; CLI flag removal + dead above-4G code pending (T01) |
-| XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
-| Linux + Windows hosts only | in progress | macOS/BSD code removed; Linux and Windows builds verified by CI (T03 pass 2 pending, T07 done) |
-| x87 host fast path (add/sub/mul/div/sqrt, exact loads) | done (part 1) | 3.0-4.6x on x87 microbenchmarks, bit-identical to softfloat on 7.2M random ops (T13a) |
-| General TCG performance: call/ret, rep string ops, more x87, thread pinning | planned | T13b, T13c, T14 |
-| Remove IOMMU/SEV/SGX/TDX/VFIO + remaining KVM call sites | planned | heavily entangled; see HANDOFF |
-| Device pruning | partly done | XP device set in `default.mak` (220 -> 91 enabled symbols, 439 -> ~247 listed devices); 1015 dead C files, 724 unused headers, non-x86 firmware removed (tree 171 MB -> 41 MB); machine-coupled pieces (DIMM/NVDIMM/CXL/ACPI hotplug) await the fixed-machine rework |
-| Boot Windows XP SP3 end to end | **not yet done** | only SeaBIOS boot verified so far |
-| 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D via DXVK) + TCG backdoor-port fix | planned | T09-T11; VBoxVGA 5.2.x (T16) is the frozen alternative |
-| wxWidgets launcher (qcow2 disk, RAM, floppy, ISO) | planned (later) | |
-
-Verified so far: CI builds on Linux and Windows (MSYS2); fresh configure + full build; `-accel help` lists only `tcg`;
-SeaBIOS boots under TCG with 2 vCPUs; SSE2 memory-op, immediate-shuffle, and unpack/pack/shuffle functional tests pass on both hosts.
-
-## References
-
-QEMU: https://github.com/qemu/QEMU - xemu: https://github.com/xemu-project/xemu -
-qemu-vmvga (VMware SVGA3D for QEMU, primary 3D plan): https://github.com/qemus/qemu-vmvga -
-xbased: https://github.com/crazyriddler/xbased - 86Box VBoxVGA PR (alternative path):
-https://github.com/86Box/86Box/pull/6183 - VirtualBox mirror (use v5.2.x/v6.1.x,
-GPLv2): https://github.com/VirtualBox/virtualbox - Bochs GeForce PR:
-https://github.com/bochs-emu/Bochs/pull/574 - wine9x: https://github.com/JHRobotics/wine9x -
-SoftGPU: https://github.com/JHRobotics/softgpu - DXVK: https://github.com/doitsujin/DXVK -
-d3d8to9: https://github.com/crosire/d3d8to9/ - viogpu3d:
-https://github.com/virtio-win/kvm-guest-drivers-windows/pull/943 - virglrenderer:
-https://github.com/utmapp/virglrenderer - Yttrium: https://github.com/arehnman/yttrium-virtio-gpu - PCBox NV11 (GeForce2 MX) PR, real-GPU route:
-https://github.com/PCBox/PCBox/pull/202 .
-x87/soft-float references: PCSX2 soft-float interpreter https://github.com/PCSX2/pcsx2/pull/12001 and recompiler
-PRs https://github.com/DiscoStarslayer/pcsx2-reliquary/pull/17 , /pull/18 , /pull/29 ; xemu's fpu/:
-https://github.com/xemu-project/xemu/tree/master/fpu .
-Details and how each is useful: HANDOFF.md section 9.
+| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="500" alt="Windows XP SP3 desktop running in Y2KBox"> |
