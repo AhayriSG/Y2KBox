@@ -55,7 +55,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   booted yet** (T08, needs an XP ISO).
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
-* T13d legacy XMM register caching is implemented in commit `c272958`; Linux CI benchmark recorded +0.58% (1.006x), effectively near-neutral. Windows functional/build confirmation remains separate.
+* T13d legacy XMM register caching began in `c272958`; Linux CI measured +0.58% (1.006x), effectively near-neutral. A Win64 refinement now caps live cached guest XMM values at five to match the backend's five allocatable host XMM registers. Windows CI includes a pre-cache A/B benchmark; result pending.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
 

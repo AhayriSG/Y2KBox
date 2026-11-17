@@ -3678,7 +3678,9 @@ static void disas_insn(DisasContext *s, CPUState *cpu)
         }
     }
     s->xmm_cache_insn = xmm_cacheable_insn(s, &decode);
-    if (!s->xmm_cache_insn) {
+    if (s->xmm_cache_insn) {
+        xmm_cache_prepare(s, &decode);
+    } else {
         xmm_cache_flush(s);
     }
 

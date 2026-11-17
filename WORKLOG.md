@@ -153,3 +153,28 @@ functional/build feedback when supplied. Given the near-neutral result, do not
 claim that XMM caching materially improves performance; if pursuing further
 speedups, profile the generated host code and target the measured register
 state traffic rather than expanding the cache blindly.
+
+
+## Session 7 (ChatGPT), 2026-11-18 - Win64 XMM-cache register-pressure refinement
+
+The x86-64 TCG backend reserves XMM5 as a scratch vector register. Under
+`_WIN64`, it also excludes XMM6-XMM15 because the backend does not save those
+ABI nonvolatile registers, leaving XMM0-XMM4 as the five allocatable host vector
+registers. The original guest XMM cache could keep eight 128-bit values live on
+a 32-bit guest, exceeding that budget.
+
+The translator now preflights all three decoded operand slots before emitting
+a cacheable instruction. If the union of currently cached guest XMM registers
+and the instruction's operands would exceed five, it flushes the cache before
+emission. This keeps every operand of the current instruction resident while
+preventing the cache from forcing the Win64 TCG allocator to spill an oversized
+set. Linux behavior is unchanged.
+
+Windows CI now downloads the pre-cache Windows artifact from run 44156398064
+and compares it with the capacity-aware build using the same 300M-iteration
+register-only `sse2.asm` image, three runs per build, median wall time. Added
+the `bc` dependency required by the shared benchmark runner. No local build or
+test was run; review the CI benchmark output supplied by the owner before
+claiming a performance result.
+
+| (this commit) | T13d Win64 cache-capacity refinement and Windows A/B benchmark automation; documentation updated. |

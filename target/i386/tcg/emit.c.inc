@@ -371,6 +371,43 @@ static void xmm_cache_flush(DisasContext *s)
     s->xmm_cache_dirty = 0;
 }
 
+/*
+ * On Win64, the x86-64 TCG backend can allocate only XMM0-XMM4:
+ * XMM5 is reserved as scratch, and XMM6-XMM15 are withheld because
+ * the backend does not save the ABI's nonvolatile vector registers.
+ * Keep the EBB cache within that five-register budget.  Preflight all
+ * operands together so the current instruction's inputs cannot be
+ * flushed between successive xmm_cache_get() calls.
+ */
+static void xmm_cache_prepare(DisasContext *s, X86DecodedInsn *decode)
+{
+#ifdef _WIN64
+    uint32_t needed = 0;
+    uint32_t live;
+    unsigned count = 0;
+
+    for (int i = 0; i < 3; i++) {
+        X86DecodedOp *op = &decode->op[i];
+        if (op->unit == X86_OP_SSE && !op->has_ea &&
+            op->n >= 0 && op->n < XMM_CACHE_REGS) {
+            needed |= 1u << op->n;
+        }
+    }
+
+    live = s->xmm_cache_valid | needed;
+    while (live) {
+        live &= live - 1;
+        count++;
+    }
+    if (count > 5) {
+        xmm_cache_flush(s);
+    }
+#else
+    (void)s;
+    (void)decode;
+#endif
+}
+
 static bool xmm_cache_reg_operands(DisasContext *s,
                                    X86DecodedInsn *decode, int nops)
 {

@@ -190,8 +190,8 @@ separate sub-task (T13a..c), claim one:
 Every change: A/B numbers in WORKLOG + standard checks + CI green.
 
 
-* **T13d legacy XMM register caching - Status: PAUSED (Linux CI benchmark recorded; Windows CI confirmation pending).**
-  Implementation commit: `c272958`. `DisasContext` owns an EBB-temp cache for eligible
+* **T13d legacy XMM register caching - Status: PAUSED (Win64 register-pressure refinement pushed; Windows A/B result pending).**
+  Initial implementation: `c272958`. `DisasContext` owns an EBB-temp cache for eligible
   legacy XMM register-only operations: lazy loads, dirty tracking, and flush/free barriers
   before non-cacheable instructions, exceptions, and TB exits. MMX, VEX/YMM, memory operands,
   and unsupported vector operations retain their existing paths. Eligible classes include
@@ -199,11 +199,17 @@ Every change: A/B numbers in WORKLOG + standard checks + CI green.
   T04 shuffle/unpack/pack operations. `shuffletest.asm` adds a MOVD cache-barrier regression
   case. Linux CI completed the 100M-iteration `sse2.asm` A/B benchmark against the pre-cache
   artifact from run 44156398064 (median of 3 runs): 0.877822 s before, 0.872720 s after,
-  +0.58% (1.006x). This is a marginal result, not a meaningful demonstrated speedup.
-  No local build/test was run. Resume here: review Windows CI functional/build feedback when
-  supplied; then decide whether to retain this cache as a neutral/low-risk implementation or
-  pursue a better-targeted optimization. Do not extrapolate this microbenchmark to broad SSE2
-  workloads or other host CPUs.
+  +0.58% (1.006x), effectively near-neutral.
+  Review of `tcg/x86_64/tcg-target.c.inc` showed that Win64 can allocate only XMM0-XMM4:
+  XMM5 is reserved as scratch and XMM6-XMM15 are withheld under the Windows x64 ABI.
+  The translator now preflights each cacheable instruction's full operand set and flushes
+  before exceeding five live cached guest XMM values, preventing an oversized cache from
+  forcing vector-register spills. Linux behavior is unchanged. Windows CI now compares the
+  pre-cache artifact from run 44156398064 with the capacity-aware build using the same
+  300M-iteration `sse2.asm` image (median of three runs). No local build/test was run.
+  Resume here: review the Windows A/B result and retain or revise the capacity limit based
+  on measurement. Do not extrapolate these microbenchmarks to broad SSE2 workloads or other
+  host CPUs.
 
 ## T14 (P1) Threading model and thread pinning  -  Status: TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them

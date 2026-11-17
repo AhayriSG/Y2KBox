@@ -80,8 +80,20 @@ barrier case.
 Linux CI compares one identical 100-million-iteration `sse2.asm` workload
 using the pre-cache Linux artifact from run 44156398064 and the current build
 on the same runner. Each side is measured three times and compared by median
-wall time. This is a mixed register-only SSE2 workload, not a broad application
-benchmark or a measurement of the user's local CPU.
+wall time. Windows CI additionally compares the pre-cache Windows artifact from
+the same run against the current build using an identical 300-million-iteration
+image and three-run medians. These are separate host measurements; do not
+compare their absolute runtimes across operating systems. Both are mixed
+register-only SSE2 workloads, not broad application benchmarks or measurements
+of the user's local CPU.
+
+The Win64 cache budget is five live guest XMM values: the x86-64 TCG backend
+reserves XMM5 as a scratch register and does not allocate XMM6-XMM15 under the
+Windows x64 ABI. Before emitting a cacheable instruction, the translator
+preflights its complete operand set and flushes the current cache if adding
+those operands would exceed five live values. This avoids forcing the TCG
+allocator to spill a larger set of cached vectors. Linux retains its existing
+cache behavior.
 
 ### T13d Linux CI result (2026-11-18)
 
@@ -97,8 +109,9 @@ Relative change: **+0.58%** (1.006x; 0.005102 s faster). This is a marginal
 difference on a shared CI runner, effectively near-neutral rather than a
 demonstrated performance improvement. It is not evidence of a broad SSE2
 speedup or regression, and does not predict performance on other host CPUs.
-Linux benchmark completed successfully. No local build/test was run; Windows
-cross-platform functional/build confirmation remains separate.
+Linux benchmark completed successfully. No local build/test was run. The
+Windows capacity-aware A/B benchmark is automated in the Windows CI job; its
+result must be reviewed separately.
 
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 

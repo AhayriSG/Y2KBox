@@ -150,7 +150,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-meson
             mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-pixman
             mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm bc
       - name: Configure
         run: |
           mkdir build && cd build
@@ -193,6 +193,29 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=packunpacktest.img,format=raw,if=ide \
             -chardev file,id=d,path=packunpacktest.out -device isa-debugcon,iobase=0x402,chardev=d || true
           cat packunpacktest.out; grep -q '^OK' packunpacktest.out
+      - name: Download pre-cache Windows baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: y2kbox-windows-x86_64
+          path: t13-baseline
+          run-id: 44156398064
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: T13 Windows register-only SSE2 A/B benchmark
+        run: |
+          set -euo pipefail
+          nasm -fbin -DLOOPS=300000000 xp/bench/sse2.asm -o sse2-reg.img
+          before=$(Q="$PWD/t13-baseline/qemu-system-i386.exe" PCBIOS="$PWD/t13-baseline/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)
+          after=$(Q="$PWD/build/qemu-system-i386.exe" PCBIOS="$PWD/build/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)
+          python3 - "$before" "$after" <<'PY'
+          import sys
+          before, after = map(float, sys.argv[1:])
+          if before <= 0 or after <= 0:
+              raise SystemExit("Measurement invalid: runtimes must be positive")
+          print(f"Before XMM cache median: {before:.6f}s")
+          print(f"After capacity-aware XMM cache median: {after:.6f}s")
+          print(f"Relative change: {(before-after)/before*100:+.2f}% (speedup={before/after:.3f}x)")
+          PY
+        shell: bash
       - name: x87 differential test (host fast path vs softfloat)
         run: bash xp/bench/x87cmp.sh build 2000
       - name: Package (binaries, pc-bios, MSYS2 runtime DLLs)
