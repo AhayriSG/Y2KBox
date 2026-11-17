@@ -108,3 +108,19 @@ Linux benchmark result is accepted; Windows CI is only needed for the existing
 cross-platform build/functional validation, not to complete this Linux timing.
 T04's inline lowering and functional coverage are complete; broader SSE2
 performance is outside this isolated PSHUFD measurement.
+
+## Session 5 (ChatGPT), 2026-11-18 - T13d legacy XMM register caching
+
+| commit | change |
+|--------|--------|
+| c272958 | Implemented per-TB caching for eligible legacy XMM register-only operations using TCG EBB vector temporaries. Added lazy loads, dirty tracking, and flush/free barriers before non-cacheable instructions, exception generation, and TB exits. MMX, VEX/YMM, memory operands, and unsupported vector operations retain their existing paths. Added a MOVD cache-barrier case to `shuffletest.asm` and Linux CI A/B automation. |
+| 7c81602 | Added T13d to `TASKS.md` as paused pending CI review and benchmark output. |
+| 45bd37c | Updated `HANDOFF.md` with the cache design and pending validation state. |
+| 060c995 | Documented the T13d A/B benchmark in `xp/bench/README.md`. |
+
+The Linux workflow compares the same 100M-iteration `sse2.asm` workload on
+the pre-cache artifact from run 44156398064 and the current build, using the
+median of three runs. No local build or test was run, and no CI result was
+polled. The benchmark result is not yet known; no speedup or regression is
+claimed. Next: review the owner's CI feedback and Linux benchmark output,
+fix any failures, then interpret the measured result.
