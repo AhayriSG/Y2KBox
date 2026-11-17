@@ -361,6 +361,17 @@ void tcg_gen_st_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset);
 QEMU_ARG_NONNULL
 void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 
+QEMU_ARG_NONNULL
+void tcg_gen_x86_punpckl_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b, unsigned vece);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_punpckh_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b, unsigned vece);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_packss_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b, unsigned vece);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_packus_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b, unsigned vece);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_shufps_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b, int64_t imm);
+
 /* Host pointer ops */
 
 TCGv_ptr tcg_constant_ptr_int(intptr_t x);

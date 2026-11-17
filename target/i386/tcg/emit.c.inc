@@ -907,15 +907,65 @@ static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                
                           gen_helper_##lname##_xmm,                                \
                           gen_helper_##lname##_ymm);                               \
 }
-BINARY_INT_MMX(PUNPCKLBW,  punpcklbw)
-BINARY_INT_MMX(PUNPCKLWD,  punpcklwd)
-BINARY_INT_MMX(PUNPCKLDQ,  punpckldq)
-BINARY_INT_MMX(PACKSSWB,   packsswb)
-BINARY_INT_MMX(PACKUSWB,   packuswb)
-BINARY_INT_MMX(PUNPCKHBW,  punpckhbw)
-BINARY_INT_MMX(PUNPCKHWD,  punpckhwd)
-BINARY_INT_MMX(PUNPCKHDQ,  punpckhdq)
-BINARY_INT_MMX(PACKSSDW,   packssdw)
+/*
+ * Legacy XMM forms are destructive two-operand instructions. Load the old
+ * destination and second operand, then use the native host vector op.
+ * MMX and VEX forms keep their existing helper paths.
+ */
+#define BINARY_INT_MMX_VEC(uname, lname, vece, vecfn)                              \
+static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
+{                                                                                  \
+    if ((s->prefix & PREFIX_DATA) && !(s->prefix & PREFIX_VEX)) {                  \
+        TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        tcg_gen_ld_vec(a, OP_PTR1, 0);                                              \
+        tcg_gen_ld_vec(b, OP_PTR2, 0);                                              \
+        vecfn(r, a, b, vece);                                                      \
+        tcg_gen_st_vec(r, OP_PTR0, 0);                                             \
+        tcg_temp_free_vec(r);                                                      \
+        tcg_temp_free_vec(b);                                                      \
+        tcg_temp_free_vec(a);                                                      \
+    } else {                                                                       \
+        gen_binary_int_sse(s, decode,                                              \
+                           gen_helper_##lname##_mmx,                              \
+                           gen_helper_##lname##_xmm,                              \
+                           gen_helper_##lname##_ymm);                             \
+    }                                                                              \
+}
+#define BINARY_INT_SSE_VEC(uname, lname, vece, vecfn)                              \
+static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
+{                                                                                  \
+    if (!(s->prefix & PREFIX_VEX)) {                                               \
+        TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);                              \
+        tcg_gen_ld_vec(a, OP_PTR1, 0);                                              \
+        tcg_gen_ld_vec(b, OP_PTR2, 0);                                              \
+        vecfn(r, a, b, vece);                                                      \
+        tcg_gen_st_vec(r, OP_PTR0, 0);                                             \
+        tcg_temp_free_vec(r);                                                      \
+        tcg_temp_free_vec(b);                                                      \
+        tcg_temp_free_vec(a);                                                      \
+    } else {                                                                       \
+        gen_binary_int_sse(s, decode, NULL,                                        \
+                           gen_helper_##lname##_xmm,                              \
+                           gen_helper_##lname##_ymm);                             \
+    }                                                                              \
+}
+BINARY_INT_MMX_VEC(PUNPCKLBW, punpcklbw, MO_8,  tcg_gen_x86_punpckl_vec)
+BINARY_INT_MMX_VEC(PUNPCKLWD, punpcklwd, MO_16, tcg_gen_x86_punpckl_vec)
+BINARY_INT_MMX_VEC(PUNPCKLDQ, punpckldq, MO_32, tcg_gen_x86_punpckl_vec)
+BINARY_INT_MMX_VEC(PACKSSWB,  packsswb,  MO_8,  tcg_gen_x86_packss_vec)
+BINARY_INT_MMX_VEC(PACKUSWB,  packuswb,  MO_8,  tcg_gen_x86_packus_vec)
+BINARY_INT_MMX_VEC(PUNPCKHBW, punpckhbw, MO_8,  tcg_gen_x86_punpckh_vec)
+BINARY_INT_MMX_VEC(PUNPCKHWD, punpckhwd, MO_16, tcg_gen_x86_punpckh_vec)
+BINARY_INT_MMX_VEC(PUNPCKHDQ, punpckhdq, MO_32, tcg_gen_x86_punpckh_vec)
+BINARY_INT_MMX_VEC(PACKSSDW,  packssdw,  MO_16, tcg_gen_x86_packss_vec)
+BINARY_INT_SSE_VEC(PUNPCKLQDQ, punpcklqdq, MO_64, tcg_gen_x86_punpckl_vec)
+BINARY_INT_SSE_VEC(PUNPCKHQDQ, punpckhqdq, MO_64, tcg_gen_x86_punpckh_vec)
+#undef BINARY_INT_MMX_VEC
+#undef BINARY_INT_SSE_VEC
 
 BINARY_INT_MMX(PAVGB,   pavgb)
 BINARY_INT_MMX(PAVGW,   pavgw)
@@ -4949,6 +4999,23 @@ static void gen_VSHUF(DisasContext *s, X86DecodedInsn *decode)
 {
     TCGv_i32 imm = tcg_constant_i32(decode->immediate);
     SSEFunc_0_pppi ps, pd, fn;
+
+    if (!(s->prefix & (PREFIX_VEX | PREFIX_DATA))) {
+        TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);
+        TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);
+        TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);
+
+        tcg_gen_ld_vec(a, OP_PTR1, 0);
+        tcg_gen_ld_vec(b, OP_PTR2, 0);
+        tcg_gen_x86_shufps_vec(r, a, b, decode->immediate);
+        tcg_gen_st_vec(r, OP_PTR0, 0);
+
+        tcg_temp_free_vec(r);
+        tcg_temp_free_vec(b);
+        tcg_temp_free_vec(a);
+        return;
+    }
+
     ps = s->vex_l ? gen_helper_shufps_ymm : gen_helper_shufps_xmm;
     pd = s->vex_l ? gen_helper_shufpd_ymm : gen_helper_shufpd_xmm;
     fn = s->prefix & PREFIX_DATA ? pd : ps;

@@ -108,8 +108,10 @@ removed by T01.
 * AVX-512 on/off: reg loop 3.13 s vs 3.09 s; mem loop 8.11 s vs 8.14 s -> no gain.
 * Register SSE2 ops are already inline TCG vector ops (add_vec, mul_vec, xor_vec,
   cmp_vec, shri_vec...), but each is `ld_vec env -> op -> st_vec env` (XMM regs are not
-  TCG globals; keeping them in host regs is T13). **PSHUFD is an out-of-line helper
-  call** (T04).
+  TCG globals; keeping them in host regs is T13). T04 now lowers legacy XMM
+  PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK*, and SHUFPS through native host vector ops;
+  MMX and VEX/YMM forms retain their existing helper paths. Functional CI coverage
+  is being expanded; performance measurements remain pending.
 * The load hotspot (fixed, below): int-pair load + two 64-bit env stores + 128-bit
   reload = store-forwarding stall (~15-20 cycles).
 

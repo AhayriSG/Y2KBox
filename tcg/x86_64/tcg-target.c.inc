@@ -4029,6 +4029,56 @@ void tcg_gen_x86_pshufhw_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
     tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshufhw_vec, r, a, imm);
 }
 
+static void tcg_gen_x86_binary_vec(TCGOpcode opc, TCGv_vec r,
+                                   TCGv_vec a, TCGv_vec b, unsigned vece)
+{
+    TCGType type = tcgv_vec_temp(r)->base_type;
+
+    tcg_debug_assert(type == TCG_TYPE_V128);
+    tcg_debug_assert(tcgv_vec_temp(a)->base_type >= type);
+    tcg_debug_assert(tcgv_vec_temp(b)->base_type >= type);
+    tcg_debug_assert(vece <= MO_64);
+    vec_gen_3(opc, type, vece, tcgv_vec_arg(r),
+              tcgv_vec_arg(a), tcgv_vec_arg(b));
+}
+
+void tcg_gen_x86_punpckl_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b,
+                             unsigned vece)
+{
+    tcg_gen_x86_binary_vec(INDEX_op_x86_punpckl_vec, r, a, b, vece);
+}
+
+void tcg_gen_x86_punpckh_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b,
+                             unsigned vece)
+{
+    tcg_gen_x86_binary_vec(INDEX_op_x86_punpckh_vec, r, a, b, vece);
+}
+
+void tcg_gen_x86_packss_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b,
+                            unsigned vece)
+{
+    tcg_gen_x86_binary_vec(INDEX_op_x86_packss_vec, r, a, b, vece);
+}
+
+void tcg_gen_x86_packus_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b,
+                            unsigned vece)
+{
+    tcg_gen_x86_binary_vec(INDEX_op_x86_packus_vec, r, a, b, vece);
+}
+
+void tcg_gen_x86_shufps_vec(TCGv_vec r, TCGv_vec a, TCGv_vec b,
+                            int64_t imm)
+{
+    TCGType type = tcgv_vec_temp(r)->base_type;
+
+    tcg_debug_assert(type == TCG_TYPE_V128);
+    tcg_debug_assert(tcgv_vec_temp(a)->base_type >= type);
+    tcg_debug_assert(tcgv_vec_temp(b)->base_type >= type);
+    tcg_debug_assert(imm >= 0 && imm <= 255);
+    vec_gen_4(INDEX_op_x86_shufps_vec, type, MO_32, tcgv_vec_arg(r),
+              tcgv_vec_arg(a), tcgv_vec_arg(b), imm);
+}
+
 static TCGConstraintSetIndex
 tcg_target_op_def(TCGOpcode op, TCGType type, unsigned flags)
 {

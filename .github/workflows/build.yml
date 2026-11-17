@@ -36,6 +36,11 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=shuffletest.img,format=raw,if=ide \
             -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee shuffletest.out || true
           grep -q '^OK' shuffletest.out
+          nasm -fbin ../xp/bench/packunpacktest.asm -o packunpacktest.img
+          ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=packunpacktest.img,format=raw,if=ide \
+            -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee packunpacktest.out || true
+          grep -q '^OK' packunpacktest.out
           ./qemu-img create -f qcow2 t.qcow2 1G
       - name: x87 differential test (host fast path vs softfloat)
         run: bash xp/bench/x87cmp.sh build 2000
@@ -123,6 +128,11 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=shuffletest.img,format=raw,if=ide \
             -chardev file,id=d,path=shuffletest.out -device isa-debugcon,iobase=0x402,chardev=d || true
           cat shuffletest.out; grep -q '^OK' shuffletest.out
+          nasm -fbin ../xp/bench/packunpacktest.asm -o packunpacktest.img
+          ./qemu-system-i386.exe -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=packunpacktest.img,format=raw,if=ide \
+            -chardev file,id=d,path=packunpacktest.out -device isa-debugcon,iobase=0x402,chardev=d || true
+          cat packunpacktest.out; grep -q '^OK' packunpacktest.out
       - name: x87 differential test (host fast path vs softfloat)
         run: bash xp/bench/x87cmp.sh build 2000
       - name: Package (binaries, pc-bios, MSYS2 runtime DLLs)
