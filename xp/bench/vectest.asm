@@ -127,6 +127,39 @@ start:
     cmp si, 33
     jb .t7
 
+    ; ---- test 8: PSHUFD XMM immediate shuffle (reverse dword lanes)
+    mov bl, '8'
+    movdqa xmm6, [shuffle_input]
+    pshufd xmm7, xmm6, 0x1B
+    movdqa [0xA600], xmm7
+    mov si, 0xA600
+    mov di, shuffle_pshufd_expected
+    mov cx, 16
+    repe cmpsb
+    jne fail
+
+    ; ---- test 9: PSHUFLW XMM immediate shuffle (reverse low word lanes)
+    mov bl, '9'
+    movdqa xmm6, [shuffle_input]
+    pshuflw xmm7, xmm6, 0x1B
+    movdqa [0xA600], xmm7
+    mov si, 0xA600
+    mov di, shuffle_pshuflw_expected
+    mov cx, 16
+    repe cmpsb
+    jne fail
+
+    ; ---- test 10: PSHUFHW XMM immediate shuffle (reverse high word lanes)
+    mov bl, 'A'
+    movdqa xmm6, [shuffle_input]
+    pshufhw xmm7, xmm6, 0x1B
+    movdqa [0xA600], xmm7
+    mov si, 0xA600
+    mov di, shuffle_pshufhw_expected
+    mov cx, 16
+    repe cmpsb
+    jne fail
+
     mov si, ok_msg
     jmp print
 fail:
@@ -155,5 +188,10 @@ gp_handler:
 gpcnt: db 0
 ok_msg:   db "OK", 10, 0
 fail_msg: db "FAIL?", 10, 0
-times 510-($-$$) db 0
+align 16
+shuffle_input: db 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+shuffle_pshufd_expected: db 13,14,15,16,9,10,11,12,5,6,7,8,1,2,3,4
+shuffle_pshuflw_expected: db 7,8,5,6,3,4,1,2,9,10,11,12,13,14,15,16
+shuffle_pshufhw_expected: db 1,2,3,4,5,6,7,8,15,16,13,14,11,12,9,10
+times 510-($-$) db 0
 dw 0xAA55
