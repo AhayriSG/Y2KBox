@@ -81,8 +81,11 @@ Dedicated boot-sector functional tests run in Linux/Windows CI:
 `xp/bench/shuffletest.asm` and `xp/bench/packunpacktest.asm`.
 CI validation: PASS on Linux and Windows (run 44156398064); both
 `shuffletest.asm` and `packunpacktest.asm` print `OK` on both hosts.
-Next: measure the isolated PSHUFD loop against its empty-loop control and record
-at least three repeated results, host/build details, and net timing in WORKLOG.md.
+The Linux CI workflow now downloads the pre-T04 baseline artifact (run
+44148654097) and measures baseline/current PSHUFD plus matched empty-loop controls
+on the same runner (300M iterations, minimum of 3 runs each). The runner rejects
+unexpected QEMU exit codes, timeouts, and stderr output. Benchmark automation is
+wired into CI; result validation and recording remain pending.
 
 ## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: TODO
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
