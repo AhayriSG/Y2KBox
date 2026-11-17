@@ -111,7 +111,6 @@ static void pc_init1(MachineState *machine, const char *pci_type)
     }
     x86ms->below_4g_mem_size = machine->ram_size;
 
-    pc_machine_init_sgx_epc(pcms);
     x86_cpus_init(x86ms, pcmc->default_cpu_version);
 
     if (kvm_enabled()) {
