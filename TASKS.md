@@ -2,19 +2,21 @@
 
 Several AIs/humans may work at the same time. **Claim a task before starting**:
 
-1. `git pull --rebase origin main`
+1. Fetch the latest `main` and re-read this file before choosing work.
 2. Edit the task's `Status` to `CLAIMED by <name/session> <date>` in this file,
-   commit ("tasks: claim T05"), `git push origin main`.
-   If the push is rejected, somebody else pushed first: `git pull --rebase`, re-read
-   this file, pick another task if yours was taken.
-3. Work on a branch `task/T05-short-name` (push it often - WIP must never be lost).
-   Merge to `main` only when the *Definition of done* is met and CI is green
-   (HANDOFF.md section 7: do not build locally, do not poll CI; the hook reports it). Keep `main` always building.
+   then commit and push directly to `main`. If another contributor moves `main`
+   first, stop, fetch the new HEAD, re-read the queue, and coordinate before proceeding.
+3. Work directly on `main`; do not create branches or pull requests. Before every
+   write, fetch the latest `main` and the exact file being changed. Verify that both
+   the branch HEAD and file blob SHA still match what you inspected; if either moved,
+   abort that write, fetch again, and reapply the change to the new content. Commit
+   and push small, coherent increments. Never force-push. Keep `main` building.
+   (HANDOFF.md section 7: do not build locally or poll CI; the status hook reports it.)
 4. When done: set `Status: DONE <date> (commit <hash>)`, add a line to WORKLOG.md,
-   update the README status table, push.
-5. **If you are about to run out of budget**: commit and push your branch, set the
-   task to `PAUSED` with a precise "Resume here:" note (what is done, what is next,
-   what is broken). Never leave a claimed task silent.
+   update the README status table, and push to `main`.
+5. **If you are about to run out of budget**: commit and push the current safe state
+   to `main`, set the task to `PAUSED` with a precise "Resume here:" note (what is
+   done, what is next, what is broken). Never leave a claimed task silent.
 
 Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
 

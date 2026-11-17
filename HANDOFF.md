@@ -7,13 +7,16 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
 ## 0. If you are a new AI/human taking over (2 minutes)
 
 1. Read sections 1-2 below, then `TASKS.md`. Pick an unclaimed task (highest priority
-   first) and **claim it by pushing** (protocol at the top of TASKS.md).
-2. Do NOT build locally (section 7): the status hook / latest Actions run tells you whether the baseline is green.
-3. Work on a `task/Txx-name` branch, commit small, push often.
-4. Before you run out of budget: push, update TASKS.md (`PAUSED` + "Resume here"),
-   append to WORKLOG.md (section 10 has the checklist).
-Several agents can work in parallel: tasks are written to be independent (different
-files). If two tasks touch `hw/i386/pc*.c` (T01, T05, T06) coordinate through TASKS.md.
+   first) and claim it directly on `main` (protocol at the top of TASKS.md).
+2. Do NOT build locally (section 7): the status hook reports whether the latest pushed
+   commit passed the checks.
+3. Work directly on `main`, commit small, and push often. Do not create branches or
+   pull requests. Before every write, fetch the latest `main` and the exact target file;
+   verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
+4. Before you run out of budget: push the current safe state, update TASKS.md
+   (`PAUSED` + "Resume here"), and append to WORKLOG.md (section 10 has the checklist).
+Several agents can work in parallel only by coordinating task claims and serializing
+writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate through TASKS.md.
 
 ## 1. Project aim and non-negotiable constraints (owner decisions)
 
@@ -355,10 +358,11 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
 
 ## 10. Handoff rules and sandbox gotchas
 
-Before you stop (budget ending) do ALL of: (1) commit + push your branch; (2) TASKS.md:
-status `PAUSED` with "Resume here:"; (3) append to WORKLOG.md what you did, evidence
-(numbers, commands), and what broke; (4) update section 2 and the README table if state
-changed; (5) never leave `main` broken.
+Before you stop (budget ending) do ALL of: (1) commit + push the current safe state
+directly to `main` (no branches, PRs, or force-pushes); (2) TASKS.md: status `PAUSED`
+with "Resume here:"; (3) append to WORKLOG.md what you did, evidence (numbers, commands),
+and what broke; (4) update section 2 and the README table if state changed; (5) never
+leave `main` broken.
 
 Gotchas seen so far: the sandbox shell was `dash` (use `bash` scripts); a single command
 is limited to 300 s (run ninja via `setsid nohup ... &` and poll); prune files only after

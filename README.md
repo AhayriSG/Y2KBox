@@ -15,8 +15,8 @@ Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
 (qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small wxWidgets launcher.
 
 **Contributors / LLMs: read [HANDOFF.md](HANDOFF.md) first**, then pick work from
-[TASKS.md](TASKS.md) (claim by pushing) and log what you did in [WORKLOG.md](WORKLOG.md).
-Several AIs can work in parallel.
+[TASKS.md](TASKS.md) (claim on `main`) and log what you did in [WORKLOG.md](WORKLOG.md).
+Contributors work directly on `main`; coordinate task claims and serialize commits.
 
 Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
 (Pentium 4 class), 1 vCPU by default; hosts: Windows and Linux (x86-64-v3 or newer).
