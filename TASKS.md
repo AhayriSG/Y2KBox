@@ -100,6 +100,12 @@ functional CI remains independent and is not required for this Linux measurement
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
 38 files mention IOMMU, 25 SEV/confidential, 20 SGX, 17 VFIO; also `kvm_enabled()`
 branches, `include/system/kvm*.h`, `kvm_i386.h`, `hw/i386/kvm/clock.h`.
+* Progress: removed the redundant `pc_machine_init_sgx_epc()` call and its no-op stub/prototype.
+  The `PCMachineState.sgx_epc` field and `sgx-epc.h` include are retained: the ACPI builder
+  still reads that state, so removing the field would break the build. SGX capability-query/
+  CPUID stubs and the ACPI SRAT no-op remain because live code still references them.
+  Next: trace KVM, VFIO and IOMMU references by build/config dependency before removing any
+  shared call sites; avoid broad grep-based deletion.
 
 ## T06 (P1) Remaining pruning  -  Status: TODO
 Device models still compiled but unused, trace-events of deleted code, QAPI
