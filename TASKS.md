@@ -75,10 +75,12 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   meson_options.txt; (2) Windows build is verified by CI (T07).
 
 ## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: CLAIMED by ChatGPT session 2026-11-17
-Currently out-of-line helpers (`pshufd_xmm` ...). The x86 backend already has target
-vector ops (`x86_shufps`, `x86_punpckl/h`, `x86_psrldq`, blend in
-`tcg/x86_64/tcg-target-opc.h.inc`). Add inline lowering (or a new TCG shuffle op).
-Measure with a new `xp/bench` loop (baseline: pshufd is a helper call).
+Legacy XMM forms of PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK* and SHUFPS now
+have inline native x86 TCG lowering. MMX and VEX/YMM forms retain their helper paths.
+Dedicated boot-sector functional tests run in Linux/Windows CI:
+`xp/bench/shuffletest.asm` and `xp/bench/packunpacktest.asm`.
+Next: confirm both CI jobs pass, then measure the isolated PSHUFD loop against its
+empty-loop control and record repeated results in WORKLOG.md.
 
 ## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: TODO
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
