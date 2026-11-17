@@ -1036,6 +1036,12 @@ static inline const char *next_component(const char *dir, int *p_len)
 
 static const char *exec_dir;
 
+/* XP fork: used for the portable layout (firmware next to the executable) */
+const char *qemu_get_exec_dir(void)
+{
+    return exec_dir;
+}
+
 void qemu_init_exec_dir(const char *argv0)
 {
 #ifdef G_OS_WIN32

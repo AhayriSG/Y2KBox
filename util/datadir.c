@@ -102,6 +102,15 @@ void qemu_add_default_firmwarepath(void)
 
     /* try to find datadir relative to the executable path */
     qemu_add_data_dir(get_relocated_path(CONFIG_QEMU_DATADIR));
+
+    /*
+     * XP fork: portable layout. Firmware in <exe dir>/pc-bios (our release zip) or directly beside the
+     * executable (the Windows installer layout) is found without -L.
+     */
+    if (qemu_get_exec_dir()) {
+        qemu_add_data_dir(g_strdup_printf("%s/pc-bios", qemu_get_exec_dir()));
+        qemu_add_data_dir(g_strdup(qemu_get_exec_dir()));
+    }
 }
 
 void qemu_list_data_dirs(void)

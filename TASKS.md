@@ -143,7 +143,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI: pick a qcow2 disk (made with qemu-img), floppy image,
+Our own executable + wxWidgets GUI (until then the dev display is `-display sdl`, SDL2 is built in CI, or `-display vnc`): pick a qcow2 disk (made with qemu-img), floppy image,
 CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
 
 ## T13 (P1) TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)

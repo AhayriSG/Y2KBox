@@ -246,6 +246,7 @@ int qemu_pstrcmp0(const char **str1, const char **str2);
  * get_relocated_path().
  * Try OS specific API first, if not working, parse from argv0. */
 void qemu_init_exec_dir(const char *argv0);
+const char *qemu_get_exec_dir(void);
 
 /**
  * get_relocated_path:

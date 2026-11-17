@@ -26,8 +26,19 @@ License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 ## Download
 
-Every green CI run uploads Linux and Windows builds (`qemu-system-i386[.exe]`, `qemu-img[.exe]`, `pc-bios/`,
-Windows runtime DLLs) as Actions Artifacts: open the latest run on the Actions tab. Run with `-L pc-bios`.
+Every green CI run uploads Linux and Windows builds as Actions Artifacts (open the latest run on the Actions tab):
+`qemu-system-i386[.exe]`, `qemu-img[.exe]`, a `pc-bios/` folder and, on Windows, the required runtime DLLs (incl. SDL2).
+Unzip the **whole** archive and keep `pc-bios/` next to the executable; it is found automatically (no `-L` needed).
+
+    qemu-img create -f qcow2 xp.qcow2 10G
+    qemu-system-i386 -drive file=xp.qcow2,format=qcow2 -cdrom xp.iso -boot d -display sdl      # or: -display vnc=:0
+
+* **Display:** `-display sdl` (SDL2 is part of the build) or `-display vnc=:0`. A wxWidgets front end is planned (T12).
+* **"could not load PC BIOS 'bios-256k.bin'":** the `pc-bios` folder is missing or incomplete (e.g. only the .exe was copied).
+  Copy the whole `pc-bios` folder from the artifact next to the executable. As a fallback you can copy the firmware files
+  (`bios-256k.bin`, `vgabios-*.bin`, `kvmvapic.bin`, `linuxboot_dma.bin`, `efi-*.rom`, `keymaps/`, ...) from an official
+  QEMU installation into Y2KBox's `pc-bios` folder; or point to any firmware folder with `-L <dir>`.
+* **Linux:** the binary needs the usual shared libraries (glib2, pixman, libslirp, libfdt, SDL2) from your distribution.
 
 ## Development status
 

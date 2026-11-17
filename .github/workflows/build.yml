@@ -14,12 +14,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build python3-pip libglib2.0-dev libpixman-1-dev \
-            libfdt-dev libslirp-dev nasm pkg-config
+            libfdt-dev libslirp-dev libsdl2-dev nasm pkg-config
           pip install --break-system-packages meson tomli || pip install meson tomli
       - name: Configure
         run: |
           mkdir build && cd build
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl
       - name: Build
         run: ninja -C build qemu-system-i386 qemu-img
       - name: Checks (boot + memory-op test + CPUID)
@@ -39,6 +39,15 @@ jobs:
           mkdir dist
           cp build/qemu-system-i386 build/qemu-img dist/
           cp -rL build/pc-bios dist/pc-bios
+      - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
+        run: |
+          ls -la dist dist/pc-bios | head -40
+          cd dist
+          ./qemu-system-i386 -display help | tee ../display.txt; grep -qw sdl ../display.txt
+          ./qemu-system-i386 -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=../build/vectest.img,format=raw,if=ide \
+            -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee ../packaged.out || true
+          grep -q '^OK' ../packaged.out
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
@@ -63,13 +72,13 @@ jobs:
             mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-pip
             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-meson
             mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-pixman
-            mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc
+            mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc mingw-w64-ucrt-x86_64-SDL2
             mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm
       - name: Configure
         run: |
           mkdir build && cd build
           set +e
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror 2>&1 | tee configure.log
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl 2>&1 | tee configure.log
           rc=${PIPESTATUS[0]}
           if [ $rc -ne 0 ]; then
             { tail -n 30 configure.log; echo '--- meson-log'; tail -n 25 meson-logs/meson-log.txt 2>/dev/null; } > err.txt
@@ -105,6 +114,15 @@ jobs:
           cp build/qemu-system-i386.exe build/qemu-img.exe dist/
           cp -rL build/pc-bios dist/pc-bios
           for exe in dist/*.exe; do ldd "$exe" | grep -i '/ucrt64/' | awk '{print $3}'; done | sort -u | xargs -I{} cp {} dist/
+      - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
+        run: |
+          ls -la dist dist/pc-bios | head -50
+          cd dist
+          ./qemu-system-i386.exe -display help | tee ../display.txt; grep -qw sdl ../display.txt
+          ./qemu-system-i386.exe -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=../build/vectest.img,format=raw,if=ide \
+            -chardev file,id=d,path=../packaged.out -device isa-debugcon,iobase=0x402,chardev=d || true
+          cat ../packaged.out; grep -q '^OK' ../packaged.out
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
