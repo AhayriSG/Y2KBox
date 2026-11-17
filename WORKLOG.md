@@ -46,3 +46,19 @@ their exact state. Anything not committed on a `task/*` branch was lost - check 
 
 | 352c0ef | T04 follow-up (2026-11-17): added legacy XMM inline lowering for PUNPCKLBW/HBW/LWD/HWD/LDQ/HDQ/LQDQ/HQDQ, PACKSSWB/PACKUSWB/PACKSSDW and SHUFPS using existing x86 TCG vector opcodes. MMX and VEX/YMM helper paths remain unchanged. Added multi-sector boot test and Linux/Windows CI checks. CI validation and performance measurements pending. |
 | 746dae5 | T04 CI fix and validation (2026-11-17): removed duplicate `BINARY_INT_SSE` emitter invocations for `PUNPCKLQDQ`/`PUNPCKHQDQ`, leaving the newer vector-backed emitters active. Linux + Windows run 44156398064 passed full builds, Checks (including `shuffletest.asm` and `packunpacktest.asm`, both printing `OK`), x87 differential tests, packaging, and packaged-layout smoke tests. Performance benchmark remains outstanding. |
+
+## Session 2 (ChatGPT), 2026-11-17 - T04 benchmark automation
+
+| commit | what |
+|--------|------|
+| 069b1f0 | Added Linux CI A/B benchmark for the isolated PSHUFD loop against an empty-loop control, using 300M iterations and minimum-of-three timings for each image. |
+| c2a2428 | Download the pre-T04 Linux build artifact from run 44148654097 so baseline and current QEMU can be measured on the same runner. |
+| e79d5b3 | Added `bc`, required by `xp/bench/run.sh`, to Linux CI dependencies. |
+| a8cf18c | Hardened `xp/bench/run.sh`: only the expected `isa-debug-exit` status is accepted; timeout, unexpected exit status, or stderr aborts the measurement. |
+| 0766854 | Updated T04 task notes to describe the automated measurement path. |
+
+The workflow reports CPU model and runner details, measures baseline and current
+PSHUFD images plus matching empty-loop controls, and prints net times and relative
+change. **No performance result has been assumed or recorded yet**; the benchmark
+must complete successfully and its output must be reviewed before T04 is marked
+done. Per HANDOFF section 7, do not poll Actions after the push.
