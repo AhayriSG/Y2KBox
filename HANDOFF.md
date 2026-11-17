@@ -361,16 +361,24 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
   https://github.com/arehnman/yttrium-virtio-gpu
 
 
-## 10. Handoff rules and sandbox gotchas
+## Handoff Rules & Sandbox Gotchas
 
-Before you stop (budget ending) do ALL of: (1) commit + push the current safe state
-directly to `main` (no branches, PRs, or force-pushes); (2) TASKS.md: status `PAUSED`
-with "Resume here:"; (3) append to WORKLOG.md what you did, evidence (numbers, commands),
-and what broke; (4) update section 2 and the README table if state changed; (5) never
-leave `main` broken.
+### 1. Session Handoff Protocol (Before Budget Ends)
+* **Never leave `main` broken.**
+* **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). Always `git fetch` + `git rebase` before pushing due to parallel agents. Use `git revert` rather than file copies to avoid swapping files like `TASKS.md`/`WORKLOG.md` (verify with `head -1`).
+* **TASKS.md:** Update status to `PAUSED` and add a "Resume here:" note.
+* **WORKLOG.md:** Append what you did, evidence (numbers, commands), and what broke.
+* **Documentation:** Update section 2 and the README table if state changed.
 
-Gotchas seen so far: the sandbox shell was `dash` (use `bash` scripts); a single command
-is limited to 300 s (run ninja via `setsid nohup ... &` and poll); prune files only after
-confirming the config really excludes them, then re-run the standard checks (a removed
-option ROM once broke the default NIC); host-dependent backends (ui/audio/net/block/
-util/crypto) look "dead" in a library-poor sandbox - do not delete them by that signal.
+### 2. Environment & Shell Constraints
+* **Shell & Execution:** The sandbox shell is `dash` (no `<(...)`, no `{a,b}` expansion, no `${var:0:7}`). Always run scripts via explicit `bash` execution. Single commands time out at 300 seconds (run long jobs like ninja via `setsid nohup ... &` and poll).
+* **Network & Auth:** Network allowlist blocks `app.codacy.com` and artifact downloads. GitHub API works, but unauthenticated limits (60/h) exhaust quickly—use an environment token. **Never write `ghp_` tokens to files.**
+
+### 3. Pruning & Dead Code Rules
+* **Location:** Prune/dead-code scripts live in `xp/strip/`.
+* **Safety Checks:** Only prune files *after* confirming the config truly excludes them (a removed option ROM once broke the default NIC). Re-run standard checks afterward.
+* **Host-Dependent Backends:** Host-dependent backends (ui/audio/net/block/util/crypto) look "dead" in a library-poor sandbox—**do not delete them** based on that signal; the dead-code method applies only to config-driven directories.
+
+### 4. Benchmarking & Development
+* **Benchmarks:** The sandbox is noisy. Use run durations of at least 1 second, with a minimum of 3 runs. Keep loop counters off the code page (Self-Modifying Code / SMC makes execution ~50x slower).
+* **Validation:** Always compare a changed binary against the *same* binary with its kill switch enabled, rather than an old build.
