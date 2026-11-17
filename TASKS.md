@@ -211,8 +211,12 @@ Every change: A/B numbers in WORKLOG + standard checks + CI green.
   The small positive deltas on shared CI runners are effectively near-neutral, not
   demonstrated performance gains; they also do not establish a broad SSE2 improvement or
   regression. Keep the cache and Win64 five-register pressure guard as implemented.
-  Any further optimization should first profile generated host code and use broader,
-  representative workloads rather than expanding the cache based on these microbenchmarks.
+  **T13d follow-up / next optimization gate:** do not expand the XMM cache yet. First profile
+  the generated host code and determine whether the remaining cost is guest XMM state traffic,
+  TCG register allocation/spills, translation/dispatch overhead, or another source. Then build
+  a benchmark that isolates the identified cost (and retain a representative end-to-end workload
+  as a guard). Only pursue a cache-policy or lowering change when the profile and targeted A/B
+  measurement support it; do not infer a bottleneck from the near-neutral SSE2 microbenchmark.
 
 ## T14 (P1) Threading model and thread pinning  -  Status: TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
