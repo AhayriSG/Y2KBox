@@ -51,6 +51,22 @@ Keep the host, QEMU build, CPU affinity, image and iteration count identical
 when comparing revisions. This measures the isolated dependent PSHUFD loop,
 not a broad SSE2 workload or the user's local CPU performance.
 
+### T04 Linux CI result (2026-11-18)
+
+Runner: AMD EPYC 9V74, x86-64, Ubuntu 24.04 Azure runner. Same runner,
+same 300M-iteration image, five runs per binary; `run.sh` reports the median.
+
+| build | median wall time |
+|-------|------------------:|
+| Pre-T04 baseline (`c5ef98e`) | 3.083675 s |
+| T04 | 3.166926 s |
+
+Relative change: **-2.70%** (0.974x; T04 is 0.083251 s slower in this run).
+This result does not show a speedup for the isolated dependent PSHUFD loop.
+Because this is one shared-host CI sample, the small difference should not be
+treated as a definitive regression. It says nothing conclusive about broader
+SSE2 workloads or other host CPUs.
+
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 
 Real-mode boot sectors (register loop counter `ebp`; keep loop state off the code page - a counter
