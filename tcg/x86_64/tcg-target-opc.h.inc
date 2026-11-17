@@ -25,6 +25,9 @@
  */
 
 DEF(x86_shufps_vec, 1, 2, 1, TCG_OPF_VECTOR)
+DEF(x86_pshufd_vec, 1, 1, 1, TCG_OPF_VECTOR)
+DEF(x86_pshuflw_vec, 1, 1, 1, TCG_OPF_VECTOR)
+DEF(x86_pshufhw_vec, 1, 1, 1, TCG_OPF_VECTOR)
 DEF(x86_blend_vec, 1, 2, 1, TCG_OPF_VECTOR)
 DEF(x86_packss_vec, 1, 2, 0, TCG_OPF_VECTOR)
 DEF(x86_packus_vec, 1, 2, 0, TCG_OPF_VECTOR)
