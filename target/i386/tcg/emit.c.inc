@@ -1008,8 +1008,6 @@ static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                
 }
 
 /* Instructions with no MMX equivalent.  */
-BINARY_INT_SSE(PUNPCKLQDQ, punpcklqdq)
-BINARY_INT_SSE(PUNPCKHQDQ, punpckhqdq)
 BINARY_INT_SSE(VPACKUSDW,  packusdw)
 BINARY_INT_SSE(VPERMILPS,  vpermilps)
 BINARY_INT_SSE(VPERMILPD,  vpermilpd)
