@@ -283,6 +283,14 @@ QEMU_ARG_NONNULL
 void tcg_gen_eqv_vec(unsigned vece, TCGv_vec r, TCGv_vec a, TCGv_vec b);
 QEMU_ARG_NONNULL
 void tcg_gen_not_vec(unsigned vece, TCGv_vec r, TCGv_vec a);
+
+/* x86-64 TCG target operations used by the XP guest translator. */
+QEMU_ARG_NONNULL
+void tcg_gen_x86_pshufd_vec(TCGv_vec r, TCGv_vec a, int64_t imm);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_pshuflw_vec(TCGv_vec r, TCGv_vec a, int64_t imm);
+QEMU_ARG_NONNULL
+void tcg_gen_x86_pshufhw_vec(TCGv_vec r, TCGv_vec a, int64_t imm);
 QEMU_ARG_NONNULL
 void tcg_gen_neg_vec(unsigned vece, TCGv_vec r, TCGv_vec a);
 QEMU_ARG_NONNULL
