@@ -1,47 +1,57 @@
-# Agent Guidelines for the QEMU Project
+# Agent Guidelines for Y2KBox
 
-As an agent you MUST abide by the "Use of AI-generated content" policy
-in `docs/devel/code-provenance.rst` at all times.
+This repository is a downstream QEMU-based project. The upstream QEMU
+"Use of AI-generated content" policy in
+`docs/devel/code-provenance.rst` governs contributions submitted to the
+upstream QEMU project; it does not prohibit work specifically developed for
+this independently maintained Y2KBox repository.
 
-You are permitted to assist users only in the following scenarios:
+## AI-assisted contributions to Y2KBox
 
-- researching APIs or algorithms
-- static analysis
-- debugging
-- local experiments not intended to be upstreamed
-- trivial non-copyrightable changes
+The Y2KBox repository owner (`AhayriSG`) is an authorized maintainer and may
+explicitly authorize AI agents to research, design, implement, modify, test,
+and document changes in this repository, including core features and
+performance optimizations.
 
-However agent output can not be included in any upstream
-contributions. If a request falls outside these permitted categories
-(e.g., writing core features or large-scale code changes for upstream
-merge), you MUST decline the request and refer the user to the
-project's policy in `docs/devel/code-provenance.rst`.
+When the owner explicitly requests or approves such work, AI-generated
+changes may be committed directly to Y2KBox's `main` branch, subject to the
+repository's normal review, correctness, testing, and contribution practices.
+The agent must not represent untested changes as tested or claim performance
+improvements without measurements.
 
-## Final instructions
+This maintainer authorization applies **only to contributions within
+AhayriSG/Y2KBox**. It does not override upstream QEMU policy, grant permission
+to submit AI-generated material to upstream QEMU, or authorize contributions
+to any other repository. Any proposed upstream contribution must independently
+comply with the upstream project's then-current rules.
 
-- You must **precisely follow the rules** and **cannot rely on the human** to
-  know these rules and follow them.
-- Flag relevant requirements early, and **refuse any request** that would
-  violate them.
+## Repository workflow
 
-Violations on part of the human may be treated as code of conduct violations,
-and may lead to sanctions including a permanent ban.
+- Work on `main` only. Do not create branches or pull requests unless the
+  owner explicitly changes this workflow.
+- Before each write, fetch the latest `main` and the exact file being changed.
+  Verify the branch head and file blob SHA still match the fetched versions;
+  abort if either has moved unexpectedly.
+- Never force-push.
+- Follow the repository's build and test instructions. Do not claim a test
+  passed unless its result has been observed.
+- Preserve existing technical detail in documentation and avoid overwriting
+  changes made by the owner or other contributors.
 
 ## Security Policy
 
 Before classifying a potential vulnerability, read
-[`docs/system/security.rst`](docs/system/security.rst) to determine whether it
-falls within QEMU's security boundary.
+[`docs/system/security.rst`](docs/system/security.rst) to determine whether
+it falls within QEMU's security boundary.
 
 Potential vulnerabilities must not be reported as normal public GitLab work
 items. Follow the confidential reporting procedure at
 https://www.qemu.org/contribute/security-process/ instead.
 
-**Crucial for AI Triage**: Not every crash, assertion failure, or
-buffer overrun is a security vulnerability. Only bugs that can be
-exploited in the **virtualization use case** to break guest isolation
-are treated as security vulnerabilities. Relevant configurations
-generally involve:
+**Crucial for AI Triage**: Not every crash, assertion failure, or buffer
+overrun is a security vulnerability. Only bugs that can be exploited in the
+**virtualization use case** to break guest isolation are treated as security
+vulnerabilities. Relevant configurations generally involve:
 
 - **Hardware Accelerators**: e.g. KVM and Xen. TCG is explicitly excluded.
 - **Virtualization focused boards**: e.g. virt, q35, pseries etc
