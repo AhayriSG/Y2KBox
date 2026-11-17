@@ -172,38 +172,6 @@ void vec_gen_4(TCGOpcode opc, TCGType type, unsigned vece,
     op->args[3] = c;
 }
 
-/*
- * XP fork: emit the x86 immediate XMM shuffle instructions directly.
- * These target-specific operations are only used by the x86 translator.
- */
-static void tcg_gen_x86_shuffle_imm_vec(TCGOpcode opc, TCGv_vec r,
-                                        TCGv_vec a, int64_t imm)
-{
-    TCGTemp *rt = tcgv_vec_temp(r);
-    TCGTemp *at = tcgv_vec_temp(a);
-    TCGType type = rt->base_type;
-
-    tcg_debug_assert(type == TCG_TYPE_V128);
-    tcg_debug_assert(at->base_type >= type);
-    tcg_debug_assert(imm >= 0 && imm <= 255);
-    vec_gen_3(opc, type, MO_32, temp_arg(rt), temp_arg(at), imm);
-}
-
-void tcg_gen_x86_pshufd_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
-{
-    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshufd_vec, r, a, imm);
-}
-
-void tcg_gen_x86_pshuflw_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
-{
-    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshuflw_vec, r, a, imm);
-}
-
-void tcg_gen_x86_pshufhw_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
-{
-    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshufhw_vec, r, a, imm);
-}
-
 void vec_gen_6(TCGOpcode opc, TCGType type, unsigned vece, TCGArg r,
                TCGArg a, TCGArg b, TCGArg c, TCGArg d, TCGArg e)
 {
