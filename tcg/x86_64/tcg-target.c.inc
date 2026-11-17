@@ -3973,6 +3973,19 @@ static void tcg_out_vec_op(TCGContext *s, TCGOpcode opc,
         tcg_out8(s, sub);
         break;
 
+    case INDEX_op_x86_pshufd_vec:
+        tcg_out_vex_modrm_type(s, OPC_PSHUFD, a0, 0, a1, type);
+        tcg_out8(s, a2);
+        break;
+    case INDEX_op_x86_pshuflw_vec:
+        tcg_out_vex_modrm_type(s, OPC_PSHUFLW, a0, 0, a1, type);
+        tcg_out8(s, a2);
+        break;
+    case INDEX_op_x86_pshufhw_vec:
+        tcg_out_vex_modrm_type(s, OPC_PSHUFHW, a0, 0, a1, type);
+        tcg_out8(s, a2);
+        break;
+
     case INDEX_op_x86_psrldq_vec:
         tcg_out_vex_modrm(s, OPC_GRP14, 3, a0, a1);
         tcg_out8(s, a2);
@@ -4048,6 +4061,9 @@ tcg_target_op_def(TCGOpcode op, TCGType type, unsigned flags)
     case INDEX_op_sari_vec:
     case INDEX_op_rotli_vec:
     case INDEX_op_x86_psrldq_vec:
+    case INDEX_op_x86_pshufd_vec:
+    case INDEX_op_x86_pshuflw_vec:
+    case INDEX_op_x86_pshufhw_vec:
         return C_O1_I1(x, x);
 
     case INDEX_op_x86_vpshldv_vec:
