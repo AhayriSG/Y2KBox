@@ -24,13 +24,6 @@ Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 ma
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
-## Development status
-
-| Area | Status |
-|------|--------|
-| T04 legacy XMM shuffle/unpack/pack lowering | Complete; Linux and Windows functional CI passed. The isolated PSHUFD benchmark showed no speedup. |
-| T13d legacy XMM register caching | Implementation committed; CI review and Linux A/B benchmark pending. No performance result claimed yet. |
-
 
 ## Download
 
