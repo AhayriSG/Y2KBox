@@ -45,7 +45,6 @@
 #include "hw/i2c/smbus_eeprom.h"
 #include "system/memory.h"
 #include "hw/acpi/acpi.h"
-#include "hw/vfio/types.h"
 #include "qapi/error.h"
 #include "qapi/qapi-type-infos-machine.h"
 #include "qemu/error-report.h"
@@ -60,7 +59,6 @@
 
 static GlobalProperty pc_piix_compat_defaults[] = {
     { TYPE_RAMFB_DEVICE, "use-legacy-x86-rom", "true" },
-    { TYPE_VFIO_PCI_NOHOTPLUG, "use-legacy-x86-rom", "true" },
 };
 static const size_t pc_piix_compat_defaults_len =
     G_N_ELEMENTS(pc_piix_compat_defaults);
