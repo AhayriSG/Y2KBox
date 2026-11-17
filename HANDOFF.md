@@ -113,8 +113,11 @@ removed by T01.
   cmp_vec, shri_vec...), but each is `ld_vec env -> op -> st_vec env` (XMM regs are not
   TCG globals; keeping them in host regs is T13). T04 now lowers legacy XMM
   PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK*, and SHUFPS through native host vector ops;
-  MMX and VEX/YMM forms retain their existing helper paths. Functional CI coverage
-  is being expanded; performance measurements remain pending.
+  MMX and VEX/YMM forms retain their existing helper paths. Dedicated shuffle/pack
+  functional tests pass on Linux and Windows CI. Linux CI's isolated PSHUFD benchmark
+  measured 3.083675 s baseline vs 3.166926 s T04 (median of five, AMD EPYC 9V74;
+  -2.70%, 0.974x). This does not show a speedup; the small difference from one shared
+  runner is not conclusive evidence of a regression. See xp/bench/README.md.
 * The load hotspot (fixed, below): int-pair load + two 64-bit env stores + 128-bit
   reload = store-forwarding stall (~15-20 cycles).
 
