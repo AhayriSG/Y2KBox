@@ -57,9 +57,11 @@
 #ifdef TARGET_X86_64
 # define ctztl  ctz64
 # define clztl  clz64
+# define XMM_CACHE_REGS 16
 #else
 # define ctztl  ctz32
 # define clztl  clz32
+# define XMM_CACHE_REGS 8
 #endif
 
 /* For a switch indexed by MODRM, match all memory operands for a given OP.  */
@@ -134,6 +136,11 @@ typedef struct DisasContext {
     int cpuid_xsave_features;
 
     /* TCG local temps */
+    TCGv_vec xmm_cache[XMM_CACHE_REGS];
+    uint32_t xmm_cache_valid;
+    uint32_t xmm_cache_dirty;
+    bool xmm_cache_insn;
+
     TCGv cc_srcT;
     TCGv A0;
     TCGv T0;
@@ -143,6 +150,8 @@ typedef struct DisasContext {
     TCGOp *prev_insn_start;
     TCGOp *prev_insn_end;
 } DisasContext;
+
+static void xmm_cache_flush(DisasContext *s);
 
 /*
  * Point EIP to next instruction before ending translation.
@@ -1593,6 +1602,7 @@ static void gen_helper_fp_arith_STN_ST0(int op, int opreg)
 
 static void gen_exception(DisasContext *s, int trapno)
 {
+    xmm_cache_flush(s);
     gen_update_cc_op(s);
     gen_update_eip_cur(s);
     gen_helper_raise_exception(tcg_env, tcg_constant_i32(trapno));
@@ -3552,6 +3562,10 @@ static void i386_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cpu)
 
     dc->cc_op = CC_OP_DYNAMIC;
     dc->cc_op_dirty = false;
+    memset(dc->xmm_cache, 0, sizeof(dc->xmm_cache));
+    dc->xmm_cache_valid = 0;
+    dc->xmm_cache_dirty = 0;
+    dc->xmm_cache_insn = false;
     /* select memory access functions */
     dc->mem_index = cpu_mmu_index(cpu, false);
     dc->cpuid_features = env->features[FEAT_1_EDX];
@@ -3657,6 +3671,7 @@ static void i386_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
 
+    xmm_cache_flush(dc);
     switch (dc->base.is_jmp) {
     case DISAS_NORETURN:
         /*

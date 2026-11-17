@@ -3302,6 +3302,7 @@ static void disas_insn(DisasContext *s, CPUState *cpu)
     s->evex4 = 0;
     s->has_modrm = false;
     s->prefix = 0;
+    s->xmm_cache_insn = false;
 
  next_byte:;
 #ifdef TARGET_X86_64
@@ -3676,6 +3677,11 @@ static void disas_insn(DisasContext *s, CPUState *cpu)
             goto gp_fault;
         }
     }
+    s->xmm_cache_insn = xmm_cacheable_insn(s, &decode);
+    if (!s->xmm_cache_insn) {
+        xmm_cache_flush(s);
+    }
+
     if (decode.e.has_intercept && unlikely(GUEST(s))) {
         gen_helper_svm_check_intercept(tcg_env,
                                        tcg_constant_i32(decode.e.intercept));

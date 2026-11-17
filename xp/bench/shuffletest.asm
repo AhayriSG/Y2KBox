@@ -27,6 +27,20 @@ start:
     call check16
     jc fail
 
+    ; A non-cacheable MOVD must flush the previous result and the following
+    ; cached PXOR must reload the value written by MOVD.
+    mov bl, '4'
+    movdqa xmm0, [shuffle_input]
+    pshufd xmm0, xmm0, 0x1B
+    mov eax, 0x01020304
+    movd xmm1, eax
+    pxor xmm0, xmm1
+    movdqa [result], xmm0
+    mov si, result
+    mov di, expected_cache_barrier
+    call check16
+    jc fail
+
     ; PSHUFLW: reverse the low four word lanes.
     mov bl, '2'
     movdqa xmm0, [shuffle_input]
@@ -82,6 +96,7 @@ print:
 align 16
 shuffle_input: db 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
 expected_pshufd: db 13,14,15,16,9,10,11,12,5,6,7,8,1,2,3,4
+expected_cache_barrier: db 9,13,13,17,9,10,11,12,5,6,7,8,1,2,3,4
 expected_pshuflw: db 7,8,5,6,3,4,1,2,9,10,11,12,13,14,15,16
 expected_pshufhw: db 1,2,3,4,5,6,7,8,15,16,13,14,11,12,9,10
 result: times 16 db 0

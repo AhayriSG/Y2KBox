@@ -55,6 +55,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Restore baseline executable permission
         run: chmod +x baseline/qemu-system-i386
+
+      - name: Download pre-cache Linux baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: y2kbox-linux-x86_64
+          path: t13-baseline
+          run-id: 44156398064
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore pre-cache baseline executable permission
+        run: chmod +x t13-baseline/qemu-system-i386
       - name: T04 PSHUFD A/B benchmark (same Linux runner)
         run: |
           set -euo pipefail
@@ -71,6 +81,24 @@ jobs:
               raise SystemExit("Measurement invalid: runtimes must be positive")
           print(f"Before T04 median: {before:.6f}s")
           print(f"After T04 median:  {after:.6f}s")
+          print(f"Relative change: {(before-after)/before*100:+.2f}% (speedup={before/after:.3f}x)")
+          PY
+        shell: bash
+
+      - name: T13 register-only SSE2 A/B benchmark (same Linux runner)
+        run: |
+          set -euo pipefail
+          echo "Baseline artifact: T04 implementation before XMM register caching (run 44156398064)"
+          nasm -fbin -DLOOPS=100000000 xp/bench/sse2.asm -o sse2-reg.img
+          before=$(Q="$PWD/t13-baseline/qemu-system-i386" PCBIOS="$PWD/t13-baseline/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)
+          after=$(Q="$PWD/build/qemu-system-i386" PCBIOS="$PWD/build/pc-bios" N=3 bash xp/bench/run.sh sse2-reg.img)
+          python3 - "$before" "$after" <<'PY'
+          import sys
+          before, after = map(float, sys.argv[1:])
+          if before <= 0 or after <= 0:
+              raise SystemExit("Measurement invalid: runtimes must be positive")
+          print(f"Before XMM cache median: {before:.6f}s")
+          print(f"After XMM cache median:  {after:.6f}s")
           print(f"Relative change: {(before-after)/before*100:+.2f}% (speedup={before/after:.3f}x)")
           PY
         shell: bash

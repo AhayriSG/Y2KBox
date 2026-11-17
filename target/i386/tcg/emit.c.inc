@@ -334,6 +334,59 @@ static TCGv_ptr op_ptr(X86DecodedInsn *decode, int opn)
 #define OP_PTR1 op_ptr(decode, 1)
 #define OP_PTR2 op_ptr(decode, 2)
 
+static TCGv_vec xmm_cache_get(DisasContext *s, int reg)
+{
+    uint32_t bit;
+
+    assert(reg >= 0 && reg < XMM_CACHE_REGS);
+    bit = 1u << reg;
+    if (!(s->xmm_cache_valid & bit)) {
+        s->xmm_cache[reg] = tcg_temp_new_vec(TCG_TYPE_V128);
+        tcg_gen_ld_vec(s->xmm_cache[reg], tcg_env, ZMM_OFFSET(reg));
+        s->xmm_cache_valid |= bit;
+    }
+    return s->xmm_cache[reg];
+}
+
+static void xmm_cache_mark_dirty(DisasContext *s, int reg)
+{
+    assert(reg >= 0 && reg < XMM_CACHE_REGS);
+    s->xmm_cache_dirty |= 1u << reg;
+}
+
+/* Cached EBB temporaries never cross non-cacheable instructions or TB exits. */
+static void xmm_cache_flush(DisasContext *s)
+{
+    for (int i = 0; i < XMM_CACHE_REGS; i++) {
+        uint32_t bit = 1u << i;
+        if (s->xmm_cache_valid & bit) {
+            if (s->xmm_cache_dirty & bit) {
+                tcg_gen_st_vec(s->xmm_cache[i], tcg_env, ZMM_OFFSET(i));
+            }
+            tcg_temp_free_vec(s->xmm_cache[i]);
+            s->xmm_cache[i] = NULL;
+        }
+    }
+    s->xmm_cache_valid = 0;
+    s->xmm_cache_dirty = 0;
+}
+
+static bool xmm_cache_reg_operands(DisasContext *s,
+                                   X86DecodedInsn *decode, int nops)
+{
+    if (s->prefix & (PREFIX_VEX | PREFIX_EVEX)) {
+        return false;
+    }
+    for (int i = 0; i < nops; i++) {
+        X86DecodedOp *op = &decode->op[i];
+        if (op->unit != X86_OP_SSE || op->has_ea ||
+            op->n < 0 || op->n >= XMM_CACHE_REGS) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void gen_writeback(DisasContext *s, X86DecodedInsn *decode, int opn, TCGv v)
 {
     X86DecodedOp *op = &decode->op[opn];
@@ -819,57 +872,80 @@ UNARY_INT_GVEC(VPBROADCASTD,   tcg_gen_gvec_dup_mem, MO_32)
 UNARY_INT_GVEC(VPBROADCASTQ,   tcg_gen_gvec_dup_mem, MO_64)
 
 
-#define BINARY_INT_GVEC(uname, func, ...)                                          \
+#define BINARY_INT_GVEC(uname, gvecfn, vecfn, vecop, vece)                     \
 static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
 {                                                                                  \
     int vec_len = vector_len(s, decode);                                          \
-                                                                                   \
-    func(__VA_ARGS__,                                                              \
-         decode->op[0].offset, decode->op[1].offset,                               \
-         decode->op[2].offset, vec_len, vec_len);                                  \
+    if (s->xmm_cache_insn) {                                                       \
+        TCGv_vec a = xmm_cache_get(s, decode->op[1].n);                            \
+        TCGv_vec b = xmm_cache_get(s, decode->op[2].n);                            \
+        TCGv_vec r = xmm_cache_get(s, decode->op[0].n);                            \
+        vecfn(vece, r, a, b);                                                      \
+        xmm_cache_mark_dirty(s, decode->op[0].n);                                  \
+    } else {                                                                       \
+        gvecfn(vece, decode->op[0].offset, decode->op[1].offset,                  \
+               decode->op[2].offset, vec_len, vec_len);                            \
+    }                                                                              \
 }
-
-BINARY_INT_GVEC(PADDB,   tcg_gen_gvec_add, MO_8)
-BINARY_INT_GVEC(PADDW,   tcg_gen_gvec_add, MO_16)
-BINARY_INT_GVEC(PADDD,   tcg_gen_gvec_add, MO_32)
-BINARY_INT_GVEC(PADDQ,   tcg_gen_gvec_add, MO_64)
-BINARY_INT_GVEC(PADDSB,  tcg_gen_gvec_ssadd, MO_8)
-BINARY_INT_GVEC(PADDSW,  tcg_gen_gvec_ssadd, MO_16)
-BINARY_INT_GVEC(PADDUSB, tcg_gen_gvec_usadd, MO_8)
-BINARY_INT_GVEC(PADDUSW, tcg_gen_gvec_usadd, MO_16)
-BINARY_INT_GVEC(PAND,    tcg_gen_gvec_and, MO_64)
-BINARY_INT_GVEC(PCMPEQB, tcg_gen_gvec_cmp, TCG_COND_EQ, MO_8)
-BINARY_INT_GVEC(PCMPEQD, tcg_gen_gvec_cmp, TCG_COND_EQ, MO_32)
-BINARY_INT_GVEC(PCMPEQW, tcg_gen_gvec_cmp, TCG_COND_EQ, MO_16)
-BINARY_INT_GVEC(PCMPEQQ, tcg_gen_gvec_cmp, TCG_COND_EQ, MO_64)
-BINARY_INT_GVEC(PCMPGTB, tcg_gen_gvec_cmp, TCG_COND_GT, MO_8)
-BINARY_INT_GVEC(PCMPGTW, tcg_gen_gvec_cmp, TCG_COND_GT, MO_16)
-BINARY_INT_GVEC(PCMPGTD, tcg_gen_gvec_cmp, TCG_COND_GT, MO_32)
-BINARY_INT_GVEC(PCMPGTQ, tcg_gen_gvec_cmp, TCG_COND_GT, MO_64)
-BINARY_INT_GVEC(PMAXSB,  tcg_gen_gvec_smax, MO_8)
-BINARY_INT_GVEC(PMAXSW,  tcg_gen_gvec_smax, MO_16)
-BINARY_INT_GVEC(PMAXSD,  tcg_gen_gvec_smax, MO_32)
-BINARY_INT_GVEC(PMAXUB,  tcg_gen_gvec_umax, MO_8)
-BINARY_INT_GVEC(PMAXUW,  tcg_gen_gvec_umax, MO_16)
-BINARY_INT_GVEC(PMAXUD,  tcg_gen_gvec_umax, MO_32)
-BINARY_INT_GVEC(PMINSB,  tcg_gen_gvec_smin, MO_8)
-BINARY_INT_GVEC(PMINSW,  tcg_gen_gvec_smin, MO_16)
-BINARY_INT_GVEC(PMINSD,  tcg_gen_gvec_smin, MO_32)
-BINARY_INT_GVEC(PMINUB,  tcg_gen_gvec_umin, MO_8)
-BINARY_INT_GVEC(PMINUW,  tcg_gen_gvec_umin, MO_16)
-BINARY_INT_GVEC(PMINUD,  tcg_gen_gvec_umin, MO_32)
-BINARY_INT_GVEC(PMULLW,  tcg_gen_gvec_mul, MO_16)
-BINARY_INT_GVEC(PMULLD,  tcg_gen_gvec_mul, MO_32)
-BINARY_INT_GVEC(POR,     tcg_gen_gvec_or, MO_64)
-BINARY_INT_GVEC(PSUBB,   tcg_gen_gvec_sub, MO_8)
-BINARY_INT_GVEC(PSUBW,   tcg_gen_gvec_sub, MO_16)
-BINARY_INT_GVEC(PSUBD,   tcg_gen_gvec_sub, MO_32)
-BINARY_INT_GVEC(PSUBQ,   tcg_gen_gvec_sub, MO_64)
-BINARY_INT_GVEC(PSUBSB,  tcg_gen_gvec_sssub, MO_8)
-BINARY_INT_GVEC(PSUBSW,  tcg_gen_gvec_sssub, MO_16)
-BINARY_INT_GVEC(PSUBUSB, tcg_gen_gvec_ussub, MO_8)
-BINARY_INT_GVEC(PSUBUSW, tcg_gen_gvec_ussub, MO_16)
-BINARY_INT_GVEC(PXOR,    tcg_gen_gvec_xor, MO_64)
+#define BINARY_INT_GVEC_CMP(uname, cond, vece)                                     \
+static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
+{                                                                                  \
+    int vec_len = vector_len(s, decode);                                          \
+    if (s->xmm_cache_insn) {                                                       \
+        TCGv_vec a = xmm_cache_get(s, decode->op[1].n);                            \
+        TCGv_vec b = xmm_cache_get(s, decode->op[2].n);                            \
+        TCGv_vec r = xmm_cache_get(s, decode->op[0].n);                            \
+        tcg_gen_cmp_vec(cond, vece, r, a, b);                                     \
+        xmm_cache_mark_dirty(s, decode->op[0].n);                                  \
+    } else {                                                                       \
+        tcg_gen_gvec_cmp(cond, vece, decode->op[0].offset,                        \
+                         decode->op[1].offset, decode->op[2].offset,              \
+                         vec_len, vec_len);                                        \
+    }                                                                              \
+}
+BINARY_INT_GVEC(PADDB,   tcg_gen_gvec_add,   tcg_gen_add_vec,   INDEX_op_add_vec,   MO_8)
+BINARY_INT_GVEC(PADDW,   tcg_gen_gvec_add,   tcg_gen_add_vec,   INDEX_op_add_vec,   MO_16)
+BINARY_INT_GVEC(PADDD,   tcg_gen_gvec_add,   tcg_gen_add_vec,   INDEX_op_add_vec,   MO_32)
+BINARY_INT_GVEC(PADDQ,   tcg_gen_gvec_add,   tcg_gen_add_vec,   INDEX_op_add_vec,   MO_64)
+BINARY_INT_GVEC(PADDSB,  tcg_gen_gvec_ssadd,  tcg_gen_ssadd_vec, INDEX_op_ssadd_vec, MO_8)
+BINARY_INT_GVEC(PADDSW,  tcg_gen_gvec_ssadd,  tcg_gen_ssadd_vec, INDEX_op_ssadd_vec, MO_16)
+BINARY_INT_GVEC(PADDUSB, tcg_gen_gvec_usadd,  tcg_gen_usadd_vec, INDEX_op_usadd_vec, MO_8)
+BINARY_INT_GVEC(PADDUSW, tcg_gen_gvec_usadd,  tcg_gen_usadd_vec, INDEX_op_usadd_vec, MO_16)
+BINARY_INT_GVEC(PAND,    tcg_gen_gvec_and,    tcg_gen_and_vec,   INDEX_op_and_vec,   MO_64)
+BINARY_INT_GVEC_CMP(PCMPEQB, TCG_COND_EQ, MO_8)
+BINARY_INT_GVEC_CMP(PCMPEQD, TCG_COND_EQ, MO_32)
+BINARY_INT_GVEC_CMP(PCMPEQW, TCG_COND_EQ, MO_16)
+BINARY_INT_GVEC_CMP(PCMPEQQ, TCG_COND_EQ, MO_64)
+BINARY_INT_GVEC_CMP(PCMPGTB, TCG_COND_GT, MO_8)
+BINARY_INT_GVEC_CMP(PCMPGTW, TCG_COND_GT, MO_16)
+BINARY_INT_GVEC_CMP(PCMPGTD, TCG_COND_GT, MO_32)
+BINARY_INT_GVEC_CMP(PCMPGTQ, TCG_COND_GT, MO_64)
+BINARY_INT_GVEC(PMAXSB,  tcg_gen_gvec_smax, tcg_gen_smax_vec, INDEX_op_smax_vec, MO_8)
+BINARY_INT_GVEC(PMAXSW,  tcg_gen_gvec_smax, tcg_gen_smax_vec, INDEX_op_smax_vec, MO_16)
+BINARY_INT_GVEC(PMAXSD,  tcg_gen_gvec_smax, tcg_gen_smax_vec, INDEX_op_smax_vec, MO_32)
+BINARY_INT_GVEC(PMAXUB,  tcg_gen_gvec_umax, tcg_gen_umax_vec, INDEX_op_umax_vec, MO_8)
+BINARY_INT_GVEC(PMAXUW,  tcg_gen_gvec_umax, tcg_gen_umax_vec, INDEX_op_umax_vec, MO_16)
+BINARY_INT_GVEC(PMAXUD,  tcg_gen_gvec_umax, tcg_gen_umax_vec, INDEX_op_umax_vec, MO_32)
+BINARY_INT_GVEC(PMINSB,  tcg_gen_gvec_smin, tcg_gen_smin_vec, INDEX_op_smin_vec, MO_8)
+BINARY_INT_GVEC(PMINSW,  tcg_gen_gvec_smin, tcg_gen_smin_vec, INDEX_op_smin_vec, MO_16)
+BINARY_INT_GVEC(PMINSD,  tcg_gen_gvec_smin, tcg_gen_smin_vec, INDEX_op_smin_vec, MO_32)
+BINARY_INT_GVEC(PMINUB,  tcg_gen_gvec_umin, tcg_gen_umin_vec, INDEX_op_umin_vec, MO_8)
+BINARY_INT_GVEC(PMINUW,  tcg_gen_gvec_umin, tcg_gen_umin_vec, INDEX_op_umin_vec, MO_16)
+BINARY_INT_GVEC(PMINUD,  tcg_gen_gvec_umin, tcg_gen_umin_vec, INDEX_op_umin_vec, MO_32)
+BINARY_INT_GVEC(PMULLW,  tcg_gen_gvec_mul,   tcg_gen_mul_vec,   INDEX_op_mul_vec,   MO_16)
+BINARY_INT_GVEC(PMULLD,  tcg_gen_gvec_mul,   tcg_gen_mul_vec,   INDEX_op_mul_vec,   MO_32)
+BINARY_INT_GVEC(POR,     tcg_gen_gvec_or,    tcg_gen_or_vec,    INDEX_op_or_vec,    MO_64)
+BINARY_INT_GVEC(PSUBB,   tcg_gen_gvec_sub,   tcg_gen_sub_vec,   INDEX_op_sub_vec,   MO_8)
+BINARY_INT_GVEC(PSUBW,   tcg_gen_gvec_sub,   tcg_gen_sub_vec,   INDEX_op_sub_vec,   MO_16)
+BINARY_INT_GVEC(PSUBD,   tcg_gen_gvec_sub,   tcg_gen_sub_vec,   INDEX_op_sub_vec,   MO_32)
+BINARY_INT_GVEC(PSUBQ,   tcg_gen_gvec_sub,   tcg_gen_sub_vec,   INDEX_op_sub_vec,   MO_64)
+BINARY_INT_GVEC(PSUBSB,  tcg_gen_gvec_sssub, tcg_gen_sssub_vec, INDEX_op_sssub_vec, MO_8)
+BINARY_INT_GVEC(PSUBSW,  tcg_gen_gvec_sssub, tcg_gen_sssub_vec, INDEX_op_sssub_vec, MO_16)
+BINARY_INT_GVEC(PSUBUSB, tcg_gen_gvec_ussub, tcg_gen_ussub_vec, INDEX_op_ussub_vec, MO_8)
+BINARY_INT_GVEC(PSUBUSW, tcg_gen_gvec_ussub, tcg_gen_ussub_vec, INDEX_op_ussub_vec, MO_16)
+BINARY_INT_GVEC(PXOR,    tcg_gen_gvec_xor,   tcg_gen_xor_vec,   INDEX_op_xor_vec,   MO_64)
+#undef BINARY_INT_GVEC
+#undef BINARY_INT_GVEC_CMP
 
 
 /*
@@ -915,7 +991,13 @@ static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                
 #define BINARY_INT_MMX_VEC(uname, lname, vece, vecfn)                              \
 static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
 {                                                                                  \
-    if ((s->prefix & PREFIX_DATA) && !(s->prefix & PREFIX_VEX)) {                  \
+    if (s->xmm_cache_insn) {                                                       \
+        TCGv_vec a = xmm_cache_get(s, decode->op[1].n);                            \
+        TCGv_vec b = xmm_cache_get(s, decode->op[2].n);                            \
+        TCGv_vec r = xmm_cache_get(s, decode->op[0].n);                            \
+        vecfn(r, a, b, vece);                                                      \
+        xmm_cache_mark_dirty(s, decode->op[0].n);                                  \
+    } else if ((s->prefix & PREFIX_DATA) && !(s->prefix & PREFIX_VEX)) {           \
         TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);                              \
         TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);                              \
         TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);                              \
@@ -936,7 +1018,13 @@ static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                
 #define BINARY_INT_SSE_VEC(uname, lname, vece, vecfn)                              \
 static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                   \
 {                                                                                  \
-    if (!(s->prefix & PREFIX_VEX)) {                                               \
+    if (s->xmm_cache_insn) {                                                       \
+        TCGv_vec a = xmm_cache_get(s, decode->op[1].n);                            \
+        TCGv_vec b = xmm_cache_get(s, decode->op[2].n);                            \
+        TCGv_vec r = xmm_cache_get(s, decode->op[0].n);                            \
+        vecfn(r, a, b, vece);                                                      \
+        xmm_cache_mark_dirty(s, decode->op[0].n);                                  \
+    } else if (!(s->prefix & PREFIX_VEX)) {                                        \
         TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);                              \
         TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);                              \
         TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);                              \
@@ -1105,15 +1193,22 @@ static inline void gen_unary_imm_shuffle_sse(DisasContext *s,
                                                        SSEVecFunc_0_vvi xmm)
 {
     if (!s->vex_l) {
-        TCGv_vec src = tcg_temp_new_vec(TCG_TYPE_V128);
-        TCGv_vec dst = tcg_temp_new_vec(TCG_TYPE_V128);
+        if (s->xmm_cache_insn) {
+            TCGv_vec src = xmm_cache_get(s, decode->op[1].n);
+            TCGv_vec dst = xmm_cache_get(s, decode->op[0].n);
+            xmm(dst, src, decode->immediate);
+            xmm_cache_mark_dirty(s, decode->op[0].n);
+        } else {
+            TCGv_vec src = tcg_temp_new_vec(TCG_TYPE_V128);
+            TCGv_vec dst = tcg_temp_new_vec(TCG_TYPE_V128);
 
-        tcg_gen_ld_vec(src, OP_PTR1, 0);
-        xmm(dst, src, decode->immediate);
-        tcg_gen_st_vec(dst, OP_PTR0, 0);
+            tcg_gen_ld_vec(src, OP_PTR1, 0);
+            xmm(dst, src, decode->immediate);
+            tcg_gen_st_vec(dst, OP_PTR0, 0);
 
-        tcg_temp_free_vec(dst);
-        tcg_temp_free_vec(src);
+            tcg_temp_free_vec(dst);
+            tcg_temp_free_vec(src);
+        }
     } else {
         TCGv_i32 imm = tcg_constant8u_i32(decode->immediate);
         ymm(OP_PTR0, OP_PTR1, imm);
@@ -3420,7 +3515,16 @@ static void gen_PSRLD_i(DisasContext *s, X86DecodedInsn *decode)
 {
     int vec_len = vector_len(s, decode);
 
-    if (decode->immediate >= 32) {
+    if (s->xmm_cache_insn) {
+        TCGv_vec src = xmm_cache_get(s, decode->op[1].n);
+        TCGv_vec dst = xmm_cache_get(s, decode->op[0].n);
+        if (decode->immediate >= 32) {
+            tcg_gen_dupi_vec(MO_64, dst, 0);
+        } else {
+            tcg_gen_shri_vec(MO_32, dst, src, decode->immediate);
+        }
+        xmm_cache_mark_dirty(s, decode->op[0].n);
+    } else if (decode->immediate >= 32) {
         tcg_gen_gvec_dup_imm(MO_64, decode->op[0].offset, vec_len, vec_len, 0);
     } else {
         tcg_gen_gvec_shri(MO_32,
@@ -4999,18 +5103,26 @@ static void gen_VSHUF(DisasContext *s, X86DecodedInsn *decode)
     SSEFunc_0_pppi ps, pd, fn;
 
     if (!(s->prefix & (PREFIX_VEX | PREFIX_DATA))) {
-        TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);
-        TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);
-        TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);
+        if (s->xmm_cache_insn) {
+            TCGv_vec a = xmm_cache_get(s, decode->op[1].n);
+            TCGv_vec b = xmm_cache_get(s, decode->op[2].n);
+            TCGv_vec r = xmm_cache_get(s, decode->op[0].n);
+            tcg_gen_x86_shufps_vec(r, a, b, decode->immediate);
+            xmm_cache_mark_dirty(s, decode->op[0].n);
+        } else {
+            TCGv_vec a = tcg_temp_new_vec(TCG_TYPE_V128);
+            TCGv_vec b = tcg_temp_new_vec(TCG_TYPE_V128);
+            TCGv_vec r = tcg_temp_new_vec(TCG_TYPE_V128);
 
-        tcg_gen_ld_vec(a, OP_PTR1, 0);
-        tcg_gen_ld_vec(b, OP_PTR2, 0);
-        tcg_gen_x86_shufps_vec(r, a, b, decode->immediate);
-        tcg_gen_st_vec(r, OP_PTR0, 0);
+            tcg_gen_ld_vec(a, OP_PTR1, 0);
+            tcg_gen_ld_vec(b, OP_PTR2, 0);
+            tcg_gen_x86_shufps_vec(r, a, b, decode->immediate);
+            tcg_gen_st_vec(r, OP_PTR0, 0);
 
-        tcg_temp_free_vec(r);
-        tcg_temp_free_vec(b);
-        tcg_temp_free_vec(a);
+            tcg_temp_free_vec(r);
+            tcg_temp_free_vec(b);
+            tcg_temp_free_vec(a);
+        }
         return;
     }
 
@@ -5176,4 +5288,107 @@ static void gen_XSAVEOPT(DisasContext *s, X86DecodedInsn *decode)
 
     tcg_gen_concat_tl_i64(features, cpu_regs[R_EAX], cpu_regs[R_EDX]);
     gen_helper_xsave(tcg_env, s->A0, features);
+}
+
+static bool xmm_cacheable_insn(DisasContext *s, X86DecodedInsn *decode)
+{
+    X86GenFunc gen = decode->e.gen;
+    if (!tcg_op_supported(INDEX_op_mov_vec, TCG_TYPE_V128, 0)) {
+        return false;
+    }
+#define CACHE_BINARY(name, opcode, vece)                                           \
+    if (gen == gen_##name) {                                                       \
+        return (s->prefix & PREFIX_DATA) &&                                       \
+               xmm_cache_reg_operands(s, decode, 3) &&                            \
+               tcg_can_emit_vec_op(opcode, TCG_TYPE_V128, vece) != 0;              \
+    }
+#define CACHE_CMP(name, vece)                                                      \
+    if (gen == gen_##name) {                                                       \
+        return (s->prefix & PREFIX_DATA) &&                                       \
+               xmm_cache_reg_operands(s, decode, 3) &&                            \
+               tcg_can_emit_vec_op(INDEX_op_cmp_vec, TCG_TYPE_V128, vece) != 0;    \
+    }
+    CACHE_BINARY(PADDB, INDEX_op_add_vec, MO_8)
+    CACHE_BINARY(PADDW, INDEX_op_add_vec, MO_16)
+    CACHE_BINARY(PADDD, INDEX_op_add_vec, MO_32)
+    CACHE_BINARY(PADDQ, INDEX_op_add_vec, MO_64)
+    CACHE_BINARY(PADDSB, INDEX_op_ssadd_vec, MO_8)
+    CACHE_BINARY(PADDSW, INDEX_op_ssadd_vec, MO_16)
+    CACHE_BINARY(PADDUSB, INDEX_op_usadd_vec, MO_8)
+    CACHE_BINARY(PADDUSW, INDEX_op_usadd_vec, MO_16)
+    CACHE_BINARY(PAND, INDEX_op_and_vec, MO_64)
+    CACHE_CMP(PCMPEQB, MO_8)
+    CACHE_CMP(PCMPEQD, MO_32)
+    CACHE_CMP(PCMPEQW, MO_16)
+    CACHE_CMP(PCMPEQQ, MO_64)
+    CACHE_CMP(PCMPGTB, MO_8)
+    CACHE_CMP(PCMPGTW, MO_16)
+    CACHE_CMP(PCMPGTD, MO_32)
+    CACHE_CMP(PCMPGTQ, MO_64)
+    CACHE_BINARY(PMAXSB, INDEX_op_smax_vec, MO_8)
+    CACHE_BINARY(PMAXSW, INDEX_op_smax_vec, MO_16)
+    CACHE_BINARY(PMAXSD, INDEX_op_smax_vec, MO_32)
+    CACHE_BINARY(PMAXUB, INDEX_op_umax_vec, MO_8)
+    CACHE_BINARY(PMAXUW, INDEX_op_umax_vec, MO_16)
+    CACHE_BINARY(PMAXUD, INDEX_op_umax_vec, MO_32)
+    CACHE_BINARY(PMINSB, INDEX_op_smin_vec, MO_8)
+    CACHE_BINARY(PMINSW, INDEX_op_smin_vec, MO_16)
+    CACHE_BINARY(PMINSD, INDEX_op_smin_vec, MO_32)
+    CACHE_BINARY(PMINUB, INDEX_op_umin_vec, MO_8)
+    CACHE_BINARY(PMINUW, INDEX_op_umin_vec, MO_16)
+    CACHE_BINARY(PMINUD, INDEX_op_umin_vec, MO_32)
+    CACHE_BINARY(PMULLW, INDEX_op_mul_vec, MO_16)
+    CACHE_BINARY(PMULLD, INDEX_op_mul_vec, MO_32)
+    CACHE_BINARY(POR, INDEX_op_or_vec, MO_64)
+    CACHE_BINARY(PSUBB, INDEX_op_sub_vec, MO_8)
+    CACHE_BINARY(PSUBW, INDEX_op_sub_vec, MO_16)
+    CACHE_BINARY(PSUBD, INDEX_op_sub_vec, MO_32)
+    CACHE_BINARY(PSUBQ, INDEX_op_sub_vec, MO_64)
+    CACHE_BINARY(PSUBSB, INDEX_op_sssub_vec, MO_8)
+    CACHE_BINARY(PSUBSW, INDEX_op_sssub_vec, MO_16)
+    CACHE_BINARY(PSUBUSB, INDEX_op_ussub_vec, MO_8)
+    CACHE_BINARY(PSUBUSW, INDEX_op_ussub_vec, MO_16)
+    CACHE_BINARY(PXOR, INDEX_op_xor_vec, MO_64)
+#define CACHE_X86_BINARY(name, opcode, vece)                                       \
+    if (gen == gen_##name) {                                                       \
+        return (s->prefix & PREFIX_DATA) &&                                       \
+               xmm_cache_reg_operands(s, decode, 3) &&                            \
+               tcg_can_emit_vec_op(opcode, TCG_TYPE_V128, vece) != 0;              \
+    }
+    CACHE_X86_BINARY(PUNPCKLBW, INDEX_op_x86_punpckl_vec, MO_8)
+    CACHE_X86_BINARY(PUNPCKLWD, INDEX_op_x86_punpckl_vec, MO_16)
+    CACHE_X86_BINARY(PUNPCKLDQ, INDEX_op_x86_punpckl_vec, MO_32)
+    CACHE_X86_BINARY(PUNPCKHBW, INDEX_op_x86_punpckh_vec, MO_8)
+    CACHE_X86_BINARY(PUNPCKHWD, INDEX_op_x86_punpckh_vec, MO_16)
+    CACHE_X86_BINARY(PUNPCKHDQ, INDEX_op_x86_punpckh_vec, MO_32)
+    CACHE_X86_BINARY(PACKSSWB, INDEX_op_x86_packss_vec, MO_8)
+    CACHE_X86_BINARY(PACKUSWB, INDEX_op_x86_packus_vec, MO_8)
+    CACHE_X86_BINARY(PACKSSDW, INDEX_op_x86_packss_vec, MO_16)
+    CACHE_X86_BINARY(PUNPCKLQDQ, INDEX_op_x86_punpckl_vec, MO_64)
+    CACHE_X86_BINARY(PUNPCKHQDQ, INDEX_op_x86_punpckh_vec, MO_64)
+#undef CACHE_X86_BINARY
+#define CACHE_SHUFFLE(name, opcode)                                                \
+    if (gen == gen_##name) {                                                       \
+        return (s->prefix & PREFIX_DATA) &&                                       \
+               xmm_cache_reg_operands(s, decode, 2) &&                            \
+               tcg_can_emit_vec_op(opcode, TCG_TYPE_V128, MO_8) != 0;              \
+    }
+    CACHE_SHUFFLE(PSHUFD, INDEX_op_x86_pshufd_vec)
+    CACHE_SHUFFLE(PSHUFLW, INDEX_op_x86_pshuflw_vec)
+    CACHE_SHUFFLE(PSHUFHW, INDEX_op_x86_pshufhw_vec)
+#undef CACHE_SHUFFLE
+    if (gen == gen_PSRLD_i) {
+        return (s->prefix & PREFIX_DATA) &&
+               xmm_cache_reg_operands(s, decode, 2) &&
+               tcg_can_emit_vec_op(INDEX_op_shri_vec, TCG_TYPE_V128, MO_32) != 0;
+    }
+    if (gen == gen_VSHUF) {
+        return !(s->prefix & (PREFIX_VEX | PREFIX_DATA)) &&
+               xmm_cache_reg_operands(s, decode, 3) &&
+               tcg_can_emit_vec_op(INDEX_op_x86_shufps_vec,
+                                   TCG_TYPE_V128, MO_32) != 0;
+    }
+#undef CACHE_BINARY
+#undef CACHE_CMP
+    return false;
 }
