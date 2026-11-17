@@ -111,10 +111,24 @@ Relative change: **+0.58%** (1.006x; 0.005102 s faster). This is a marginal
 difference on a shared CI runner, effectively near-neutral rather than a
 demonstrated performance improvement. It is not evidence of a broad SSE2
 speedup or regression, and does not predict performance on other host CPUs.
-Linux benchmark completed successfully. The first Windows attempt did not
-produce a measurement: the runner lacked `bc`, and the current build's UCRT64
-DLL directory was not on `PATH`. Both CI setup issues are corrected; a valid
-Windows A/B result is still pending. No local build/test was run.
+### T13d Windows CI result (2026-11-18)
+
+Baseline artifact: pre-cache Windows build from Actions run 44156398064. Same
+300M-iteration `sse2.asm` image, three runs per build, median wall time:
+
+| build | median wall time |
+|-------|------------------:|
+| Before XMM cache | 3.166927 s |
+| After capacity-aware XMM cache | 3.132343 s |
+
+Relative change: **+1.09%** (1.011x; 0.034584 s faster). Both executable
+preflights and all six benchmark runs succeeded after removing the `bc`
+dependency and adding the UCRT64 runtime directory to `PATH`. This small
+positive difference on a shared CI runner is effectively near-neutral, not a
+demonstrated performance improvement. Together with the Linux +0.58% result,
+the targeted measurements show no material change in this mixed register-only
+workload. They do not establish a broad SSE2 speedup or regression and do not
+predict performance on other host CPUs. No local build/test was run.
 
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 
