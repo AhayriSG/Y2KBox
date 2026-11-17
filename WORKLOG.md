@@ -63,3 +63,27 @@ must complete successfully and its output must be reviewed before T04 is marked
 done. Per HANDOFF section 7, do not poll Actions after the push.
 
 | (this commit) | T04 benchmark measurement correction (2026-11-17): successful CI runs showed that the 300M-iteration PSHUFD and empty-loop measurements were rounded to 0.01 s before subtraction, yielding 0.00 s or negative net times. These are invalid measurements, not evidence of a speedup or regression. Increased the loop to 1B iterations, raised the sample count from 3 to 5, retained six decimal places through subtraction, and made CI fail explicitly if either net time is non-positive. The valid A/B result is still pending. |
+
+
+## Session 3 (ChatGPT), 2026-11-18 - Correct T04 benchmark methodology
+
+The first 1B-iteration CI attempt still produced negative values after subtracting
+the empty-loop runtime (PSHUFD: 3.609034 s baseline / 3.199697 s current;
+empty control: 4.291559 s / 4.462503 s). This demonstrates that the empty loop
+is not a stable additive overhead for this TCG benchmark: its translation-block
+shape and dispatch behavior differ from the PSHUFD workload. The subtraction
+method is invalid; these numbers do not establish a speedup or regression.
+
+| commit | change |
+|--------|--------|
+| 733fdf9 | Replaced the invalid empty-loop subtraction with a direct comparison of identical 300M-iteration PSHUFD images on baseline/current binaries. |
+| c1876f4, 105fd86, 75ce168 | Changed `xp/bench/run.sh` to report the median of five successful runs; corrected the output formatting. |
+| c84d38c | Updated the benchmark README with the valid raw-runtime comparison method. |
+| b5af358 | Updated T04 task notes; result remains pending until the corrected CI measurement is reported. |
+| 5e4f480 | Updated HANDOFF benchmark instructions to match the corrected method. |
+
+The revised CI benchmark performs five runs per binary at 300M iterations and
+compares raw median runtimes. It no longer builds or runs the empty-loop image,
+and should take materially less time than the 1B-iteration, four-series benchmark.
+No performance result is recorded yet. Per HANDOFF section 7, do not poll CI
+after pushing.
