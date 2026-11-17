@@ -254,3 +254,24 @@ initialization. No local build/test was run and no CI was polled.
 | 2d2e7dd | Recorded the explicit T13d profiling/benchmark gate in TASKS.md. |
 | 2b6593f, 521b1f7, 7afca6c, b7928ac | Removed redundant SGX EPC initialization while retaining the ACPI-consumed state field; corrected the initial over-prune before proceeding. |
 | 9440999 | Documented T05 SGX dependency findings and next audit scope. |
+
+
+## Session 11 (ChatGPT), 2026-11-18 - T05 SGX/VFIO dependency cleanup
+
+Continued the T05 source audit with exact call-site and include checks.
+Removed the now-redundant SGX EPC init call/stub/prototype; retained the SGX
+EPC state in PCMachineState because the ACPI builder still reads it. The
+remaining SGX stub no longer includes PC or SGX EPC headers, as it no longer
+uses their declarations. SGX query/CPUID and SRAT stubs remain because live
+code still references them.
+
+Removed the unused VFIO PCI compatibility property from the i440fx machine
+compat defaults and dropped its VFIO types header include. VFIO is disabled in
+the XP device configuration, and the only reference to that compatibility
+property was in pc_piix.c.
+
+Commits: 95feeea (drop SGX stub header dependencies), 85a0947 (remove dead
+VFIO compatibility property), a96a653 (record progress). No local build/test
+was run and no CI was polled. Next: map KVM and IOMMU call sites against the
+actual XP build configuration; preserve generic TCG memory translation and any
+shared interfaces still required by active code.
