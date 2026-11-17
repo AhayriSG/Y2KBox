@@ -76,7 +76,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
   meson_options.txt; (2) Windows build is verified by CI (T07).
 
-## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: DONE 2026-11-18 (commit pending)
+## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: DONE 2026-11-18 (implementation 746dae5; benchmark recorded df28ec6)
 Legacy XMM forms of PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK* and SHUFPS now
 have inline native x86 TCG lowering. MMX and VEX/YMM forms retain their helper paths.
 Dedicated boot-sector functional tests run in Linux/Windows CI:
