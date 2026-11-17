@@ -41,9 +41,16 @@ jobs:
         run: bash xp/bench/x87cmp.sh build 2000
       - name: Package
         run: |
-          mkdir dist
+          mkdir -p dist/pc-bios
           cp build/qemu-system-i386 build/qemu-img dist/
-          cp -rL build/pc-bios dist/pc-bios
+          cp pc-bios/*.bin pc-bios/*.rom dist/pc-bios/
+          cp -r pc-bios/keymaps dist/pc-bios/keymaps
+          if [ -d build/pc-bios/keymaps ]; then
+            for f in build/pc-bios/keymaps/*; do
+              [ -f "$f" ] && [ "$(basename "$f")" != "meson.build" ] && cp "$f" dist/pc-bios/keymaps/
+            done
+          fi
+          rm -f dist/pc-bios/keymaps/meson.build
       - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
         run: |
           ls -la dist dist/pc-bios | head -40
@@ -120,9 +127,11 @@ jobs:
         run: bash xp/bench/x87cmp.sh build 2000
       - name: Package (binaries, pc-bios, MSYS2 runtime DLLs)
         run: |
-          mkdir dist
+          mkdir -p dist/pc-bios
           cp build/qemu-system-i386.exe build/qemu-img.exe dist/
-          cp -rL build/pc-bios dist/pc-bios
+          cp pc-bios/*.bin pc-bios/*.rom dist/pc-bios/
+          cp -r pc-bios/keymaps dist/pc-bios/keymaps
+          rm -f dist/pc-bios/keymaps/meson.build
           for exe in dist/*.exe; do ldd "$exe" | grep -i '/ucrt64/' | awk '{print $3}'; done | sort -u | xargs -I{} cp {} dist/
       - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
         run: |
