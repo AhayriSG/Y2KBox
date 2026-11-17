@@ -11,7 +11,6 @@
 
 #include "hw/core/hotplug.h"
 #include "qom/object.h"
-#include "hw/i386/sgx-epc.h"
 #include "hw/cxl/cxl.h"
 
 #define MAX_IDE_BUS 2
@@ -61,7 +60,6 @@ typedef struct PCMachineState {
     /* ACPI Memory hotplug IO base address */
     hwaddr memhp_io_base;
 
-    SGXEPCState sgx_epc;
     CXLState cxl_devices_state;
 } PCMachineState;
 
@@ -184,9 +182,6 @@ void pc_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
 bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
                                int *data_len);
 void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size);
-
-/* sgx.c */
-void pc_machine_init_sgx_epc(PCMachineState *pcms);
 
 
 
