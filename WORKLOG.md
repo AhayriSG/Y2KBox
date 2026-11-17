@@ -199,3 +199,33 @@ must complete both preflight commands and all six benchmark runs before any
 Windows performance result is recorded.
 
 | (this commit) | Replaced bc timing arithmetic with awk; fixed Windows runtime DLL search path and added executable preflight; documented the failed attempt without recording a timing. |
+
+
+## Session 9 (ChatGPT), 2026-11-18 - T13d Windows benchmark result
+
+The owner supplied the successful Windows CI A/B output for the capacity-aware
+Win64 cache build. The workflow passed both QEMU executable preflights and all
+six benchmark runs, using the same 300M-iteration register-only `sse2.asm`
+image and the pre-cache Windows artifact from Actions run 44156398064:
+
+| build | median |
+|-------|-------:|
+| Before XMM cache | 3.166927 s |
+| After capacity-aware XMM cache | 3.132343 s |
+
+Relative change: +1.09% (1.011x; 0.034584 s faster). This is a small difference
+on a shared CI runner and should be treated as effectively near-neutral, not a
+demonstrated speedup. Combined with the Linux result (+0.58%, 1.006x), neither
+targeted measurement establishes a material performance change or a broad SSE2
+conclusion.
+
+The Windows benchmark environment fix is validated: awk replaces the missing
+`bc` dependency, and the UCRT64 runtime directory is available through
+`PATH`; both baseline/current executable preflights and all six measured runs
+succeeded. T13d is marked complete as an implementation and targeted
+cross-platform measurement task, with the measured performance outcome
+explicitly recorded as near-neutral. Keep the existing cache and Win64
+five-register pressure guard; profile generated host code and add broader
+representative workloads before attempting further cache-policy changes.
+
+No local build/test was run and no CI was polled.
