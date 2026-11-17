@@ -76,7 +76,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
   meson_options.txt; (2) Windows build is verified by CI (T07).
 
-## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: CLAIMED by ChatGPT session 2026-11-17
+## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: DONE 2026-11-18 (commit pending)
 Legacy XMM forms of PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK* and SHUFPS now
 have inline native x86 TCG lowering. MMX and VEX/YMM forms retain their helper paths.
 Dedicated boot-sector functional tests run in Linux/Windows CI:
@@ -89,8 +89,12 @@ image on the baseline and current binaries, on the same runner. Each result is t
 median of five successful runs. No empty-loop subtraction is used: TCG translation
 and dispatch make that a different workload, not an additive overhead. The earlier
 negative net times were invalid and are not a performance result. The runner rejects
-unexpected QEMU exit codes, timeouts and stderr output. The corrected benchmark
-method is now wired into CI; result validation and recording remain pending.
+unexpected QEMU exit codes, timeouts and stderr output. Linux CI benchmark result (AMD EPYC 9V74, same runner/build environment):
+baseline median 3.083675 s; T04 median 3.166926 s; relative change -2.70%
+(0.974x). This single isolated dependent-PSHUFD microbenchmark shows no
+measurable improvement; the small difference may be within shared-runner noise
+and is not evidence of a broad regression. Linux result recorded; Windows
+functional CI remains independent and is not required for this Linux measurement.
 
 ## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: TODO
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
