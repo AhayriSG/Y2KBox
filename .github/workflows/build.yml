@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build python3-pip libglib2.0-dev libpixman-1-dev \
-            libfdt-dev libslirp-dev libsdl2-dev nasm pkg-config
+            libfdt-dev libslirp-dev libsdl2-dev nasm pkg-config bc
           pip install --break-system-packages meson tomli || pip install meson tomli
       - name: Configure
         run: |
