@@ -189,6 +189,21 @@ separate sub-task (T13a..c), claim one:
 * Keep XMM/MMX state in host registers across instructions; PSHUFD & shuffles inline (T04).
 Every change: A/B numbers in WORKLOG + standard checks + CI green.
 
+
+* **T13d legacy XMM register caching - Status: PAUSED (implementation committed; CI and A/B result pending).**
+  Implementation commit: `c272958`. `DisasContext` now owns an EBB-temp cache for eligible
+  legacy XMM register-only operations: lazy loads, dirty tracking, and flush/free barriers
+  before non-cacheable instructions, exceptions, and TB exits. MMX, VEX/YMM, memory operands,
+  and unsupported vector operations retain their existing paths. Eligible classes include
+  packed integer arithmetic/compare/min-max/multiply, logical ops, immediate PSRLD, and the
+  T04 shuffle/unpack/pack operations. `shuffletest.asm` adds a MOVD cache-barrier regression
+  case. Linux CI is configured to compare the same 100M-iteration `sse2.asm` workload on
+  the pre-cache artifact from run 44156398064 and the current build (median of 3 runs).
+  No local build/test was run and no performance result is recorded yet.
+  Resume here: review Linux/Windows CI feedback supplied by the owner; then review the Linux
+  A/B result. Fix any failures before interpreting performance. Do not claim a speedup until
+  the benchmark output is available.
+
 ## T14 (P1) Threading model and thread pinning  -  Status: TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
 (vCPU thread to the fastest/performance core, others elsewhere) with Windows
