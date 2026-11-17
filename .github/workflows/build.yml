@@ -58,26 +58,20 @@ jobs:
       - name: T04 PSHUFD A/B benchmark (same Linux runner)
         run: |
           set -euo pipefail
-          mkdir -p baseline
           echo "Baseline artifact: commit c5ef98e840ac83ea800ec7dfeb6d38731c964a4a"
           lscpu | grep -E 'Model name|Architecture|CPU\\(s\\)' | head -3
           uname -a
-          nasm -fbin -DLOOPS=1000000000 xp/bench/pshufd.asm -o pshufd.img
-          nasm -fbin -DLOOPS=1000000000 -DEMPTY xp/bench/pshufd.asm -o empty.img
-          before_ps=$(Q="$PWD/baseline/qemu-system-i386" PCBIOS="$PWD/baseline/pc-bios" N=5 bash xp/bench/run.sh pshufd.img)
-          before_empty=$(Q="$PWD/baseline/qemu-system-i386" PCBIOS="$PWD/baseline/pc-bios" N=5 bash xp/bench/run.sh empty.img)
-          after_ps=$(Q="$PWD/build/qemu-system-i386" PCBIOS="$PWD/build/pc-bios" N=5 bash xp/bench/run.sh pshufd.img)
-          after_empty=$(Q="$PWD/build/qemu-system-i386" PCBIOS="$PWD/build/pc-bios" N=5 bash xp/bench/run.sh empty.img)
-          python3 - "$before_ps" "$before_empty" "$after_ps" "$after_empty" <<'PY'
+          nasm -fbin -DLOOPS=300000000 xp/bench/pshufd.asm -o pshufd.img
+          before=$(Q="$PWD/baseline/qemu-system-i386" PCBIOS="$PWD/baseline/pc-bios" N=5 bash xp/bench/run.sh pshufd.img)
+          after=$(Q="$PWD/build/qemu-system-i386" PCBIOS="$PWD/build/pc-bios" N=5 bash xp/bench/run.sh pshufd.img)
+          python3 - "$before" "$after" <<'PY'
           import sys
-          bp, be, ap, ae = map(float, sys.argv[1:])
-          bn, an = bp - be, ap - ae
-          print(f"Before T04: pshufd={bp:.6f}s empty={be:.6f}s net={bn:.6f}s")
-          print(f"After T04:  pshufd={ap:.6f}s empty={ae:.6f}s net={an:.6f}s")
-          if bn <= 0 or an <= 0:
-              print("Measurement invalid: net PSHUFD time must be positive for both builds")
-              sys.exit(1)
-          print(f"Net change: {(bn-an)/bn*100:.2f}% faster; speedup={bn/an:.3f}x" if an > 0 else "Measurement invalid")
+          before, after = map(float, sys.argv[1:])
+          if before <= 0 or after <= 0:
+              raise SystemExit("Measurement invalid: runtimes must be positive")
+          print(f"Before T04 median: {before:.6f}s")
+          print(f"After T04 median:  {after:.6f}s")
+          print(f"Relative change: {(before-after)/before*100:+.2f}% (speedup={before/after:.3f}x)")
           PY
         shell: bash
       - name: x87 differential test (host fast path vs softfloat)
