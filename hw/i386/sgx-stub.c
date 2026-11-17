@@ -22,11 +22,6 @@ SgxInfo *qmp_query_sgx_capabilities(Error **errp)
     return NULL;
 }
 
-void pc_machine_init_sgx_epc(PCMachineState *pcms)
-{
-    memset(&pcms->sgx_epc, 0, sizeof(SGXEPCState));
-}
-
 bool check_sgx_support(void)
 {
     return false;
