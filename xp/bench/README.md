@@ -67,6 +67,25 @@ Because this is one shared-host CI sample, the small difference should not be
 treated as a definitive regression. It says nothing conclusive about broader
 SSE2 workloads or other host CPUs.
 
+## T13d legacy XMM register-cache A/B benchmark
+
+The per-TB legacy XMM cache is implemented in commit `c272958`. It keeps
+eligible register-only legacy XMM values in TCG EBB vector temporaries across
+consecutive instructions, with lazy loads and dirty writeback. Cache barriers
+flush and free the temporaries before non-cacheable instructions, exceptions,
+and TB exits. MMX, VEX/YMM, memory operands, and unsupported vector operations
+remain on their existing paths. The functional shuffle test includes a MOVD
+barrier case.
+
+Linux CI compares one identical 100-million-iteration `sse2.asm` workload
+using the pre-cache Linux artifact from run 44156398064 and the current build
+on the same runner. Each side is measured three times and compared by median
+wall time. This is a mixed register-only SSE2 workload, not a broad application
+benchmark or a measurement of the user's local CPU.
+
+**Result: pending owner-supplied CI output.** No local build/test was run and
+no performance improvement or regression is claimed yet.
+
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 
 Real-mode boot sectors (register loop counter `ebp`; keep loop state off the code page - a counter
