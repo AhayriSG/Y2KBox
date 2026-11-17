@@ -83,8 +83,22 @@ on the same runner. Each side is measured three times and compared by median
 wall time. This is a mixed register-only SSE2 workload, not a broad application
 benchmark or a measurement of the user's local CPU.
 
-**Result: pending owner-supplied CI output.** No local build/test was run and
-no performance improvement or regression is claimed yet.
+### T13d Linux CI result (2026-11-18)
+
+Baseline artifact: pre-cache build from Actions run 44156398064. Same
+100M-iteration `sse2.asm` image, three runs per build, median wall time:
+
+| build | median wall time |
+|-------|------------------:|
+| Before XMM cache | 0.877822 s |
+| After XMM cache | 0.872720 s |
+
+Relative change: **+0.58%** (1.006x; 0.005102 s faster). This is a marginal
+difference on a shared CI runner, effectively near-neutral rather than a
+demonstrated performance improvement. It is not evidence of a broad SSE2
+speedup or regression, and does not predict performance on other host CPUs.
+Linux benchmark completed successfully. No local build/test was run; Windows
+cross-platform functional/build confirmation remains separate.
 
 ## General-instruction microbenchmarks (`micro/*.asm`, `perf.py`)
 
