@@ -40,6 +40,10 @@ Unzip the **whole** archive and keep `pc-bios/` next to the executable; it is fo
   QEMU installation into Y2KBox's `pc-bios` folder; or point to any firmware folder with `-L <dir>`.
 * **Linux:** the binary needs the usual shared libraries (glib2, pixman, libslirp, libfdt, SDL2) from your distribution.
 
+| Windows XP SP3 - Desktop |
+| :--------------------------------------------------------------------------------------------: |
+| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="500" alt="Screenshot description"> |
+
 ## Development status
 
 _Last updated: 2026-11-14. Legend: done / in progress / planned._
