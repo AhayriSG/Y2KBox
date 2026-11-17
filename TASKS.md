@@ -96,7 +96,7 @@ measurable improvement; the small difference may be within shared-runner noise
 and is not evidence of a broad regression. Linux result recorded; Windows
 functional CI remains independent and is not required for this Linux measurement.
 
-## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: TODO
+## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: CLAIMED by ChatGPT 2026-11-18
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
 38 files mention IOMMU, 25 SEV/confidential, 20 SGX, 17 VFIO; also `kvm_enabled()`
 branches, `include/system/kvm*.h`, `kvm_i386.h`, `hw/i386/kvm/clock.h`.
