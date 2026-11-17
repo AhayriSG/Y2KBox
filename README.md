@@ -57,7 +57,7 @@ _Last updated: 2026-11-17. Legend: done / in progress / planned._
 | x86-64 hosts only, x86-64-v3 baseline enforced | done | other TCG backends + TCI removed |
 | Benchmarks + AVX-512 A/B | done | no AVX-512 gain for SSE2 guests; stay on v3 |
 | 128-bit guest memory ops (`qemu_ld_vec`/`qemu_st_vec`) | done | loads ~2.7x faster; `xp/bench/vectest.asm` |
-| Inline SSE2 shuffle / unpack / pack ops | in progress | Legacy XMM PSHUFD/PSHUFLW/PSHUFHW/PUNPCK/PACK/SHUFPS lowering; Linux + Windows CI functional tests pass; benchmark pending |
+| Inline SSE2 shuffle / unpack / pack ops | in progress | Legacy XMM PSHUFD/PSHUFLW/PSHUFHW/PUNPCK/PACK/SHUFPS lowering; Linux + Windows CI functional tests pass; automated Linux baseline-vs-current PSHUFD benchmark wired into CI; result pending |
 | Fixed XP machine (2 GiB RAM, 1 vCPU default, no -smp/-cpu/-m flags) | in progress | fixed 2 GiB memory model done, hotplug/NVDIMM/CXL removed; single machine type done; CLI flag removal + dead above-4G code pending (T01) |
 | XP guest CPU `xp-p4` (SSE2 max) | in progress | model is default; deleting other models and SSE3+ translators pending (T02) |
 | Linux + Windows hosts only | in progress | macOS/BSD code removed; Linux and Windows builds verified by CI (T03 pass 2 pending, T07 done) |
