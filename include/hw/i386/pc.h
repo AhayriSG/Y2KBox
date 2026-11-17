@@ -44,7 +44,6 @@ typedef struct PCMachineState {
     Object *alias_pflash1;
 
     /* Configuration options: */
-    uint64_t max_ram_below_4g;
     OnOffAuto vmport;
     SmbiosEntryPointType smbios_entry_point_type;
     PCSouthBridgeOption south_bridge;
@@ -67,7 +66,6 @@ typedef struct PCMachineState {
 } PCMachineState;
 
 #define PC_MACHINE_ACPI_DEVICE_PROP "acpi-device"
-#define PC_MACHINE_MAX_RAM_BELOW_4G "max-ram-below-4g"
 #define PC_MACHINE_VMPORT           "vmport"
 #define PC_MACHINE_SMBUS            "smbus"
 #define PC_MACHINE_SATA             "sata"
@@ -77,14 +75,6 @@ typedef struct PCMachineState {
 
 /**
  * PCMachineClass:
- *
- * Compat fields:
- *
- * @gigabyte_align: Make sure that guest addresses aligned at
- *                  1Gbyte boundaries get mapped to host
- *                  addresses aligned at 1Gbyte boundaries. This
- *                  way we can use 1GByte pages in the host.
- *
  */
 struct PCMachineClass {
     /*< private >*/
@@ -111,19 +101,10 @@ struct PCMachineClass {
     SmbiosEntryPointType default_smbios_ep_type;
 
     /* RAM / address space compat: */
-    bool gigabyte_align;
-    bool has_reserved_memory;
-    bool enforce_amd_1tb_hole;
     bool isa_bios_alias;
 
     /* create kvmclock device even when KVM PV features are not exposed */
     bool kvmclock_create_always;
-
-    /*
-     * whether the machine type implements broken 32-bit address space bound
-     * check for memory.
-     */
-    bool broken_32bit_mem_addr_check;
 };
 
 #define TYPE_PC_MACHINE "generic-pc-machine"
@@ -143,11 +124,7 @@ void pc_acpi_smi_interrupt(void *opaque, int irq, int level);
 #define PCI_HOST_PROP_IO_MEM           "io-mem"
 #define PCI_HOST_PROP_PCI_HOLE_START   "pci-hole-start"
 #define PCI_HOST_PROP_PCI_HOLE_END     "pci-hole-end"
-#define PCI_HOST_PROP_PCI_HOLE64_START "pci-hole64-start"
-#define PCI_HOST_PROP_PCI_HOLE64_END   "pci-hole64-end"
-#define PCI_HOST_PROP_PCI_HOLE64_SIZE  "pci-hole64-size"
 #define PCI_HOST_BELOW_4G_MEM_SIZE     "below-4g-mem-size"
-#define PCI_HOST_ABOVE_4G_MEM_SIZE     "above-4g-mem-size"
 #define PCI_HOST_PROP_SMM_RANGES       "smm-ranges"
 
 typedef enum {
@@ -184,9 +161,7 @@ void pc_pci_as_mapping_init(MemoryRegion *system_memory,
 
 void pc_memory_init(PCMachineState *pcms,
                     MemoryRegion *system_memory,
-                    MemoryRegion *rom_memory,
-                    uint64_t pci_hole64_size);
-uint64_t pc_pci_hole64_start(void);
+                    MemoryRegion *rom_memory);
 DeviceState *pc_vga_init(ISABus *isa_bus, PCIBus *pci_bus);
 void pc_basic_device_init(struct PCMachineState *pcms,
                           ISABus *isa_bus, qemu_irq *gsi,

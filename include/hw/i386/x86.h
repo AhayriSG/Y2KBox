@@ -60,11 +60,8 @@ struct X86MachineState {
      */
     MemoryRegion isa_bios;
 
-    /* RAM information (sizes, addresses, configuration): */
-    ram_addr_t below_4g_mem_size, above_4g_mem_size;
-
-    /* Start address of the initial RAM above 4G */
-    uint64_t above_4g_mem_start;
+    /* RAM information (all guest RAM lives below 4 GiB): */
+    ram_addr_t below_4g_mem_size;
 
     /* CPU and apic information: */
     unsigned pci_irq_mask;

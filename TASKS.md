@@ -32,9 +32,10 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   2 GiB entry, vectest OK, `-smp 2` boots, no pc-dimm/nvdimm devices.
 * DONE part 2b (`xp/strip/09-single-machine-type.py`): only `pc-i440fx-11.2` (alias `pc`) remains; 88 compat
   tables (`pc_compat_*`, `hw_compat_*`) deleted. `-machine help` = pc + none.
-* Resume here (part 2c): (2) remove dead above-4G /
-  hole64 / `max_ram_below_4g` / ram-slots/maxmem fields and code (`x86_machine_*`, `pc_init1`
-  memory split in `hw/i386/pc_piix.c`, `hw/i386/x86.c`); (3) remove the `-m/-smp/-machine/-cpu`
+* DONE part 2c-1: removed dead above-4G / `max_ram_below_4g` / `pci_hole64` / `gigabyte_align` /
+  `enforce_amd_1tb_hole` / `pc_init1` memory-split code across `hw/i386/{pc,pc_piix,x86,acpi-build}.c`,
+  `hw/pci-host/i440fx.c`, and `include/hw/i386/{pc,x86}.h`.
+* Resume here (part 2c-2): remove remaining `ram-slots`/`maxmem` fields if unused; (3) remove the `-m/-smp/-machine/-cpu`
   CLI paths (qemu-options.hx, system/vl.c, `-smp` parsing) now that defaults are fixed; (4) rename the machine to something like `xp` (drop the version suffix); (5) ACPI
   CPU hotplug AML (`build_cpus_aml`) is still needed for the CPU objects - keep it, drop the
   hotplug-only parts later; (6) re-run dead-source pass (HANDOFF 5b), standard checks.

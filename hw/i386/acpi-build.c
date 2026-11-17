@@ -281,7 +281,7 @@ Object *acpi_get_i386_pci_host(void)
     return OBJECT(host);
 }
 
-static void acpi_get_pci_holes(Range *hole, Range *hole64)
+static void acpi_get_pci_holes(Range *hole)
 {
     Object *pci_host;
 
@@ -297,13 +297,6 @@ static void acpi_get_pci_holes(Range *hole, Range *hole64)
                                                NULL),
                       object_property_get_uint(pci_host,
                                                PCI_HOST_PROP_PCI_HOLE_END,
-                                               NULL));
-    range_set_bounds1(hole64,
-                      object_property_get_uint(pci_host,
-                                               PCI_HOST_PROP_PCI_HOLE64_START,
-                                               NULL),
-                      object_property_get_uint(pci_host,
-                                               PCI_HOST_PROP_PCI_HOLE64_END,
                                                NULL));
 }
 
@@ -827,7 +820,7 @@ static Aml *build_q35_dram_controller(const AcpiMcfgInfo *mcfg)
 static void
 build_dsdt(GArray *table_data, BIOSLinker *linker,
            AcpiPmInfo *pm, AcpiMiscInfo *misc,
-           Range *pci_hole, Range *pci_hole64, MachineState *machine)
+           Range *pci_hole, MachineState *machine)
 {
     Object *i440fx = object_resolve_type_unambiguous(TYPE_I440FX_PCI_HOST_BRIDGE,
                                                      NULL);
@@ -1042,20 +1035,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
                              0, entry->limit - entry->base + 1));
     }
 
-    if (!range_is_empty(pci_hole64)) {
-        crs_replace_with_free_ranges(crs_range_set.mem_64bit_ranges,
-                                     range_lob(pci_hole64),
-                                     range_upb(pci_hole64));
-        for (i = 0; i < crs_range_set.mem_64bit_ranges->len; i++) {
-            entry = g_ptr_array_index(crs_range_set.mem_64bit_ranges, i);
-            aml_append(crs,
-                       aml_qword_memory(AML_POS_DECODE, AML_MIN_FIXED,
-                                        AML_MAX_FIXED,
-                                        AML_CACHEABLE, AML_READ_WRITE,
-                                        0, entry->base, entry->limit,
-                                        0, entry->limit - entry->base + 1));
-        }
-    }
+
 
 #ifdef CONFIG_TPM
     if (TPM_IS_TIS_ISA(tpm_find())) {
@@ -1415,19 +1395,6 @@ build_srat(GArray *table_data, BIOSLinker *linker, MachineState *machine)
             }
             mem_base = HOLE_640K_END;
             mem_len = next_base - HOLE_640K_END;
-        }
-
-        /* Cut out the ACPI_PCI hole */
-        if (mem_base <= x86ms->below_4g_mem_size &&
-            next_base > x86ms->below_4g_mem_size) {
-            mem_len -= next_base - x86ms->below_4g_mem_size;
-            if (mem_len > 0) {
-                build_srat_memory(table_data, mem_base, mem_len, i - 1,
-                                  MEM_AFFINITY_ENABLED);
-            }
-            mem_base = x86ms->above_4g_mem_start;
-            mem_len = next_base - x86ms->below_4g_mem_size;
-            next_base = mem_base + mem_len;
         }
 
         if (mem_len > 0) {
@@ -1921,7 +1888,7 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
     AcpiPmInfo pm;
     AcpiMiscInfo misc;
     AcpiMcfgInfo mcfg;
-    Range pci_hole = {}, pci_hole64 = {};
+    Range pci_hole = {};
     uint8_t *u;
     GArray *tables_blob = tables->table_data;
     AcpiSlicOem slic_oem = { .id = NULL, .table_id = NULL };
@@ -1930,7 +1897,7 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
 
     acpi_get_pm_info(machine, &pm);
     acpi_get_misc_info(&misc);
-    acpi_get_pci_holes(&pci_hole, &pci_hole64);
+    acpi_get_pci_holes(&pci_hole);
     acpi_get_slic_oem(&slic_oem);
 
     if (slic_oem.id) {
@@ -1965,7 +1932,7 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
     /* DSDT is pointed to by FADT */
     dsdt = tables_blob->len;
     build_dsdt(tables_blob, tables->linker, &pm, &misc,
-               &pci_hole, &pci_hole64, machine);
+               &pci_hole, machine);
 
     /* ACPI tables pointed to by RSDT */
     acpi_add_table(table_offsets, tables_blob);

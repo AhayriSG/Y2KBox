@@ -350,11 +350,10 @@ static void pc_cmos_init_late(PCMachineState *pcms)
         val = 65535;
     mc146818rtc_set_cmos_data(s, 0x34, val);
     mc146818rtc_set_cmos_data(s, 0x35, val >> 8);
-    /* memory above 4GiB */
-    val = x86ms->above_4g_mem_size / 65536;
-    mc146818rtc_set_cmos_data(s, 0x5b, val);
-    mc146818rtc_set_cmos_data(s, 0x5c, val >> 8);
-    mc146818rtc_set_cmos_data(s, 0x5d, val >> 16);
+    /* memory above 4GiB (always 0 in XP fork) */
+    mc146818rtc_set_cmos_data(s, 0x5b, 0);
+    mc146818rtc_set_cmos_data(s, 0x5c, 0);
+    mc146818rtc_set_cmos_data(s, 0x5d, 0);
 
     val = 0;
     val |= 0x02; /* FPU is there */
@@ -441,51 +440,9 @@ void pc_pci_as_mapping_init(MemoryRegion *system_memory,
 #define PC_ROM_ALIGN       0x800
 #define PC_ROM_SIZE        (PC_ROM_MAX - PC_ROM_MIN_VGA)
 
-static hwaddr pc_above_4g_end(PCMachineState *pcms)
-{
-    X86MachineState *x86ms = X86_MACHINE(pcms);
-
-    return x86ms->above_4g_mem_start + x86ms->above_4g_mem_size;
-}
-
-/*
- * AMD systems with an IOMMU have an additional hole close to the
- * 1Tb, which are special GPAs that cannot be DMA mapped. Depending
- * on kernel version, VFIO may or may not let you DMA map those ranges.
- * Starting Linux v5.4 we validate it, and can't create guests on AMD machines
- * with certain memory sizes. It's also wrong to use those IOVA ranges
- * in detriment of leading to IOMMU INVALID_DEVICE_REQUEST or worse.
- * The ranges reserved for Hyper-Transport are:
- *
- * FD_0000_0000h - FF_FFFF_FFFFh
- *
- * The ranges represent the following:
- *
- * Base Address   Top Address  Use
- *
- * FD_0000_0000h FD_F7FF_FFFFh Reserved interrupt address space
- * FD_F800_0000h FD_F8FF_FFFFh Interrupt/EOI IntCtl
- * FD_F900_0000h FD_F90F_FFFFh Legacy PIC IACK
- * FD_F910_0000h FD_F91F_FFFFh System Management
- * FD_F920_0000h FD_FAFF_FFFFh Reserved Page Tables
- * FD_FB00_0000h FD_FBFF_FFFFh Address Translation
- * FD_FC00_0000h FD_FDFF_FFFFh I/O Space
- * FD_FE00_0000h FD_FFFF_FFFFh Configuration
- * FE_0000_0000h FE_1FFF_FFFFh Extended Configuration/Device Messages
- * FE_2000_0000h FF_FFFF_FFFFh Reserved
- *
- * See AMD IOMMU spec, section 2.1.2 "IOMMU Logical Topology",
- * Table 3: Special Address Controls (GPA) for more information.
- */
-#define AMD_HT_START         0xfd00000000UL
-#define AMD_HT_END           0xffffffffffUL
-#define AMD_ABOVE_1TB_START  (AMD_HT_END + 1)
-#define AMD_HT_SIZE          (AMD_ABOVE_1TB_START - AMD_HT_START)
-
 void pc_memory_init(PCMachineState *pcms,
                     MemoryRegion *system_memory,
-                    MemoryRegion *rom_memory,
-                    uint64_t pci_hole64_size)
+                    MemoryRegion *rom_memory)
 {
     int linux_boot, i;
     MemoryRegion *option_rom_mr;
@@ -500,7 +457,6 @@ void pc_memory_init(PCMachineState *pcms,
      * hotplug, device memory, CXL, NVDIMM or 64-bit PCI hole logic.
      */
     assert(machine->ram_size == x86ms->below_4g_mem_size);
-    assert(x86ms->above_4g_mem_size == 0);
 
     linux_boot = (machine->kernel_filename != NULL);
 
@@ -541,17 +497,6 @@ void pc_memory_init(PCMachineState *pcms,
 
     /* Init ACPI memory hotplug IO base address (still read by ACPI/PM code) */
     pcms->memhp_io_base = ACPI_MEMORY_HOTPLUG_BASE;
-}
-
-/*
- * The 64bit pci hole starts after "above 4G RAM" and
- * potentially the space reserved for memory hotplug.
- */
-uint64_t pc_pci_hole64_start(void)
-{
-    PCMachineState *pcms = PC_MACHINE(qdev_get_machine());
-
-    return ROUND_UP(pc_above_4g_end(pcms), 1 * GiB);
 }
 
 DeviceState *pc_vga_init(ISABus *isa_bus, PCIBus *pci_bus)
@@ -965,41 +910,6 @@ static void pc_machine_set_smbios_ep(Object *obj, Visitor *v, const char *name,
     visit_type_SmbiosEntryPointType(v, name, &pcms->smbios_entry_point_type, errp);
 }
 
-static void pc_machine_get_max_ram_below_4g(Object *obj, Visitor *v,
-                                            const char *name, void *opaque,
-                                            Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(obj);
-    uint64_t value = pcms->max_ram_below_4g;
-
-    visit_type_size(v, name, &value, errp);
-}
-
-static void pc_machine_set_max_ram_below_4g(Object *obj, Visitor *v,
-                                            const char *name, void *opaque,
-                                            Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(obj);
-    uint64_t value;
-
-    if (!visit_type_size(v, name, &value, errp)) {
-        return;
-    }
-    if (value > 4 * GiB) {
-        error_setg(errp,
-                   "Machine option 'max-ram-below-4g=%"PRIu64
-                   "' expects size less than or equal to 4G", value);
-        return;
-    }
-
-    if (value < 1 * MiB) {
-        warn_report("Only %" PRIu64 " bytes of RAM below the 4GiB boundary,"
-                    "BIOS may not work with less than 1MiB", value);
-    }
-
-    pcms->max_ram_below_4g = value;
-}
-
 static void pc_machine_get_max_fw_size(Object *obj, Visitor *v,
                                        const char *name, void *opaque,
                                        Error **errp)
@@ -1052,7 +962,6 @@ static void pc_machine_initfn(Object *obj)
 #else
     pcms->vmport = ON_OFF_AUTO_OFF;
 #endif /* CONFIG_VMPORT */
-    pcms->max_ram_below_4g = 0; /* use default */
     pcms->smbios_entry_point_type = pcmc->default_smbios_ep_type;
     pcms->south_bridge = pcmc->default_south_bridge;
 
@@ -1117,9 +1026,6 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     pcmc->pci_enabled = true;
     pcmc->has_acpi_build = true;
     pcmc->smbios_defaults = true;
-    pcmc->gigabyte_align = true;
-    pcmc->has_reserved_memory = true;
-    pcmc->enforce_amd_1tb_hole = true;
     pcmc->isa_bios_alias = true;
     pcmc->kvmclock_create_always = true;
     x86mc->apic_xrupt_override = true;
@@ -1149,14 +1055,6 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     mc->default_cpus = 1;
     mc->max_cpus = 2;
     pcmc->default_smbios_ep_type = SMBIOS_ENTRY_POINT_TYPE_AUTO;
-
-    object_class_property_add(oc, PC_MACHINE_MAX_RAM_BELOW_4G, "size",
-                              &size_type_info,
-                              pc_machine_get_max_ram_below_4g,
-                              pc_machine_set_max_ram_below_4g,
-                              NULL, NULL);
-    object_class_property_set_description(oc, PC_MACHINE_MAX_RAM_BELOW_4G,
-        "Maximum ram below the 4G boundary (32bit boundary)");
 
     object_class_property_add_enum(oc, PC_MACHINE_VMPORT, "OnOffAuto",
                                    &OnOffAuto_type_info,
