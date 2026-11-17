@@ -190,29 +190,29 @@ separate sub-task (T13a..c), claim one:
 Every change: A/B numbers in WORKLOG + standard checks + CI green.
 
 
-* **T13d legacy XMM register caching - Status: PAUSED (Win64 register-pressure refinement pushed; Windows A/B result pending).**
+* **T13d legacy XMM register caching - Status: DONE 2026-11-18 (implementation and targeted Linux/Windows A/B measurements complete; no meaningful speedup demonstrated).**
   Initial implementation: `c272958`. `DisasContext` owns an EBB-temp cache for eligible
   legacy XMM register-only operations: lazy loads, dirty tracking, and flush/free barriers
   before non-cacheable instructions, exceptions, and TB exits. MMX, VEX/YMM, memory operands,
   and unsupported vector operations retain their existing paths. Eligible classes include
   packed integer arithmetic/compare/min-max/multiply, logical ops, immediate PSRLD, and the
   T04 shuffle/unpack/pack operations. `shuffletest.asm` adds a MOVD cache-barrier regression
-  case. Linux CI completed the 100M-iteration `sse2.asm` A/B benchmark against the pre-cache
+  case. Linux CI compared the same 100M-iteration `sse2.asm` image against the pre-cache
   artifact from run 44156398064 (median of 3 runs): 0.877822 s before, 0.872720 s after,
   +0.58% (1.006x), effectively near-neutral.
   Review of `tcg/x86_64/tcg-target.c.inc` showed that Win64 can allocate only XMM0-XMM4:
   XMM5 is reserved as scratch and XMM6-XMM15 are withheld under the Windows x64 ABI.
-  The translator now preflights each cacheable instruction's full operand set and flushes
+  The translator preflights each cacheable instruction's full operand set and flushes
   before exceeding five live cached guest XMM values, preventing an oversized cache from
-  forcing vector-register spills. Linux behavior is unchanged. Windows CI now compares the
+  forcing vector-register spills. Linux behavior is unchanged. Windows CI compared the
   pre-cache artifact from run 44156398064 with the capacity-aware build using the same
-  300M-iteration `sse2.asm` image (median of three runs). The first attempt failed before
-  producing timings because `bc` was unavailable and the current executable could not find
-  `libz-1.dll`; the runner now uses awk and explicitly adds the UCRT64 DLL directory to
-  `PATH`, with executable preflight checks. No valid Windows measurement exists yet.
-  Resume here: review the Windows A/B result and retain or revise the capacity limit based
-  on measurement. Do not extrapolate these microbenchmarks to broad SSE2 workloads or other
-  host CPUs.
+  300M-iteration `sse2.asm` image (median of three runs): 3.166927 s before, 3.132343 s
+  after, +1.09% (1.011x). Both executable preflights and all six benchmark runs succeeded.
+  The small positive deltas on shared CI runners are effectively near-neutral, not
+  demonstrated performance gains; they also do not establish a broad SSE2 improvement or
+  regression. Keep the cache and Win64 five-register pressure guard as implemented.
+  Any further optimization should first profile generated host code and use broader,
+  representative workloads rather than expanding the cache based on these microbenchmarks.
 
 ## T14 (P1) Threading model and thread pinning  -  Status: TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
