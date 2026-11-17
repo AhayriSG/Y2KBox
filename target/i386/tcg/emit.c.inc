@@ -41,6 +41,8 @@ typedef void (*SSEFunc_0_epppi)(TCGv_ptr env, TCGv_ptr reg_a, TCGv_ptr reg_b,
 typedef void (*SSEFunc_0_ppi)(TCGv_ptr reg_a, TCGv_ptr reg_b, TCGv_i32 val);
 typedef void (*SSEFunc_0_pppi)(TCGv_ptr reg_a, TCGv_ptr reg_b, TCGv_ptr reg_c,
                                TCGv_i32 val);
+typedef void (*SSEVecFunc_0_vvi)(TCGv_vec reg_a, TCGv_vec reg_b,
+                                     int64_t val);
 typedef void (*SSEFunc_0_eppt)(TCGv_ptr env, TCGv_ptr reg_a, TCGv_ptr reg_b,
                                TCGv val);
 typedef void (*SSEFunc_0_eppptit)(TCGv_ptr env, TCGv_ptr reg_a, TCGv_ptr reg_b,
@@ -1049,9 +1051,44 @@ static void gen_##uname(DisasContext *s, X86DecodedInsn *decode)                
                       gen_helper_##lname##_ymm);                                   \
 }
 
-UNARY_IMM_SSE(PSHUFD,     pshufd)
-UNARY_IMM_SSE(PSHUFHW,    pshufhw)
-UNARY_IMM_SSE(PSHUFLW,    pshuflw)
+static inline void gen_unary_imm_shuffle_sse(DisasContext *s,
+                                                       X86DecodedInsn *decode,
+                                                       SSEFunc_0_ppi ymm,
+                                                       SSEVecFunc_0_vvi xmm)
+{
+    if (!s->vex_l) {
+        TCGv_vec src = tcg_temp_new_vec(TCG_TYPE_V128);
+        TCGv_vec dst = tcg_temp_new_vec(TCG_TYPE_V128);
+
+        tcg_gen_ld_vec(src, OP_PTR1, 0);
+        xmm(dst, src, decode->immediate);
+        tcg_gen_st_vec(dst, OP_PTR0, 0);
+
+        tcg_temp_free_vec(dst);
+        tcg_temp_free_vec(src);
+    } else {
+        TCGv_i32 imm = tcg_constant8u_i32(decode->immediate);
+        ymm(OP_PTR0, OP_PTR1, imm);
+    }
+}
+
+static void gen_PSHUFD(DisasContext *s, X86DecodedInsn *decode)
+{
+    gen_unary_imm_shuffle_sse(s, decode, gen_helper_pshufd_ymm,
+                              tcg_gen_x86_pshufd_vec);
+}
+
+static void gen_PSHUFHW(DisasContext *s, X86DecodedInsn *decode)
+{
+    gen_unary_imm_shuffle_sse(s, decode, gen_helper_pshufhw_ymm,
+                              tcg_gen_x86_pshufhw_vec);
+}
+
+static void gen_PSHUFLW(DisasContext *s, X86DecodedInsn *decode)
+{
+    gen_unary_imm_shuffle_sse(s, decode, gen_helper_pshuflw_ymm,
+                              tcg_gen_x86_pshuflw_vec);
+}
 #define gen_helper_vpermq_xmm NULL
 UNARY_IMM_SSE(VPERMQ,      vpermq)
 UNARY_IMM_SSE(VPERMILPS_i, vpermilps_imm)
