@@ -3998,6 +3998,37 @@ static void tcg_out_vec_op(TCGContext *s, TCGOpcode opc,
     }
 }
 
+/*
+ * XP fork: expose the x86 immediate XMM shuffle opcodes to the guest
+ * translator.  These are V128-only operations; AVX YMM forms retain the
+ * existing helpers.
+ */
+static void tcg_gen_x86_shuffle_imm_vec(TCGOpcode opc, TCGv_vec r,
+                                        TCGv_vec a, int64_t imm)
+{
+    TCGType type = tcgv_vec_temp(r)->base_type;
+
+    tcg_debug_assert(type == TCG_TYPE_V128);
+    tcg_debug_assert(tcgv_vec_temp(a)->base_type >= type);
+    tcg_debug_assert(imm >= 0 && imm <= 255);
+    vec_gen_3(opc, type, MO_32, tcgv_vec_arg(r), tcgv_vec_arg(a), imm);
+}
+
+void tcg_gen_x86_pshufd_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
+{
+    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshufd_vec, r, a, imm);
+}
+
+void tcg_gen_x86_pshuflw_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
+{
+    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshuflw_vec, r, a, imm);
+}
+
+void tcg_gen_x86_pshufhw_vec(TCGv_vec r, TCGv_vec a, int64_t imm)
+{
+    tcg_gen_x86_shuffle_imm_vec(INDEX_op_x86_pshufhw_vec, r, a, imm);
+}
+
 static TCGConstraintSetIndex
 tcg_target_op_def(TCGOpcode op, TCGType type, unsigned flags)
 {
