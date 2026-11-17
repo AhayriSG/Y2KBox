@@ -206,10 +206,14 @@ idempotent (`git checkout` touched files first).
 - **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
   (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B performance work). Let GitHub Actions handle compilation, smoke tests and
   binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
-- **CI pipeline (`.github/workflows/build.yml`):** automatically runs `configure`, build, the SeaBIOS 2-vCPU boot check,
-  `vectest` (`xp/bench/vectest.asm`) and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for
-  every push, and uploads the compiled binaries as GitHub Actions Artifacts (`y2kbox-linux-x86_64`,
-  `y2kbox-windows-x86_64`: `qemu-system-i386[.exe]`, `qemu-img[.exe]`, `pc-bios/`, Windows runtime DLLs; run with `-L pc-bios`).
+- **CI pipeline (`.github/workflows/build.yml`):** automatically runs `configure`, build, the boot and SSE2 functional checks,
+  and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for every push. The Linux job also
+  runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run `44148654097`, builds
+  matching 300M-iteration PSHUFD and empty-loop images, takes the minimum of three runs for each image on the same
+  runner, subtracts the empty-loop controls, and reports net times and relative change. `xp/bench/run.sh` rejects
+  unexpected QEMU exit statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
+  Actions Artifacts (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`: `qemu-system-i386[.exe]`, `qemu-img[.exe]`,
+  `pc-bios/`, Windows runtime DLLs; run with `-L pc-bios`).
 - **CI & Codacy feedback loop (never poll after pushing):**
   - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`; also runs on
     `SessionStart` after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and
