@@ -8,8 +8,8 @@ Several AIs/humans may work at the same time. **Claim a task before starting**:
    If the push is rejected, somebody else pushed first: `git pull --rebase`, re-read
    this file, pick another task if yours was taken.
 3. Work on a branch `task/T05-short-name` (push it often - WIP must never be lost).
-   Merge to `main` only when the *Definition of done* is met and the standard checks
-   pass (HANDOFF.md section 7). Keep `main` always building.
+   Merge to `main` only when the *Definition of done* is met and CI is green
+   (HANDOFF.md section 7: do not build locally, do not poll CI; the hook reports it). Keep `main` always building.
 4. When done: set `Status: DONE <date> (commit <hash>)`, add a line to WORKLOG.md,
    update the README status table, push.
 5. **If you are about to run out of budget**: commit and push your branch, set the
@@ -95,7 +95,7 @@ Use the dead-code technique in HANDOFF 5b. Re-run the boot + vectest checks.
 GitHub Actions (`.github/workflows/build.yml`) builds and checks BOTH hosts natively: Linux (ubuntu-24.04)
 and Windows (MSYS2 UCRT64): configure, build `qemu-system-i386[.exe]` + `qemu-img[.exe]`, `-accel help`,
 boot + `xp/bench/vectest.asm` (prints OK on both). Windows needed `pc-bios/qemu-nsis.ico` restored (agent fix
-92dbf22). Keep CI green: check the Actions tab / API (`/repos/AhayriSG/Y2KBox/actions/runs`) after every push.
+92dbf22). Keep CI green: the `UserPromptSubmit` hook (`scripts/session_status.sh`) reports the HEAD run - never poll; fix failures first. CI also uploads binaries as Artifacts and runs `xp/bench/x87cmp.sh`.
 Follow-ups (not blocking): upload build artifacts; cache MSYS2 packages; add a Windows `vectest` timing run.
 
 ## T08 (P1) Boot Windows XP SP3 end to end  -  Status: TODO (needs an XP ISO from the owner)

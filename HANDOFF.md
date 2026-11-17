@@ -8,8 +8,7 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
 
 1. Read sections 1-2 below, then `TASKS.md`. Pick an unclaimed task (highest priority
    first) and **claim it by pushing** (protocol at the top of TASKS.md).
-2. Build and run the standard checks (section 7) BEFORE changing anything, so you know
-   the baseline is green.
+2. Do NOT build locally (section 7): the status hook / latest Actions run tells you whether the baseline is green.
 3. Work on a `task/Txx-name` branch, commit small, push often.
 4. Before you run out of budget: push, update TASKS.md (`PAUSED` + "Resume here"),
    append to WORKLOG.md (section 10 has the checklist).
@@ -185,6 +184,8 @@ boot/functional test after pruning - removing `efi-e1000.rom` broke the default 
 
 ## 6. Build and environment
 
+(Reference only: CI builds for you - see section 7. Build locally only for benchmarking / A-B performance work.)
+
     sudo apt install libfdt-dev libslirp-dev nasm pkg-config   # + glib2/pixman dev, python3
     pip install meson ninja tomli
     # subprojects/keycodemapdb: if gitlab.com is blocked, clone
@@ -198,22 +199,33 @@ Always do a FRESH configure after changing `meson_options.txt` / `default.mak` d
 or meson files (old build dirs keep old option values). Strip script `05` is not
 idempotent (`git checkout` touched files first).
 
-## 7. Standard checks ("green" = all pass; run after every change)
+## 7. Standard Checks & CI Verification (Token-Optimized)
 
-CI (`.github/workflows/build.yml`) runs configure+build+boot+vectest on Linux and Windows for every push;
-check it after pushing (Actions tab or `GET /repos/AhayriSG/Y2KBox/actions/runs`).
+- **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
+  (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B performance work). Let GitHub Actions handle compilation, smoke tests and
+  binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
+- **CI pipeline (`.github/workflows/build.yml`):** automatically runs `configure`, build, the SeaBIOS 2-vCPU boot check,
+  `vectest` (`xp/bench/vectest.asm`) and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for
+  every push, and uploads the compiled binaries as GitHub Actions Artifacts (`y2kbox-linux-x86_64`,
+  `y2kbox-windows-x86_64`: `qemu-system-i386[.exe]`, `qemu-img[.exe]`, `pc-bios/`, Windows runtime DLLs; run with `-L pc-bios`).
+- **CI & Codacy feedback loop (never poll after pushing):**
+  - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`; also runs on
+    `SessionStart` after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and
+    exits silently once the HEAD run is `completed` and reported (cache `/tmp/y2kbox_ci_checked_<sha>`).
+  - If `conclusion=failure`, inspect only the failed step (the hook prints job/step names and annotations; more detail via
+    the run URL or `gh run view <run_id> --log-failed`) and fix the regression before starting new feature work.
+  - **After pushing:** commit, push, and **finish your turn immediately**. Do not wait or poll for Actions or Codacy.
+- **Secrets:** `CODACY_API_TOKEN` (and optional `GITHUB_TOKEN`) come from the environment only, never from files.
+  `.claude/settings.local.json` and `.env*` are git-ignored. Codacy's API is not reachable from the Claude sandbox
+  network (allowlist), only from the owner's machine, so the Codacy half of the hook runs there.
+- **Manual reference (humans / benchmarking only)** - what the CI checks do:
 
-    ./qemu-system-i386 -accel help                       # only: tcg
-    # SeaBIOS boot, 2 vCPUs:
-    ./qemu-system-i386 -L pc-bios -machine pc -accel tcg -m 64 -smp 2 -display none \
-      -monitor none -serial none -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d
-        # expect "Found 2 cpu(s)" and "Booting from ..."
-    # memory-op functional test (build with: nasm -fbin xp/bench/vectest.asm -o vectest.img)
-    ./qemu-system-i386 -L pc-bios -machine pc -accel tcg -m 16 -smp 2 -display none \
-      -monitor none -serial none -no-reboot -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-      -drive file=vectest.img,format=raw,if=ide -chardev stdio,id=d \
-      -device isa-debugcon,iobase=0x402,chardev=d        # expect "OK"
-    # perf (A/B against a saved binary): xp/bench/run.sh
+      ./qemu-system-i386 -accel help                        # only: tcg
+      ./qemu-system-i386 -L pc-bios -accel tcg -smp 2 -display none -monitor none -serial none \
+        -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d     # "Found 2 cpu(s)", "Booting from ..."
+      nasm -fbin xp/bench/vectest.asm -o vectest.img   # run with isa-debug-exit + debugcon, expect "OK"
+      xp/bench/x87cmp.sh build 2000                    # all 30 operations identical
+      xp/bench/perf.py QEMU PCBIOS                     # performance (benchmark runs may build locally)
 
 ## 8. 3D research notes
 

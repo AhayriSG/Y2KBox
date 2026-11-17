@@ -6,6 +6,7 @@ A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 **x86-64-v3 (or newer) hosts**, using **TCG / MTTCG only** (no KVM/WHPX/HVF/Xen).
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
 (qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small wxWidgets launcher.
+[![build](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml/badge.svg)](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
 
 **Contributors / LLMs: read [HANDOFF.md](HANDOFF.md) first**, then pick work from
 [TASKS.md](TASKS.md) (claim by pushing) and log what you did in [WORKLOG.md](WORKLOG.md).
@@ -16,6 +17,11 @@ Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 ma
 
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
+
+## Download
+
+Every green CI run uploads Linux and Windows builds (`qemu-system-i386[.exe]`, `qemu-img[.exe]`, `pc-bios/`,
+Windows runtime DLLs) as Actions Artifacts: open the latest run on the Actions tab. Run with `-L pc-bios`.
 
 ## Development status
 

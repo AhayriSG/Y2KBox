@@ -32,6 +32,19 @@ jobs:
             -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee vectest.out || true
           grep -q '^OK' vectest.out
           ./qemu-img create -f qcow2 t.qcow2 1G
+      - name: x87 differential test (host fast path vs softfloat)
+        run: bash xp/bench/x87cmp.sh build 2000
+      - name: Package
+        run: |
+          mkdir dist
+          cp build/qemu-system-i386 build/qemu-img dist/
+          cp -rL build/pc-bios dist/pc-bios
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: y2kbox-linux-x86_64
+          path: dist
+          retention-days: 14
 
   windows:
     runs-on: windows-latest
@@ -84,3 +97,17 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vectest.img,format=raw,if=ide \
             -chardev file,id=d,path=vectest.out -device isa-debugcon,iobase=0x402,chardev=d || true
           cat vectest.out; grep -q '^OK' vectest.out
+      - name: x87 differential test (host fast path vs softfloat)
+        run: bash xp/bench/x87cmp.sh build 2000
+      - name: Package (binaries, pc-bios, MSYS2 runtime DLLs)
+        run: |
+          mkdir dist
+          cp build/qemu-system-i386.exe build/qemu-img.exe dist/
+          cp -rL build/pc-bios dist/pc-bios
+          for exe in dist/*.exe; do ldd "$exe" | grep -i '/ucrt64/' | awk '{print $3}'; done | sort -u | xargs -I{} cp {} dist/
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: y2kbox-windows-x86_64
+          path: dist
+          retention-days: 14
