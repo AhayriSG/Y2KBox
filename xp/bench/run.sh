@@ -1,8 +1,8 @@
 #!/bin/bash
-# usage: run.sh image [env assignments...]   -> prints wall seconds (min of N)
+# usage: run.sh image [env assignments...]   -> prints median wall seconds (N runs)
 Q=${Q:-./build/qemu-system-i386}
 img=$1; shift
-N=${N:-3}; best=999999
+N=${N:-3}; times=()
 err=$(mktemp)
 trap 'rm -f "$err"' EXIT
 for i in $(seq "$N"); do
@@ -19,6 +19,6 @@ for i in $(seq "$N"); do
     exit 1
   fi
   t=$(echo "$e - $s" | bc -l)
-  best=$(echo "if ($t < $best) $t else $best" | bc -l)
+  times+=( "$t" )
 done
 printf "%.6f\n" "$best"
