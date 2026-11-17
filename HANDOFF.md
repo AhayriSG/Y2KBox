@@ -55,7 +55,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   booted yet** (T08, needs an XP ISO).
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
-* T13d legacy XMM register caching began in `c272958`; Linux CI measured +0.58% (1.006x), effectively near-neutral. A Win64 refinement caps live cached guest XMM values at five. The first Windows A/B attempt produced no timings (`bc` missing; current executable could not find `libz-1.dll`); CI now uses awk timing arithmetic and adds the UCRT64 runtime directory to `PATH`. Valid Windows measurement pending.
+* T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
 
@@ -125,9 +125,14 @@ removed by T01.
   instructions, exceptions, and TB exits. MMX, VEX/YMM, memory operands, and unsupported vector
   operations keep their previous paths. The cache covers packed integer arithmetic, compare,
   min/max/multiply, logical operations, immediate PSRLD, and the T04 shuffle/unpack/pack family.
-  The shuffle functional test adds a MOVD barrier case. Linux CI compares the same 100M-iteration
-  `sse2.asm` image against the pre-cache artifact (run 44156398064), median of three runs.
-  CI feedback and the benchmark result are pending; do not infer a speedup from the implementation.
+  The shuffle functional test adds a MOVD barrier case. Linux CI compared the same 100M-iteration
+  `sse2.asm` image against the pre-cache artifact (run 44156398064), median of three runs:
+  0.877822 s before vs 0.872720 s after (+0.58%, 1.006x). The Win64 refinement caps live
+  cached guest XMM values at five and preflights each instruction's complete operand set.
+  Windows CI compared the same 300M-iteration image against the pre-cache artifact (median
+  of three runs): 3.166927 s before vs 3.132343 s after (+1.09%, 1.011x); both executable
+  preflights and all six benchmark runs succeeded. Both host results are effectively
+  near-neutral shared-runner measurements, not demonstrated performance improvements.
 * The load hotspot (fixed, below): int-pair load + two 64-bit env stores + 128-bit
   reload = store-forwarding stall (~15-20 cycles).
 
@@ -226,7 +231,7 @@ idempotent (`git checkout` touched files first).
   and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for every push. The Linux job also
   runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run
   44148654097, builds one 300M-iteration PSHUFD image, and runs it five times with each binary
-  on the same runner. It also compares the same 100M-iteration `sse2.asm` workload against the pre-XMM-cache artifact from run 44156398064 (median of three runs) to measure T13d. Owner-supplied Linux result: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x); treat as near-neutral shared-runner noise, not a meaningful demonstrated speedup. Windows build/functional confirmation remains separate. `xp/bench/run.sh` reports the median wall time; the workflow compares
+  on the same runner. It also compares the same 100M-iteration `sse2.asm` workload against the pre-XMM-cache artifact from run 44156398064 (median of three runs) to measure T13d. Linux result: 0.877822 s before vs 0.872720 s after (+0.58%, 1.006x). Windows result: 3.166927 s before vs 3.132343 s after (+1.09%, 1.011x), using the same 300M-iteration image and three-run medians. Both are near-neutral shared-runner measurements, not demonstrated speedups. `xp/bench/run.sh` reports the median wall time; the workflow compares
   raw medians without subtracting an empty-loop control (TCG translation-block and dispatch
   costs make that a different workload, not an additive overhead). Earlier negative net times
   were invalid. The script rejects unexpected QEMU exit statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
