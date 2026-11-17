@@ -87,3 +87,24 @@ compares raw median runtimes. It no longer builds or runs the empty-loop image,
 and should take materially less time than the 1B-iteration, four-series benchmark.
 No performance result is recorded yet. Per HANDOFF section 7, do not poll CI
 after pushing.
+
+
+## Session 4 (ChatGPT), 2026-11-18 - T04 Linux benchmark result
+
+The owner supplied the successful Linux CI benchmark output (AMD EPYC 9V74,
+Ubuntu 24.04 Azure runner; same 300M-iteration PSHUFD image; five runs per
+binary; median timing):
+
+| build | median |
+|-------|-------:|
+| Pre-T04 baseline (`c5ef98e`) | 3.083675 s |
+| T04 | 3.166926 s |
+
+Relative change: -2.70% (0.974x; T04 was 0.083251 s slower in this run).
+This isolated microbenchmark does not show a speedup. The small difference from
+one shared CI runner is not conclusive evidence of a general regression.
+Recorded the result in `xp/bench/README.md`, `TASKS.md`, and `HANDOFF.md`.
+Linux benchmark result is accepted; Windows CI is only needed for the existing
+cross-platform build/functional validation, not to complete this Linux timing.
+T04's inline lowering and functional coverage are complete; broader SSE2
+performance is outside this isolated PSHUFD measurement.
