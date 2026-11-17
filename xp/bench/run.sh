@@ -21,4 +21,4 @@ for i in $(seq "$N"); do
   t=$(echo "$e - $s" | bc -l)
   times+=( "$t" )
 done
-printf "%s\\n" "${times[@]}" | sort -n | awk '{ a[NR]=$1 } END { if (NR % 2) printf "%.6f\\n", a[(NR+1)/2]; else printf "%.6f\\n", (a[NR/2]+a[NR/2+1])/2 }'
+printf "%s\n" "${times[@]}" | sort -n | awk '{ a[NR]=$1 } END { if (NR % 2) printf "%.6f\n", a[(NR+1)/2]; else printf "%.6f\n", (a[NR/2]+a[NR/2+1])/2 }'
