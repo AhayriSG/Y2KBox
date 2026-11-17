@@ -55,6 +55,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   booted yet** (T08, needs an XP ISO).
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
+* T13d legacy XMM register caching is implemented in commit `c272958` but remains pending CI review and the Linux A/B benchmark; no performance result is recorded yet.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
 
@@ -118,6 +119,15 @@ removed by T01.
   measured 3.083675 s baseline vs 3.166926 s T04 (median of five, AMD EPYC 9V74;
   -2.70%, 0.974x). This does not show a speedup; the small difference from one shared
   runner is not conclusive evidence of a regression. See xp/bench/README.md.
+* T13d (implementation commit `c272958`): eligible legacy XMM register-only operations now
+  keep values in TCG EBB vector temporaries across consecutive instructions. The cache lazily
+  loads guest XMM state, tracks dirty registers, and flushes/frees before non-cacheable
+  instructions, exceptions, and TB exits. MMX, VEX/YMM, memory operands, and unsupported vector
+  operations keep their previous paths. The cache covers packed integer arithmetic, compare,
+  min/max/multiply, logical operations, immediate PSRLD, and the T04 shuffle/unpack/pack family.
+  The shuffle functional test adds a MOVD barrier case. Linux CI compares the same 100M-iteration
+  `sse2.asm` image against the pre-cache artifact (run 44156398064), median of three runs.
+  CI feedback and the benchmark result are pending; do not infer a speedup from the implementation.
 * The load hotspot (fixed, below): int-pair load + two 64-bit env stores + 128-bit
   reload = store-forwarding stall (~15-20 cycles).
 
@@ -216,7 +226,7 @@ idempotent (`git checkout` touched files first).
   and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for every push. The Linux job also
   runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run
   44148654097, builds one 300M-iteration PSHUFD image, and runs it five times with each binary
-  on the same runner. `xp/bench/run.sh` reports the median wall time; the workflow compares
+  on the same runner. It also compares the same 100M-iteration `sse2.asm` workload against the pre-XMM-cache artifact from run 44156398064 (median of three runs) to measure T13d. The T13d result is pending and must not be inferred before CI output is reviewed. `xp/bench/run.sh` reports the median wall time; the workflow compares
   raw medians without subtracting an empty-loop control (TCG translation-block and dispatch
   costs make that a different workload, not an additive overhead). Earlier negative net times
   were invalid. The script rejects unexpected QEMU exit statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
