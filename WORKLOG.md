@@ -124,3 +124,32 @@ median of three runs. No local build or test was run, and no CI result was
 polled. The benchmark result is not yet known; no speedup or regression is
 claimed. Next: review the owner's CI feedback and Linux benchmark output,
 fix any failures, then interpret the measured result.
+
+## Session 6 (ChatGPT), 2026-11-18 - T13d Linux benchmark result and README cleanup
+
+The owner supplied the successful Linux CI A/B output for the same
+100M-iteration `sse2.asm` workload, comparing the pre-cache artifact from
+run 44156398064 with the XMM-cache build (median of three runs):
+
+| build | median |
+|-------|-------:|
+| Before XMM cache | 0.877822 s |
+| After XMM cache | 0.872720 s |
+
+Relative change: +0.58% (1.006x; 0.005102 s faster). This is a marginal
+difference on a shared CI runner and should be treated as effectively
+near-neutral, not as a meaningful demonstrated speedup or a broad performance
+conclusion. Windows build/functional confirmation remains separate.
+
+| commit | change |
+|--------|--------|
+| cfb4411 | Recorded the T13d Linux result and updated its task status to paused pending Windows CI confirmation. |
+| ff09ac7 | Removed the redundant Development status section from the public README, as requested by the owner. |
+| 445300a | Recorded the T13d timing and interpretation in `xp/bench/README.md`. |
+| e54dca9 | Updated HANDOFF.md with the benchmark result and current validation state. |
+
+No local build/test was run and no CI was polled. Next: review Windows CI
+functional/build feedback when supplied. Given the near-neutral result, do not
+claim that XMM caching materially improves performance; if pursuing further
+speedups, profile the generated host code and target the measured register
+state traffic rather than expanding the cache blindly.
