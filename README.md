@@ -73,6 +73,6 @@ select the CD-ROM from the boot menu.
 A wxWidgets front end is planned (T12). Linux binaries require the usual shared
 libraries from your distribution, including glib2, pixman, libslirp, libfdt, and SDL2.
 
-| Windows XP SP3 - Desktop |
+| Windows XP SP3 (ACPI PC HAL) - Desktop |
 | :--------------------------------------------------------------------------------------------: |
 | <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="500" alt="Windows XP SP3 desktop running in Y2KBox"> |
