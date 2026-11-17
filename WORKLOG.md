@@ -61,3 +61,5 @@ PSHUFD images plus matching empty-loop controls, and prints net times and relati
 change. **No performance result has been assumed or recorded yet**; the benchmark
 must complete successfully and its output must be reviewed before T04 is marked
 done. Per HANDOFF section 7, do not poll Actions after the push.
+
+| (this commit) | T04 benchmark measurement correction (2026-11-17): successful CI runs showed that the 300M-iteration PSHUFD and empty-loop measurements were rounded to 0.01 s before subtraction, yielding 0.00 s or negative net times. These are invalid measurements, not evidence of a speedup or regression. Increased the loop to 1B iterations, raised the sample count from 3 to 5, retained six decimal places through subtraction, and made CI fail explicitly if either net time is non-positive. The valid A/B result is still pending. |

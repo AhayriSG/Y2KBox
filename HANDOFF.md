@@ -211,10 +211,11 @@ idempotent (`git checkout` touched files first).
   binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
 - **CI pipeline (`.github/workflows/build.yml`):** automatically runs `configure`, build, the boot and SSE2 functional checks,
   and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for every push. The Linux job also
-  runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run `44148654097`, builds
-  matching 300M-iteration PSHUFD and empty-loop images, takes the minimum of three runs for each image on the same
-  runner, subtracts the empty-loop controls, and reports net times and relative change. `xp/bench/run.sh` rejects
-  unexpected QEMU exit statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
+  runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run
+  44148654097, builds matching 1B-iteration PSHUFD and empty-loop images, takes the minimum of five runs for each
+  image on the same runner, subtracts the empty-loop controls, and reports six-decimal net times and relative
+  change. It fails if either net measurement is non-positive. `xp/bench/run.sh` rejects unexpected QEMU exit
+  statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
   Actions Artifacts (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`: `qemu-system-i386[.exe]`, `qemu-img[.exe]`,
   `pc-bios/`, Windows runtime DLLs; run with `-L pc-bios`).
 - **CI & Codacy feedback loop (never poll after pushing):**

@@ -85,9 +85,11 @@ CI validation: PASS on Linux and Windows (run 44156398064); both
 `shuffletest.asm` and `packunpacktest.asm` print `OK` on both hosts.
 The Linux CI workflow now downloads the pre-T04 baseline artifact (run
 44148654097) and measures baseline/current PSHUFD plus matched empty-loop controls
-on the same runner (300M iterations, minimum of 3 runs each). The runner rejects
-unexpected QEMU exit codes, timeouts, and stderr output. Benchmark automation is
-wired into CI; result validation and recording remain pending.
+on the same runner (1B iterations, minimum of 5 runs each, six-decimal timing output).
+The initial 300M/two-decimal measurements were below useful resolution and produced
+non-positive net times; they are invalid, not a performance result. The runner rejects
+unexpected QEMU exit codes, timeouts, stderr output, and non-positive net measurements.
+Benchmark automation is wired into CI; valid result review and recording remain pending.
 
 ## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: TODO
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.

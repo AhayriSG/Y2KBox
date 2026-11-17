@@ -21,4 +21,4 @@ for i in $(seq "$N"); do
   t=$(echo "$e - $s" | bc -l)
   best=$(echo "if ($t < $best) $t else $best" | bc -l)
 done
-printf "%.2f\n" "$best"
+printf "%.6f\n" "$best"

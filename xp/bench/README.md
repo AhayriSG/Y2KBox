@@ -37,13 +37,13 @@ PSHUFD/PSHUFLW/PSHUFHW/PUNPCK*/PACK*/SHUFPS; keeping hot XMM regs in host regs.
 `pshufd.asm` runs a dependent register-form `PSHUFD xmm,xmm,imm8` loop.
 Build an instruction and empty-loop control with the same iteration count:
 
-    nasm -fbin -DLOOPS=300000000 pshufd.asm -o pshufd.img
+    nasm -fbin -DLOOPS=1000000000 pshufd.asm -o pshufd.img
     nasm -fbin -DLOOPS=300000000 -DEMPTY pshufd.asm -o empty.img
     Q=build/qemu-system-i386 PCBIOS=build/pc-bios ./run.sh pshufd.img
     Q=build/qemu-system-i386 PCBIOS=build/pc-bios ./run.sh empty.img
 
-Use the minimum of at least three runs for each image and subtract the empty-loop
-time. Keep the host, QEMU build, CPU affinity, and iteration count identical
+Use the minimum of five runs for each image and subtract the empty-loop
+time. `run.sh` prints six decimal places. Keep the host, QEMU build, CPU affinity, and iteration count identical
 when comparing revisions. This isolates the guest instruction loop but is not
 a substitute for a broader SSE2 workload benchmark.
 
