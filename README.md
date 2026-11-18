@@ -10,7 +10,7 @@
 </div>
 
 A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
-**x86-64-v3 (or newer) hosts**, with **Linux KVM support** (preferred on KVM-capable hosts) and **Windows TCG / MTTCG only**. Linux builds retain TCG as a fallback and for testing; Windows builds do not include a hardware-accelerator path. TCG performance work is primarily aimed at Windows.
+**x86-64-v3 (or newer) hosts**, with **Linux KVM required** and **Windows TCG / MTTCG only**. Linux users must enable KVM and have access to `/dev/kvm` before running Y2KBox; there is no supported Linux TCG runtime fallback. TCG performance work is exclusively aimed at Windows.
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
 (qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small wxWidgets launcher.
 
