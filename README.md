@@ -25,7 +25,7 @@ Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 
-## Download
+## Download & Usage
 
 Every green CI run uploads Linux and Windows builds as Actions Artifacts. Open the
 [latest successful run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
@@ -68,14 +68,15 @@ it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonl
 select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso)
-
-A wxWidgets front end is planned (T12). `vmvga` (VMware SVGA II + SVGA3D, with
+<br/>- If you experience mouse cursor issues, or graphical glitches in certain games, drop the hardware acceleration level down by one notch in the Windows XP guest: right-click the Windows XP desktop and select Properties. Navigate to Settings > Advanced > Troubleshoot.
+<br/>- Currently, the VMware SVGA II device is hardcoded to 32MB of dedicated VRAM. (Note: This will be increased to 512MB in an upcoming update).
+<br/>- A wxWidgets front end is planned (T12). `vmvga` (VMware SVGA II + SVGA3D, with
 `vgabios-vmware.bin`) is the default display device. Linux binaries require the
 usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
 
-| Windows XP SP3 Desktop (ACPI PC HAL) | VMware SVGA II (Experimental) | Joint Operations: Typhoon Rising 1.4.3.0
+| Windows XP SP3 Desktop (ACPI PC HAL)<br/>VMware SVGA II (Experimental) | F1 Challenge '99-'02 | Joint Operations: Typhoon Rising 1.4.3.0
 | :---: | :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="310" alt="Windows XP SP3 desktop running in Y2KBox"> | <img src="https://github.com/user-attachments/assets/c36efbb4-8e7e-457c-b253-115691552d9f" width="310" alt="VMware SVGA II in Y2KBox (Experimental)"> | <img src="https://github.com/user-attachments/assets/70f54da1-c64d-41ed-975f-5ea3da77173f" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising in Y2KBox">
+| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="310" alt="Windows XP SP3 desktop running in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/c36efbb4-8e7e-457c-b253-115691552d9f" width="310" alt="VMware SVGA II in Y2KBox (Experimental)"> | <img src="https://github.com/user-attachments/assets/ee1ba790-3550-4cbe-a479-358a126f7378" width="310" alt="VMware SVGA II and F1 Challenge '99-'02 in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/034245a2-0ba9-4eb8-80d0-b4a3779c543e" width="310" alt="VMware SVGA II and F1 Challenge '99-'02  in Y2KBox"> | <img src="https://github.com/user-attachments/assets/59ad794a-ad31-49a6-a209-9beaef453098" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising  in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/70f54da1-c64d-41ed-975f-5ea3da77173f" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising in Y2KBox">
 
