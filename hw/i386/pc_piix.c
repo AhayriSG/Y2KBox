@@ -242,7 +242,7 @@ static void pc_i440fx_machine_options(MachineClass *m)
     m->family = "pc_piix";
     m->desc = "Standard PC (i440FX + PIIX, 1996)";
     m->default_machine_opts = "firmware=bios-256k.bin";
-    m->default_display = "std";
+    m->default_display = "vmware";
     m->default_nic = "e1000";
     m->no_floppy = !module_object_class_by_name(TYPE_ISA_FDC);
     m->no_parallel = !module_object_class_by_name(TYPE_ISA_PARALLEL);

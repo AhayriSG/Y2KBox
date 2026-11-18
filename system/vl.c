@@ -966,7 +966,7 @@ static const VGAInterfaceInfo vga_interfaces[VGA_TYPE_MAX] = {
     [VGA_VMWARE] = {
         .opt_name = "vmware",
         .name = "VMWare SVGA",
-        .class_names = { "vmware-svga" },
+        .class_names = { "vmvga", "vmware-svga" },
     },
     [VGA_VIRTIO] = {
         .opt_name = "virtio",
@@ -1027,6 +1027,8 @@ get_default_vga_model(const MachineClass *machine_class)
         return "cirrus";
     } else if (vga_interface_available(VGA_STD)) {
         return "std";
+    } else if (vga_interface_available(VGA_VMWARE)) {
+        return "vmware";
     }
 
     return NULL;
@@ -1380,6 +1382,7 @@ static void qemu_setup_display(void)
         dpy.type = DISPLAY_TYPE_NONE;
     }
 
+    display_backend_active = (dpy.type != DISPLAY_TYPE_NONE) || (display_remote > 0);
     qemu_display_early_init(&dpy);
 }
 

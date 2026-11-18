@@ -128,33 +128,45 @@ Install to a qcow2 disk (`qemu-img create -f qcow2`), IDE CD-ROM, floppy; measur
 fix whatever breaks (ACPI HAL choice, SMP/APIC, TPR patching via kvmvapic option ROM,
 RTC/PIT timing). Record the working command line in HANDOFF.
 
-## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: TODO
+## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: PAUSED (draft ready for CI & XP guest verification)
 PRIMARY 3D plan (owner proposal 2026-11-14, evaluated and agreed; see HANDOFF 8a).
 Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for QEMU 11.1.x: device
 `vmvga`, SVGA3D vgpu9/vgpu10/vgpu11, DXVK-based rendering, `hw/i386/vmport.c`).
-* Overlay its `hw/display/vmware_vga*.c` + `hw/display/include/*` and `hw/i386/vmport.*` onto our tree
-  (replaces the stock `vmware_vga.c`/`vmport.c`); fix meson/Kconfig hooks; re-enable `CONFIG_VMPORT`
-  and the vmware display device in `default.mak` (both are OFF now; `hw/i386/meson.build` has an
-  empty `CONFIG_VMPORT` stub from the dead-source pass); build with the 3D backend initially DISABLED
-  to get the 2D device + backdoor working first; keep it building on Linux and Windows CI.
-* **TCG backdoor fix (required, tiny):** in TCG a ring-3 `in/out` with CPL>IOPL goes through
-  `gen_check_io` -> `helper_check_io` (`target/i386/tcg/system/seg_helper.c`) and raises #GP unless the TSS
-  I/O bitmap allows the port - exactly the failure the README describes for KVM, so the VMware driver's
-  user-mode part would disable 3D. Exempt the backdoor ports (0x5658 and 0x5659) from the check when the
-  vmport device is enabled (a global flag set by the device). No host kernel/module setting is needed.
-  Verify with a ring-3 test program or the real driver.
-* Make `vmvga` the default and only display device; keep the 2D path fully working without 3D.
-* DoD: Linux+Windows CI green; device present; backdoor exemption in place; XP guest (T08) loads the
-  VMware SVGA driver (VMware Tools 10.0.12, SVGA driver 12.01.08) at 1024x768x32 with 2D acceleration.
+* **Draft implemented (needs CI verification on push + XP guest test in T08):**
+  * Overlaid `hw/display/vmware_vga*.c`, `hw/display/include/*`, and `hw/i386/vmport.{c,-vmvga.h}`;
+    restored `hw/i386/vmmouse.c` and `pc-bios/vgabios-vmware.bin` from `35a2e66`.
+  * Wired `hw/display/meson.build`, `hw/i386/meson.build`, `pc-bios/meson.build`, `hw/pci/pci.c`
+    (`VGA_VMWARE` -> `"vmvga"`), `hw/i386/pc_piix.c` (`m->default_display = "vmware"`), and
+    `system/vl.c` (`VGA_VMWARE` accepts `"vmvga"` and `"vmware-svga"`).
+  * Set `vmvga` as the default and only display device in `configs/devices/i386-softmmu/default.mak`
+    (`CONFIG_VGA_CIRRUS=n`, `CONFIG_VGA_PCI=n`, `CONFIG_VMWARE_VGA=y`, `CONFIG_VMMOUSE=y`, `CONFIG_VMPORT=y`).
+  * Added `vmport_tcg_backdoor_enabled` (`system/globals.c`, `include/system/system.h`, set in
+    `vmport_realizefn`) and exempted ports `0x5658`/`0x5659` (`size <= 4`) in `HELPER(check_io)`
+    (`target/i386/tcg/system/seg_helper.c`).
+  * Added `xp/bench/vmport_ring3_test.asm` (CPL=3, IOPL=0, 0xFF TSS IOPB test for `0x5658`/`0x5659`
+    vs `#GP` on `0x565A`) and Linux/Windows CI checks (`-vga help`, `-device help`, `vmport_ring3_test.asm`).
+* **Resume here:** check Linux + Windows CI results from this push; once an XP ISO is available (T08),
+  verify XP loads VMware Tools 10.0.12 SVGA driver 12.01.08 at 1024x768x32 with 2D acceleration.
 
-## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: TODO
+## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: PAUSED (draft ready for CI & XP guest verification)
 qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
-* Linux: build/ship `dxvk-native` + Vulkan; software fallback (lavapipe) for GPU-less hosts.
-* **Windows (open question):** `dxvk-native` is a Linux-native build. On Windows we can likely skip it:
-  call the host Direct3D 9/11 directly, or use DXVK's Windows `d3d9.dll`/`d3d11.dll` next to our executable
-  to get Vulkan. Decide after reading `vmware_vga_dxvk*.c` (how tightly the device is tied to the
-  dxvk-native API/WSI). Also design the render thread(s) and the pinning interaction (T14).
-* DoD: SVGA3D rendering works on both hosts with the same guest driver; documented requirements.
+* **Draft implemented (needs CI verification on push + XP guest test in T08/T11):**
+  * **Linux:** `vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
+    or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols when QEMU has
+    already loaded SDL2 (`--enable-sdl`). `vmware_vga_dxvk.c` searches `<exec_dir>/`, `<exec_dir>/lib/`,
+    then system paths, pre-loading `libdxvk_dxgi.so.0` (`RTLD_GLOBAL`). CI installs `libvulkan1` +
+    `mesa-vulkan-drivers` (lavapipe), packages `dxvk-native` 3.1.1 `.so.0` libs into `dist/`, and runs
+    a headless 3D smoke check (`Y2KBOX_3D_HEADLESS=1` with `lvp_icd.x86_64.json`).
+  * **Windows (`CONFIG_WIN32`):** Uses a hidden `WS_POPUP | WS_DISABLED` `"STATIC"` `HWND` in
+    `vmware_vga_dxvk_wsi.c` (`"Win32"`) and `LoadLibraryA`/`GetProcAddress`/`FreeLibrary` on `"d3d9.dll"` /
+    `"d3d11.dll"` (supporting inbox Windows Direct3D with `D3D_DRIVER_TYPE_WARP` fallback on D3D11, as
+    well as optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`).
+  * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips DXVK/D3D init under `-display none`
+    (via `display_backend_active` in `system/vl.c`) unless `debug=on` or `Y2KBOX_3D_HEADLESS` is set,
+    preserving empty `stderr` and zero overhead in non-3D CI benchmarks.
+* **Resume here:** check Linux (including packaged `dxvk-native` + lavapipe smoke check) and Windows CI
+  builds from this push; validate live in-guest SVGA3D rendering on both hosts in T11; render-thread
+  pinning remains T14.
 
 ## T11 (P2) XP guest driver validation and D3D coverage  -  Status: TODO (needs T08 + T09)
 Install VMware Tools 10.0.12 (`winPreVista.iso`) in XP; verify SVGA3D D3D9 apps (e.g. DX9 sample/game);

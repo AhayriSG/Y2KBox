@@ -55,6 +55,11 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   booted yet** (T08, needs an XP ISO).
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
+* **T09 / T10 draft on `main`:** `qemu-vmvga` (`vmvga` SVGA II + SVGA3D, `vmmouse`, `vmport` with TCG Ring-3
+  `0x5658`/`0x5659` backdoor exemption) is wired as the default and only display device, with Linux
+  `dxvk-native` (`SDL2`/`SDL3` sealed-memfd WSI) and Windows `d3d9.dll`/`d3d11.dll` (hidden HWND WSI, WARP
+  fallback, optional DXVK Windows DLLs) host 3D backends. CI builds and smoke checks run on push; in-guest XP
+  driver/3D verification awaits T08/T11.
 * T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
@@ -271,16 +276,23 @@ idempotent (`git checkout` touched files first).
 * **XP is explicitly supported:** README table: Windows XP / Server 2003 -> SVGA driver 12.01.08 from VMware
   Tools 10.0.12 (`https://packages.vmware.com/tools/frozen/windows/winPreVista.iso`; also Win2000 11.09.01).
   Other rows (Vista 8.16.01, 7/8 8.17.03, 10/11 9.17.11, 95/98/ME 10.7.0) are not our concern.
-* **The KVM "backdoor" note applies to TCG too, but is easy for us.** The README says KVM raises #GP when the
-  driver's *user-mode* component touches the VMware backdoor port, so the driver disables 3D. In our TCG
-  code the same happens: `gen_check_io` (`target/i386/tcg/translate.c`) calls `helper_check_io`
-  (`target/i386/tcg/system/seg_helper.c`) when CPL > IOPL, and that raises #GP unless the TSS I/O bitmap
-  allows the port (as on bare metal). The fix is ours to make: exempt ports 0x5658/0x5659 from that check
-  when vmport is enabled. No host kernel module option is involved (that option is KVM-only). Part of T09.
-  (Analysis from reading the code; confirm with a ring-3 test or the real driver.)
-* Host-side questions for T10: on Windows we probably do not need `dxvk-native` (Linux-native build) - use
-  host Direct3D directly, or DXVK's Windows DLLs next to our executable; on Linux use dxvk-native + Vulkan
-  (lavapipe as GPU-less fallback). Check how tied `vmware_vga_dxvk*.c` is to the dxvk-native API/WSI.
+* **TCG Ring-3 backdoor exemption (T09 draft implemented):** `gen_check_io` -> `HELPER(check_io)`
+  (`target/i386/tcg/system/seg_helper.c`) now exempts `0x5658` and `0x5659` (`size <= 4`) when
+  `vmport_tcg_backdoor_enabled` is true (`hw/i386/vmport.c`). Verified on CI via `xp/bench/vmport_ring3_test.asm`
+  (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`); still needs real XP driver
+  verification in T08.
+* **Host-side 3D backends (T10 draft implemented):**
+  * **Linux:** `hw/display/vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
+    or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols if `--enable-sdl` already
+    loaded SDL2 (`RTLD_NOLOAD`). `vmware_vga_dxvk.c` searches `<exec_dir>/`, `<exec_dir>/lib/`, then system paths,
+    pre-loading `libdxvk_dxgi.so.0` (`RTLD_GLOBAL`). CI ships `dxvk-native` 3.1.1 `.so.0` libs into `dist/` and runs
+    a headless smoke check with `Y2KBOX_3D_HEADLESS=1` + `lvp_icd.x86_64.json` (lavapipe).
+  * **Windows (`CONFIG_WIN32`):** `vmware_vga_dxvk_wsi.c` creates a hidden `WS_POPUP | WS_DISABLED` `"STATIC"`
+    `HWND` (`"Win32"`), and `vmware_vga_dxvk.c` loads `"d3d9.dll"` / `"d3d11.dll"` via `LoadLibraryA` with
+    `D3D_DRIVER_TYPE_WARP` fallback on D3D11 (working with inbox Windows Direct3D or optional DXVK Windows DLLs
+    placed beside `qemu-system-i386.exe`).
+  * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips 3D backend init when `-display none` is
+    active (`display_backend_active == false`) unless `debug=on` or `Y2KBOX_3D_HEADLESS` is set.
 * Risks: single small upstream; D3D9 is the ceiling for the XP driver (no DX10+); D3D8 and DirectDraw/D3D7
   coverage unknown (T11: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
   under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.

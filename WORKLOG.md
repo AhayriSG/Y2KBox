@@ -275,3 +275,48 @@ VFIO compatibility property), a96a653 (record progress). No local build/test
 was run and no CI was polled. Next: map KVM and IOMMU call sites against the
 actual XP build configuration; preserve generic TCG memory translation and any
 shared interfaces still required by active code.
+## Session 12 (Gemini), 2026-11-18 - T09/T10 draft: qemu-vmvga overlay, TCG backdoor exemption, Linux/Windows 3D host backends
+Implemented a draft integration of **T09** (`qemu-vmvga` SVGA II / SVGA3D) and
+**T10** (Linux and Windows host 3D backends) directly on `main` for CI compilation
+and easy continuation:
+
+* **T09 (`qemu-vmvga` overlay + `vmvga` default + TCG backdoor exemption):**
+  * Overlaid `hw/display/vmware_vga*.c`, `hw/display/include/*`, and
+    `hw/i386/vmport.{c,-vmvga.h}` from `qemus/qemu-vmvga`; restored
+    `hw/i386/vmmouse.c` and `pc-bios/vgabios-vmware.bin` from `35a2e66`.
+  * Wired `hw/display/meson.build`, `hw/i386/meson.build`, `pc-bios/meson.build`,
+    `hw/pci/pci.c` (`VGA_VMWARE` -> `"vmvga"`), `hw/i386/pc_piix.c`
+    (`m->default_display = "vmware"`), and `system/vl.c` (`VGA_VMWARE` accepts
+    `"vmvga"` and `"vmware-svga"`).
+  * Set `vmvga` as the default and only display device in
+    `configs/devices/i386-softmmu/default.mak` (`CONFIG_VGA_CIRRUS=n`,
+    `CONFIG_VGA_PCI=n`, `CONFIG_ATI_VGA=n`, `CONFIG_BOCHS_DISPLAY=n`,
+    `CONFIG_VMWARE_VGA=y`, `CONFIG_VMMOUSE=y`, `CONFIG_VMPORT=y`).
+  * Added `vmport_tcg_backdoor_enabled` (`system/globals.c`, `include/system/system.h`,
+    enabled in `vmport_realizefn()`) and exempted `0x5658`/`0x5659` (`size <= 4`)
+    in `HELPER(check_io)` (`target/i386/tcg/system/seg_helper.c`).
+  * Added `xp/bench/vmport_ring3_test.asm` (CPL=3, IOPL=0, 0xFF TSS IOPB check)
+    and CI checks for `-vga help`, `-device help`, and `vmport_ring3_test.asm`.
+* **T10 (Linux `dxvk-native` + Windows D3D9/D3D11 host backends):**
+  * Updated `hw/display/vmware_vga_dxvk_wsi.{h,c}` and `hw/display/vmware_vga_dxvk.c`:
+    Linux synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`), or
+    `libSDL3.so.0` (`"SDL3"`, all 21 `wsi_platform_sdl3_funcs.h` symbols) if SDL2 is
+    already loaded (`RTLD_NOLOAD`) or `DXVK_WSI_DRIVER=SDL3`, and searches
+    `<exec_dir>/` and `<exec_dir>/lib/` before system paths (`libdxvk_dxgi.so.0`
+    pre-loaded with `RTLD_GLOBAL`). Windows (`CONFIG_WIN32`) uses a hidden
+    `WS_POPUP | WS_DISABLED` `"STATIC"` `HWND` (`"Win32"`) and `LoadLibraryA` on
+    `"d3d9.dll"` / `"d3d11.dll"` with `D3D_DRIVER_TYPE_WARP` fallback on D3D11.
+  * Guarded `vmsvga3d_renderer_realize()` in `hw/display/vmware_vga_3d.c` using
+    `display_backend_active` (`system/vl.c`) so `-display none` benchmarks skip
+    3D init unless `debug=on` or `Y2KBOX_3D_HEADLESS` is set.
+  * Updated `.github/workflows/build.yml`: Linux installs `libvulkan1` +
+    `mesa-vulkan-drivers`, bundles `dxvk-native` 3.1.1 `.so.0` files into
+    `dist/`, and runs a headless 3D smoke check (`Y2KBOX_3D_HEADLESS=1` with
+    `lvp_icd.x86_64.json`).
+* **Local checks vs CI/pending:** Locally verified `xp/bench/vmport_ring3_test.asm`
+  assembled size (<= 510 bytes via GNU `as`), a standalone `gcc` test loading the
+  SDL3 sealed-memfd shim with `dxvk-native` 3.1.1 (`Direct3DCreate9` /
+  `D3D11CreateDevice` resolution), and balanced `#if`/`#endif` depth in
+  `vmware_vga_dxvk.c`. Full Linux & Windows builds and smoke checks run in GitHub
+  Actions on push; XP guest validation (VMware Tools 10.0.12 SVGA driver
+  12.01.08 + live 3D apps) remains pending T08/T11.

@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build python3-pip libglib2.0-dev libpixman-1-dev \
-            libfdt-dev libslirp-dev libsdl2-dev nasm pkg-config bc
+            libfdt-dev libslirp-dev libsdl2-dev libvulkan1 mesa-vulkan-drivers nasm pkg-config bc
           pip install --break-system-packages meson tomli || pip install meson tomli
       - name: Configure
         run: |
@@ -30,6 +30,16 @@ jobs:
         run: |
           cd build
           ./qemu-system-i386 -accel help | tee accel.txt; grep -qx tcg accel.txt
+          ./qemu-system-i386 -vga help | tee vga.txt
+          grep -Eq '^vmware[[:space:]].*\(default\)$' vga.txt
+          ! grep -Eq '^(cirrus|std)[[:space:]]' vga.txt
+          ./qemu-system-i386 -device help | tee dev.txt
+          grep -qw 'vmvga' dev.txt
+          nasm -fbin ../xp/bench/vmport_ring3_test.asm -o vmport_ring3.img
+          ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vmport_ring3.img,format=raw,if=ide \
+            -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee vmport_ring3.out || true
+          grep -q '^OK' vmport_ring3.out
           nasm -fbin ../xp/bench/vectest.asm -o vectest.img
           ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vectest.img,format=raw,if=ide \
@@ -116,6 +126,11 @@ jobs:
             done
           fi
           rm -f dist/pc-bios/keymaps/meson.build
+          mkdir -p dxvk-native
+          curl -fsSL https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-native-3.1.1-steamrt-sniper.tar.gz \
+            | tar -xz -C dxvk-native
+          cp -L dxvk-native/usr/lib/libdxvk_dxgi.so.0 dxvk-native/usr/lib/libdxvk_d3d9.so.0 \
+            dxvk-native/usr/lib/libdxvk_d3d11.so.0 dist/
       - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
         run: |
           ls -la dist dist/pc-bios | head -40
@@ -125,6 +140,16 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=../build/vectest.img,format=raw,if=ide \
             -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d | tee ../packaged.out || true
           grep -q '^OK' ../packaged.out
+          if [ -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json ]; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          Y2KBOX_3D_HEADLESS=1 ./qemu-system-i386 -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=../build/vmport_ring3.img,format=raw,if=ide \
+            -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d \
+            > ../packaged3d.out 2> ../packaged3d.err || true
+          cat ../packaged3d.err
+          grep -q '^OK' ../packaged3d.out
+          ! grep -q 'DXVK initialization failed' ../packaged3d.err
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
@@ -178,6 +203,16 @@ jobs:
         run: |
           cd build
           ./qemu-system-i386.exe -accel help
+          ./qemu-system-i386.exe -vga help | tee vga.txt
+          grep -Eq '^vmware[[:space:]].*\(default\)$' vga.txt
+          ! grep -Eq '^(cirrus|std)[[:space:]]' vga.txt
+          ./qemu-system-i386.exe -device help | tee dev.txt
+          grep -qw 'vmvga' dev.txt
+          nasm -fbin ../xp/bench/vmport_ring3_test.asm -o vmport_ring3.img
+          ./qemu-system-i386.exe -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vmport_ring3.img,format=raw,if=ide \
+            -chardev file,id=d,path=vmport_ring3.out -device isa-debugcon,iobase=0x402,chardev=d || true
+          cat vmport_ring3.out; grep -q '^OK' vmport_ring3.out
           nasm -fbin ../xp/bench/vectest.asm -o vectest.img
           ./qemu-system-i386.exe -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vectest.img,format=raw,if=ide \

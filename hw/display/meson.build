@@ -20,7 +20,7 @@ system_ss.add(when: 'CONFIG_SSD0323', if_true: files())
 system_ss.add(when: 'CONFIG_VGA_PCI', if_true: files('vga-pci.c'))
 system_ss.add(when: 'CONFIG_VGA_ISA', if_true: files())
 system_ss.add(when: 'CONFIG_VGA_MMIO', if_true: files())
-system_ss.add(when: 'CONFIG_VMWARE_VGA', if_true: files())
+system_ss.add(when: 'CONFIG_VMWARE_VGA', if_true: files('vmware_vga.c'))
 system_ss.add(when: 'CONFIG_BOCHS_DISPLAY', if_true: files())
 
 system_ss.add(when: 'CONFIG_EXYNOS4', if_true: files())

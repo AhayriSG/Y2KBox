@@ -48,6 +48,8 @@ bool enable_cpu_pm;
 int autostart = 1;
 int vga_interface_type = VGA_NONE;
 bool vga_interface_created;
+bool vmport_tcg_backdoor_enabled;
+bool display_backend_active;
 int graphic_width;
 int graphic_height;
 int graphic_depth;

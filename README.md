@@ -31,9 +31,11 @@ Every green CI run uploads Linux and Windows builds as Actions Artifacts. Open t
 [latest successful run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
 and download the artifact for your platform:
 
-- Linux: `qemu-system-i386`, `qemu-img`, and `pc-bios/`.
+- Linux: `qemu-system-i386`, `qemu-img`, `pc-bios/`, and bundled `dxvk-native`
+  3.1.1 `.so.0` libraries for SVGA3D.
 - Windows: `qemu-system-i386.exe`, `qemu-img.exe`, `pc-bios/`, and the required
-  runtime DLLs, including SDL2.
+  runtime DLLs, including SDL2 (uses inbox Windows `d3d9.dll`/`d3d11.dll` by
+  default, or optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`).
 
 Extract the **entire** archive. Keep `pc-bios/` beside the executable; QEMU finds
 it automatically, so you do not need `-L` when launching from that directory.
@@ -56,7 +58,7 @@ Example Windows Command Prompt launch for a Windows XP VM:
 qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
   -name "Windows XP" ^
   -M pc,kernel-irqchip=off ^
-  -device VGA ^
+  -device vmvga ^
   -audiodev sdl,id=audio0,in.voices=0 ^
   -device AC97,audiodev=audio0 ^
   -nic user,model=rtl8139 ^
@@ -71,8 +73,11 @@ or remove that floppy drive if you do not need it. To boot an installer ISO, att
 it to the CD-ROM drive with `-drive file="xp.iso",media=cdrom,readonly=on` and
 select the CD-ROM from the boot menu.
 
-A wxWidgets front end is planned (T12). Linux binaries require the usual shared
-libraries from your distribution, including glib2, pixman, libslirp, libfdt, and SDL2.
+A wxWidgets front end is planned (T12). `vmvga` (VMware SVGA II + SVGA3D, with
+`vgabios-vmware.bin`) is the default display device. Linux binaries require the
+usual shared libraries from your distribution, including glib2, pixman,
+libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
+for lavapipe software fallback).
 
 | Windows XP SP3 (ACPI PC HAL) - Desktop |
 | :--------------------------------------------------------------------------------------------: |

@@ -2142,7 +2142,7 @@ PCIDevice *pci_vga_init(PCIBus *bus)
     case VGA_STD:
         return pci_create_simple(bus, -1, "VGA");
     case VGA_VMWARE:
-        return pci_create_simple(bus, -1, "vmware-svga");
+        return pci_create_simple(bus, -1, "vmvga");
     case VGA_VIRTIO:
         return pci_create_simple(bus, -1, "virtio-vga");
     case VGA_NONE:

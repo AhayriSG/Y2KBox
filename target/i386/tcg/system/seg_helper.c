@@ -26,6 +26,7 @@
 #include "accel/tcg/cpu-ldst.h"
 #include "tcg/helper-tcg.h"
 #include "../seg_helper.h"
+#include "system/system.h"
 
 void HELPER(syscall)(CPUX86State *env, int next_eip_addend)
 {
@@ -234,6 +235,12 @@ void HELPER(check_io)(CPUX86State *env, uint32_t addr, uint32_t size)
 {
     uintptr_t retaddr = GETPC();
     uint32_t io_offset, val, mask;
+
+    /* VMware SVGA/vmport guest driver issues ring-3 backdoor IN/OUT */
+    if (vmport_tcg_backdoor_enabled &&
+        (addr == 0x5658 || addr == 0x5659) && size <= 4) {
+        return;
+    }
 
     /* TSS must be a valid 32 bit one */
     if (!(env->tr.flags & DESC_P_MASK) ||

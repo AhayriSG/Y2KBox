@@ -7,6 +7,7 @@ blobs = [
   'vgabios.bin',
   'vgabios-cirrus.bin',
   'vgabios-stdvga.bin',
+  'vgabios-vmware.bin',
   'pxe-e1000.rom',
   'pxe-pcnet.rom',
   'pxe-rtl8139.rom',
