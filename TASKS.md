@@ -261,15 +261,20 @@ the required accelerator sources, x86 KVM hooks, machine/interrupt/clock integra
 headers, stubs, Meson/Kconfig wiring, and any shared dependencies removed with it.
 Do not blindly copy an upstream directory: compare against this fork's QEMU base and
 current XP-only configuration, then restore the smallest complete dependency set.
-* Linux: compile KVM support into the Linux binary; prefer KVM when the host exposes a
-  usable `/dev/kvm`. Keep TCG available as a fallback and for CI/testing; lack of KVM
-  on a Linux host must not make the binary or guest unusable.
+* Linux: compile and ship KVM as the only supported runtime accelerator. The launcher
+  must check that `/dev/kvm` exists and is accessible before starting QEMU; if not, show a
+  clear actionable error such as: `KVM is required. Enable hardware virtualization/KVM
+  and grant your user access to /dev/kvm, then restart Y2KBox.` Do not silently fall back
+  to TCG. Internal TCG-only Linux CI/development builds may exist, but are not product
+  builds and do not define a supported Linux runtime.
 * Windows: remain TCG/MTTCG-only. Do not restore WHPX or other Windows accelerators.
+* TCG performance work and optimization acceptance are Windows-only.
 * Preserve the XP machine/device constraints and keep IOMMU, SEV, SGX, TDX, and VFIO
   disabled unless a concrete dependency proves otherwise.
-* DoD: Linux CI builds with KVM support and reports KVM in accelerator availability;
-  a KVM-capable Linux host boots the XP guest with `-accel kvm`; a host without
-  `/dev/kvm` can still use TCG. Windows CI builds and runs the existing TCG checks
+* DoD: Linux product CI builds with KVM support and reports KVM as the only supported
+  runtime accelerator; a KVM-capable Linux host boots the XP guest with `-accel kvm`.
+  A Linux host without accessible `/dev/kvm` is rejected by the launcher with the
+  documented actionable prompt (no fallback). Windows CI builds and runs the TCG checks
   without KVM dependencies. Record exact host/guest validation and do not claim KVM
   runtime success from compile-only CI.
 
