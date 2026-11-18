@@ -30,15 +30,16 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     (decision and reasoning in section 4, Q1);
   - no user-facing QEMU flags (-smp, -cpu, -m, -machine ...). Our own front end will only
     ask for: qcow2 disk (made with qemu-img), floppy image, CD/ISO image.
-* **Host accelerator policy (owner decision, 2026-11-19):** Linux builds must retain KVM
-  accelerator support and prefer KVM on hosts where `/dev/kvm` is usable. Keep TCG available
-  on Linux as a fallback and for CI/testing; do not make Linux builds fail merely because
-  KVM is unavailable. Windows builds are TCG/MTTCG-only; WHPX and other Windows hardware
-  accelerator paths remain out of scope. The XP guest/device target is unchanged.
+* **Host accelerator policy (owner decision, 2026-11-19; clarified 2026-11-19):** Linux
+  builds and runtime are KVM-only. KVM is mandatory: if `/dev/kvm` is missing or inaccessible,
+  the launcher must stop with a clear message telling the user to enable KVM and grant the
+  required access. There is no supported Linux TCG runtime fallback. Windows builds are
+  TCG/MTTCG-only; WHPX and every other Windows hardware-accelerator path remain out of scope.
+  TCG performance development is exclusively for Windows. The XP guest/device target is unchanged.
   * **Important current-state correction:** the earlier accelerator-stripping pass removed
     the KVM implementation. KVM is not currently restored; task T17 tracks restoring the
     Linux KVM build/runtime path and its required dependencies. Until T17 is complete, do
-    not describe current Linux binaries as KVM-enabled.
+    not describe current Linux binaries as KVM-enabled or advertise Linux runtime support.
   * TCG optimization work is primarily targeted at the Windows execution path. Linux TCG
     remains useful as a fallback and for functional CI, but Linux TCG timings are not the
     primary performance target.
