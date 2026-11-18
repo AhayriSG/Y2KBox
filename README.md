@@ -46,12 +46,6 @@ Create a 10 GB QCOW2 disk image:
 qemu-img create -f qcow2 xp.qcow2 10G
 ```
 
-Check the build version:
-
-```console
-qemu-system-i386 --version
-```
-
 Example Windows Command Prompt launch for a Windows XP VM:
 
 ```bat
@@ -70,7 +64,7 @@ qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
 
 The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
 or remove that floppy drive if you do not need it. To boot an installer ISO, attach
-it to the CD-ROM drive with `-drive file="xp.iso",media=cdrom,readonly=on` and
+it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
 select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso)
