@@ -75,6 +75,7 @@ usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
 
-| Windows XP SP3 Desktop (ACPI PC HAL) | VMware SVGA II (Experimental) |
-| :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="300" alt="Windows XP SP3 desktop running in Y2KBox"> | <img src="https://github.com/user-attachments/assets/c36efbb4-8e7e-457c-b253-115691552d9f" width="300" alt="VMware SVGA II in Y2KBox (Experimental)"> |
+| Windows XP SP3 Desktop (ACPI PC HAL) | VMware SVGA II (Experimental) | Joint Operations: Typhoon Rising 1.4.3.0
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="310" alt="Windows XP SP3 desktop running in Y2KBox"> | <img src="https://github.com/user-attachments/assets/c36efbb4-8e7e-457c-b253-115691552d9f" width="310" alt="VMware SVGA II in Y2KBox (Experimental)"> | <img src="https://github.com/user-attachments/assets/70f54da1-c64d-41ed-975f-5ea3da77173f" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising in Y2KBox">
+
