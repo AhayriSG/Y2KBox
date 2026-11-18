@@ -388,3 +388,22 @@ KVM-specific code and the x86 IOMMU interface needed by its split-irqchip path
 were deliberately preserved. Linux KVM implementation restoration remains T17.
 No local build/test was run and no CI was polled; the owner supplies CI results.
 
+Session 15 (ChatGPT), 2026-11-19 - T17 Linux KVM restoration claimed
+
+Started T17 against the owner's exact upstream QEMU 11.1.90 base:
+9d7d057a558b9a1c232cea390b4481dd20d9c9ce.
+
+Initial tree comparison confirms the fork is missing the generic KVM accelerator
+implementation, x86 KVM target implementation, and PC KVM interrupt/clock device
+sources. The generic KVM public/internal headers and disabled stubs remain, and
+some x86 PC-machine KVM hooks were retained. The existing host configuration already
+recognizes CONFIG_KVM on Linux when the Meson kvm feature is allowed; Windows must
+continue selecting only the KVM stubs and TCG.
+
+The restore will be deliberately limited to x86-64 Linux KVM and the XP i440FX
+machine's needs. TDX, SEV, SGX, Xen emulation, VFIO, and IOMMU devices remain
+disabled. The generic x86 IOMMU interface is retained for the KVM MSI-routing
+implementation's no-IOMMU path. No source files have been changed yet; this entry
+records the claim and audit checkpoint. No local build/test was run and no CI was
+polled.
+
