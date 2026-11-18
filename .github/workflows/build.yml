@@ -23,13 +23,22 @@ jobs:
       - name: Configure
         run: |
           mkdir build && cd build
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl --enable-kvm
       - name: Build
         run: ninja -C build qemu-system-i386 qemu-img
       - name: Checks (boot + memory-op test + CPUID)
         run: |
           cd build
-          ./qemu-system-i386 -accel help | tee accel.txt; grep -qx tcg accel.txt
+          ./qemu-system-i386 -accel help | tee accel.txt
+          grep -qx kvm accel.txt
+          grep -qx tcg accel.txt
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            if ./qemu-system-i386 -L pc-bios -display none -monitor none -serial none -nodefaults -S > kvm-required.out 2>&1; then
+              echo "default launch unexpectedly succeeded without accessible /dev/kvm" >&2
+              exit 1
+            fi
+            grep -Fq 'You need KVM turned on for using Y2KBox on Linux.' kvm-required.out
+          fi
           ./qemu-system-i386 -vga help | tee vga.txt
           grep -Eq '^vmware[[:space:]].*\(default\)$' vga.txt
           ! grep -Eq '^(cirrus|std)[[:space:]]' vga.txt
@@ -202,7 +211,9 @@ jobs:
       - name: Checks
         run: |
           cd build
-          ./qemu-system-i386.exe -accel help
+          ./qemu-system-i386.exe -accel help | tee accel.txt
+          grep -qx tcg accel.txt
+          ! grep -qx kvm accel.txt
           ./qemu-system-i386.exe -vga help | tee vga.txt
           grep -Eq '^vmware[[:space:]].*\(default\)$' vga.txt
           ! grep -Eq '^(cirrus|std)[[:space:]]' vga.txt

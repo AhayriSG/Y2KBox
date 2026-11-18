@@ -2439,6 +2439,8 @@ static void configure_accelerators(const char *progname)
 {
     bool init_failed = false;
 
+    (void)progname;
+
     qemu_opts_foreach(qemu_find_opts("icount"),
                       do_configure_icount, NULL, &error_fatal);
 
@@ -2451,14 +2453,13 @@ static void configure_accelerators(const char *progname)
             bool have_kvm = accel_find("kvm");
             bool have_hvf = accel_find("hvf");
 
-            if (have_tcg && have_kvm) {
-                if (g_str_has_suffix(progname, "kvm")) {
-                    /* If the program name ends with "kvm", we prefer KVM */
-                    accelerators = "kvm:tcg";
-                } else {
-                    accelerators = "tcg:kvm";
-                }
-            } else if (have_kvm) {
+            /*
+             * Linux product builds include KVM and must not silently fall
+             * back to TCG if /dev/kvm is missing or inaccessible. Internal
+             * TCG-only Linux builds have no KVM accelerator and still select
+             * TCG here; Windows remains TCG-only.
+             */
+            if (have_kvm) {
                 accelerators = "kvm";
             } else if (have_tcg) {
                 accelerators = "tcg";

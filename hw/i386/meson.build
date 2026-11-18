@@ -39,4 +39,6 @@ i386_ss.add(when: 'CONFIG_TDX', if_true: files())
 
 
 
+subdir('kvm')
+
 hw_arch += {'i386': i386_ss}

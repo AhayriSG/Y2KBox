@@ -5,6 +5,7 @@ user_ss.add(files('accel-user.c'))
 subdir('tcg')
 if have_system
   subdir('qtest')
+  subdir('kvm')
   subdir('stubs')
 endif
 
