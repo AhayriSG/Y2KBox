@@ -324,3 +324,41 @@ and easy continuation:
   and smoke checks run in GitHub
   Actions on push; XP guest validation (VMware Tools 10.0.12 SVGA driver
   12.01.08 + live 3D apps) remains pending T08/T11.
+
+## Session 13 (ChatGPT), 2026-11-19 - Linux KVM / Windows TCG platform split
+
+The owner changed the accelerator policy: retain and restore KVM support for
+Linux builds, while keeping Windows builds TCG/MTTCG-only. TCG optimization
+work is now primarily targeted at Windows; Linux TCG remains available as a
+fallback and for functional CI/testing.
+
+Repository inspection corrected an earlier mistaken assumption in the
+conversation: KVM is not currently present as a working accelerator. The
+historical Session 1 stripping pass explicitly removed KVM along with other
+accelerators; current `accel/meson.build` wires TCG but not KVM, and
+`target/i386/kvm/kvm.c` is absent. The generic `include/system/kvm.h`
+header remains, but that alone does not constitute KVM support. Therefore,
+this policy requires a restoration task, not merely preserving code that is
+already working.
+
+Documentation updated:
+- README describes Linux KVM support as the intended platform policy and
+  Windows TCG-only execution, while retaining Linux TCG fallback/testing.
+- HANDOFF records the platform split and explicitly warns that KVM has not yet
+  been restored; do not describe current Linux binaries as KVM-enabled.
+- T05 no longer includes KVM removal; its scope is limited to IOMMU, SEV, SGX,
+  TDX, and VFIO cleanup while preserving KVM interfaces.
+- T13 is explicitly a Windows TCG performance effort; Linux TCG remains a
+  fallback/functional-CI path.
+- New T17 tracks restoring the complete Linux KVM accelerator dependency path
+  and validating it on a KVM-capable Linux host.
+
+No source code or build configuration was changed in this documentation pass.
+No local build/test was run and no CI was polled. Next: complete the remaining
+T05 non-KVM dependency audit, then claim T17 and restore Linux KVM support.
+
+Commits: README/HANDOFF policy updates are recorded in the immediately preceding
+documentation commits; T05/T13/T17 task-queue changes are in the preceding
+TASKS.md commit. This WORKLOG entry records the decision and implementation
+scope.
+
