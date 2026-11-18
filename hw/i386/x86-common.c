@@ -33,7 +33,6 @@
 #include "hw/i386/x86.h"
 #include "target/i386/cpu.h"
 #include "hw/rtc/mc146818rtc.h"
-#include "target/i386/sev.h"
 
 #include "hw/core/irq.h"
 #include "hw/core/loader.h"
@@ -42,7 +41,6 @@
 #include "standard-headers/asm-x86/bootparam.h"
 #include CONFIG_DEVICES
 #include "kvm/kvm_i386.h"
-#include "kvm/tdx.h"
 
 #include "exec/tswap.h"
 
@@ -639,7 +637,6 @@ void x86_load_linux(X86MachineState *x86ms,
     const char *initrd_filename = machine->initrd_filename;
     const char *dtb_filename = machine->dtb;
     const char *kernel_cmdline = machine->kernel_cmdline;
-    SevKernelLoaderContext sev_load_ctx = {};
 
     /* Align to 16 bytes as a paranoia measure */
     cmdline_size = (strlen(kernel_cmdline) + 16) & ~15;
@@ -790,8 +787,6 @@ void x86_load_linux(X86MachineState *x86ms,
     fw_cfg_add_i32(fw_cfg, FW_CFG_CMDLINE_ADDR, cmdline_addr);
     fw_cfg_add_i32(fw_cfg, FW_CFG_CMDLINE_SIZE, strlen(kernel_cmdline) + 1);
     fw_cfg_add_string(fw_cfg, FW_CFG_CMDLINE_DATA, kernel_cmdline);
-    sev_load_ctx.cmdline_data = (char *)kernel_cmdline;
-    sev_load_ctx.cmdline_size = strlen(kernel_cmdline) + 1;
 
     if (protocol >= 0x202) {
         stl_le_p(header + 0x228, cmdline_addr);
@@ -873,8 +868,6 @@ void x86_load_linux(X86MachineState *x86ms,
         fw_cfg_add_i32(fw_cfg, FW_CFG_INITRD_ADDR, initrd_addr);
         fw_cfg_add_i32(fw_cfg, FW_CFG_INITRD_SIZE, initrd_size);
         fw_cfg_add_bytes(fw_cfg, FW_CFG_INITRD_DATA, initrd_data, initrd_size);
-        sev_load_ctx.initrd_data = initrd_data;
-        sev_load_ctx.initrd_size = initrd_size;
 
         stl_le_p(header + 0x218, initrd_addr);
         stl_le_p(header + 0x21c, initrd_size);
@@ -948,14 +941,10 @@ void x86_load_linux(X86MachineState *x86ms,
     fw_cfg_add_i32(fw_cfg, FW_CFG_KERNEL_SIZE, kernel_size - setup_size);
     fw_cfg_add_bytes(fw_cfg, FW_CFG_KERNEL_DATA,
                      kernel + setup_size, kernel_size - setup_size);
-    sev_load_ctx.kernel_data = (char *)kernel + setup_size;
-    sev_load_ctx.kernel_size = kernel_size - setup_size;
 
     fw_cfg_add_i32(fw_cfg, FW_CFG_SETUP_ADDR, real_addr);
     fw_cfg_add_i32(fw_cfg, FW_CFG_SETUP_SIZE, setup_size);
     fw_cfg_add_bytes(fw_cfg, FW_CFG_SETUP_DATA, setup, setup_size);
-    sev_load_ctx.setup_data = (char *)setup;
-    sev_load_ctx.setup_size = setup_size;
 
     /* kernel without setup header patches */
     fw_cfg_add_file(fw_cfg, "etc/boot/kernel", kernel, kernel_size);
@@ -963,10 +952,6 @@ void x86_load_linux(X86MachineState *x86ms,
     if (machine->shim_filename) {
         load_image_to_fw_cfg_file(fw_cfg, "etc/boot/shim",
                                   machine->shim_filename);
-    }
-
-    if (sev_enabled()) {
-        sev_add_kernel_loader_hashes(&sev_load_ctx, &error_fatal);
     }
 
     option_rom[nb_option_roms].bootindex = 0;
@@ -1020,20 +1005,15 @@ static void load_bios_from_file(X86MachineState *x86ms, const char *bios_name,
     if (machine_require_guest_memfd_private(MACHINE(x86ms))) {
         memory_region_init_ram_guest_memfd_private(
             &x86ms->bios, NULL, "pc.bios", bios_size, &error_fatal);
-        if (is_tdx_vm()) {
-            tdx_set_tdvf_region(&x86ms->bios);
-        }
     } else {
         memory_region_init_ram(&x86ms->bios, NULL, "pc.bios",
                                bios_size, &error_fatal);
     }
-    if (sev_enabled() || is_tdx_vm()) {
+    if (machine_require_guest_memfd_private(MACHINE(x86ms))) {
         /*
-         * The concept of a "reset" simply doesn't exist for
-         * confidential computing guests, we have to destroy and
-         * re-launch them instead.  So there is no need to register
-         * the firmware as rom to properly re-initialize on reset.
-         * Just go for a straight file load instead.
+         * Firmware in guest-private memory cannot be registered as a ROM file.
+         * Load it directly into the private RAM and configure the firmware
+         * region for the confidential guest.
          */
         void *ptr = memory_region_get_ram_ptr(&x86ms->bios);
         load_image_size(filename, ptr, bios_size);

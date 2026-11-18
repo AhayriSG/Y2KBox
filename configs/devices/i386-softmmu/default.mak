@@ -12,9 +12,6 @@ CONFIG_ISAPC=n
 CONFIG_SEV=n
 CONFIG_SGX=n
 CONFIG_TDX=n
-CONFIG_VTD=n
-CONFIG_VTD_ACCEL=n
-CONFIG_AMD_IOMMU=n
 CONFIG_X86_FW_OVMF=n
 
 # ---- XP device set --------------------------------------------------------

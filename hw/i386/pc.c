@@ -43,7 +43,6 @@
 #include "system/system.h"
 #include "system/reset.h"
 #include "kvm/kvm_i386.h"
-#include "kvm/tdx.h"
 #include "qapi/qapi-type-infos-common.h"
 #include "qobject/qlist.h"
 #include "qemu/error-report.h"
@@ -51,15 +50,12 @@
 #include "hw/acpi/pc-hotplug.h"
 #include "acpi-build.h"
 #include "hw/usb/usb.h"
-#include "hw/i386/intel_iommu.h"
 #include "hw/net/ne2000-isa.h"
-#include "hw/virtio/virtio-iommu.h"
 #include "hw/virtio/virtio-md-pci.h"
 #include "hw/mem/memory-device.h"
 #include "hw/mem/sp-mem.h"
 #include "e820_memory_layout.h"
 #include "trace.h"
-#include "sev.h"
 #include CONFIG_DEVICES
 
 
@@ -721,28 +717,6 @@ static void pc_machine_device_pre_plug_cb(const HotplugHandler *hotplug_dev,
         x86_cpu_pre_plug(hotplug_dev, dev, errp);
     } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         virtio_md_pci_pre_plug(VIRTIO_MD_PCI(dev), MACHINE(hotplug_dev), errp);
-    } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI)) {
-        /* Declare the APIC range as the reserved MSI region */
-        char *resv_prop_str = g_strdup_printf("0xfee00000:0xfeefffff:%d",
-                                              VIRTIO_IOMMU_RESV_MEM_T_MSI);
-        QList *reserved_regions = qlist_new();
-
-        qlist_append_str(reserved_regions, resv_prop_str);
-        qdev_prop_set_array(dev, "reserved-regions", reserved_regions);
-
-        g_free(resv_prop_str);
-    }
-
-    if (object_dynamic_cast(OBJECT(dev), TYPE_X86_IOMMU_DEVICE) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI)) {
-        PCMachineState *pcms = PC_MACHINE(hotplug_dev);
-
-        if (pcms->iommu) {
-            error_setg(errp, "QEMU does not support multiple vIOMMUs "
-                       "for x86 yet.");
-            return;
-        }
-        pcms->iommu = dev;
     }
 }
 
@@ -787,9 +761,7 @@ static const HotplugHandler *pc_get_hotplug_handler(MachineState *machine,
                                                     DeviceState *dev)
 {
     if (object_dynamic_cast(OBJECT(dev), TYPE_CPU) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI) ||
-        object_dynamic_cast(OBJECT(dev), TYPE_X86_IOMMU_DEVICE)) {
+        object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_MD_PCI)) {
         return HOTPLUG_HANDLER(machine);
     }
 
@@ -878,21 +850,6 @@ static void pc_machine_set_i8042(Object *obj, bool value, Error **errp)
     pcms->i8042_enabled = value;
 }
 
-static bool pc_machine_get_default_bus_bypass_iommu(Object *obj, Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(obj);
-
-    return pcms->default_bus_bypass_iommu;
-}
-
-static void pc_machine_set_default_bus_bypass_iommu(Object *obj, bool value,
-                                                    Error **errp)
-{
-    PCMachineState *pcms = PC_MACHINE(obj);
-
-    pcms->default_bus_bypass_iommu = value;
-}
-
 static void pc_machine_get_smbios_ep(Object *obj, Visitor *v, const char *name,
                                      void *opaque, Error **errp)
 {
@@ -975,7 +932,6 @@ static void pc_machine_initfn(Object *obj)
     pcms->hpet_enabled = true;
 #endif
     pcms->fd_bootchk = true;
-    pcms->default_bus_bypass_iommu = false;
 
     pc_system_flash_create(pcms);
     pcms->pcspk = isa_new(TYPE_PC_SPEAKER);
@@ -1082,10 +1038,6 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
         pc_machine_get_i8042, pc_machine_set_i8042);
     object_class_property_set_description(oc, PC_MACHINE_I8042,
         "Enable/disable Intel 8042 PS/2 controller emulation");
-
-    object_class_property_add_bool(oc, "default-bus-bypass-iommu",
-        pc_machine_get_default_bus_bypass_iommu,
-        pc_machine_set_default_bus_bypass_iommu);
 
     object_class_property_add(oc, PC_MACHINE_MAX_FW_SIZE, "size",
                               &size_type_info,

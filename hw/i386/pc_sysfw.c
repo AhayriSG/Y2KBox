@@ -36,7 +36,6 @@
 #include "hw/core/qdev-properties.h"
 #include "hw/block/flash.h"
 #include "system/kvm.h"
-#include "target/i386/sev.h"
 
 #define FLASH_SECTOR_SIZE 4096
 
@@ -196,12 +195,6 @@ static void pc_system_flash_map(PCMachineState *pcms,
                 pc_isa_bios_init(pcms, &x86ms->isa_bios, rom_memory, flash_mem);
             }
 
-            /* Encrypt the pflash boot ROM */
-            if (sev_enabled()) {
-                flash_ptr = memory_region_get_ram_ptr(flash_mem);
-                flash_size = memory_region_size(flash_mem);
-                x86_firmware_configure(gpa, flash_ptr, flash_size);
-            }
         }
     }
 }

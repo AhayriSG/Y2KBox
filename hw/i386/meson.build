@@ -11,8 +11,6 @@ i386_ss.add(files(
 i386_ss.add(when: 'CONFIG_APIC', if_true: files('vapic.c'))
 i386_ss.add(when: 'CONFIG_X86_IOMMU', if_true: files(),
                                       if_false: files('x86-iommu-stub.c'))
-i386_ss.add(when: 'CONFIG_AMD_IOMMU', if_true: files(),
-                                      if_false: files('amd_iommu-stub.c'))
 i386_ss.add(when: 'CONFIG_I440FX', if_true: files('pc_piix.c'))
 i386_ss.add(when: 'CONFIG_ISAPC', if_true: files())
 i386_ss.add(when: 'CONFIG_MICROVM', if_true: files('x86-common.c'))

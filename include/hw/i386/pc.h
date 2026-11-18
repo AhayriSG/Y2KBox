@@ -8,7 +8,6 @@
 #include "hw/block/fdc.h"
 #include "hw/block/flash.h"
 #include "hw/i386/x86.h"
-#include "hw/i386/sgx-epc.h"
 
 #include "hw/core/hotplug.h"
 #include "qom/object.h"
@@ -35,7 +34,6 @@ typedef struct PCMachineState {
     I2CBus *smbus;
     PFlashCFI01 *flash[2];
     ISADevice *pcspk;
-    DeviceState *iommu;
     BusState *idebus[MAX_IDE_BUS];
 
     Object *alias_pcspk;
@@ -54,14 +52,12 @@ typedef struct PCMachineState {
     bool sata_enabled;
     bool hpet_enabled;
     bool i8042_enabled;
-    bool default_bus_bypass_iommu;
     bool fd_bootchk;
     uint64_t max_fw_size;
 
     /* ACPI Memory hotplug IO base address */
     hwaddr memhp_io_base;
 
-    SGXEPCState sgx_epc;
     CXLState cxl_devices_state;
 } PCMachineState;
 
@@ -126,35 +122,6 @@ void pc_acpi_smi_interrupt(void *opaque, int irq, int level);
 #define PCI_HOST_PROP_PCI_HOLE_END     "pci-hole-end"
 #define PCI_HOST_BELOW_4G_MEM_SIZE     "below-4g-mem-size"
 #define PCI_HOST_PROP_SMM_RANGES       "smm-ranges"
-
-typedef enum {
-    SEV_DESC_TYPE_UNDEF,
-    /* The section contains the region that must be validated by the VMM. */
-    SEV_DESC_TYPE_SNP_SEC_MEM,
-    /* The section contains the SNP secrets page */
-    SEV_DESC_TYPE_SNP_SECRETS,
-    /* The section contains address that can be used as a CPUID page */
-    SEV_DESC_TYPE_CPUID,
-    /* The section contains the region for kernel hashes for measured direct boot */
-    SEV_DESC_TYPE_SNP_KERNEL_HASHES = 0x10,
-
-} ovmf_sev_metadata_desc_type;
-
-typedef struct __attribute__((__packed__)) OvmfSevMetadataDesc {
-    uint32_t base;
-    uint32_t len;
-    ovmf_sev_metadata_desc_type type;
-} OvmfSevMetadataDesc;
-
-typedef struct __attribute__((__packed__)) OvmfSevMetadata {
-    uint8_t signature[4];
-    uint32_t len;
-    uint32_t version;
-    uint32_t num_desc;
-    OvmfSevMetadataDesc descs[];
-} OvmfSevMetadata;
-
-OvmfSevMetadata *pc_system_get_ovmf_sev_metadata_ptr(void);
 
 void pc_pci_as_mapping_init(MemoryRegion *system_memory,
                             MemoryRegion *pci_address_space);

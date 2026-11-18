@@ -364,3 +364,27 @@ documentation commits; T05/T13/T17 task-queue changes are in the preceding
 TASKS.md commit. This WORKLOG entry records the decision and implementation
 scope.
 
+Session 14 (ChatGPT), 2026-11-19 - T05 non-KVM call-site cleanup
+
+Completed the remaining XP PC-machine feature-hook audit while preserving KVM:
+- Removed PC-machine IOMMU hotplug state/callbacks and PC ACPI DMAR/IVRS
+  generation. Removed AMD-IOMMU stub wiring and Kconfig options. Kept the generic
+  x86 IOMMU stub/interface because the KVM split-irqchip IOAPIC path still uses
+  it as an optional notifier hook; this does not enable an XP IOMMU device.
+- Removed SEV kernel-loader hashing and pflash-encryption callsites, plus unused
+  OVMF SEV metadata declarations.
+- Removed TDX TDVF-region setup. The BIOS direct-load path now follows the
+  generic guest-private-memory requirement, rather than SEV/TDX-specific tests.
+  The disabled TDX predicate remains for shared CPU feature gating.
+- Removed SGX EPC ACPI DSDT/SRAT generation and PCMachineState EPC state. Kept
+  SGX CPUID/capability stubs because CPU feature masking still calls them.
+- The previously removed VFIO compatibility property remains absent; generic
+  VFIO implementation is not part of the XP device configuration.
+- Corrected HANDOFF.md so Linux TCG is not described as a product fallback:
+  Linux product runtime is KVM-only, Windows is TCG/MTTCG-only, and any
+  Linux TCG-only builds are internal CI/development builds only.
+
+KVM-specific code and the x86 IOMMU interface needed by its split-irqchip path
+were deliberately preserved. Linux KVM implementation restoration remains T17.
+No local build/test was run and no CI was polled; the owner supplies CI results.
+

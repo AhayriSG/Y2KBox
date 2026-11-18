@@ -96,20 +96,23 @@ measurable improvement; the small difference may be within shared-runner noise
 and is not evidence of a broad regression. Linux result recorded; Windows
 functional CI remains independent and is not required for this Linux measurement.
 
-## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO call-site leftovers (preserve KVM)  -  Status: CLAIMED by ChatGPT 2026-11-18
-Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
-38 files mention IOMMU, 25 SEV/confidential, 20 SGX, 17 VFIO. KVM is explicitly
-out of scope for removal: preserve its required interfaces/call sites and track
-restoration of the Linux accelerator separately in T17.
-* Progress: removed the redundant `pc_machine_init_sgx_epc()` call and its no-op stub/prototype;
-  removed unused PC/SGX header dependencies from the remaining SGX stubs. The
-  `PCMachineState.sgx_epc` field and `sgx-epc.h` include are retained: the ACPI builder still
-  reads that state, so removing the field would break the build. SGX capability-query/CPUID
-  stubs and the ACPI SRAT no-op remain because live code still references them. Also removed
-  the dead VFIO compatibility property and its `hw/vfio/types.h` include from `pc_piix.c`;
-  VFIO is disabled in the XP device config. Next: trace IOMMU / SEV / TDX and remaining
-  VFIO references against the XP build configuration. Do not remove KVM headers, shared
-  interfaces, or call sites as part of T05; KVM restoration is tracked separately by T17.
+## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO call-site leftovers (preserve KVM)  -  Status: DONE 2026-11-19
+* Removed PC-machine IOMMU hotplug registration/state and the PC ACPI DMAR/IVRS
+  table builders. Removed the unused AMD-IOMMU stub wiring and its Kconfig options.
+  The generic x86 IOMMU stub/interface remains because the KVM split-irqchip IOAPIC
+  path still consults it; with no IOMMU device configured it resolves to no device.
+* Removed SEV kernel-loader hash bookkeeping, the SEV pflash encryption hook, and
+  unused OVMF SEV metadata declarations. Generic CPU CPUID feature gating remains.
+* Removed the TDX TDVF-region setup call. Firmware in guest-private memory still
+  takes the direct-load path, now selected by
+  `machine_require_guest_memfd_private()` rather than SEV/TDX feature predicates.
+  The disabled `is_tdx_vm()` predicate remains only for shared CPU feature gating.
+* Removed SGX EPC DSDT/SRAT generation and the unused PCMachineState EPC member.
+  SGX capability-query and CPUID stubs remain to keep unsupported features masked.
+* Removed the dead VFIO compatibility property and its `hw/vfio/types.h` include
+  from `pc_piix.c`; VFIO remains disabled in the XP device configuration.
+* KVM implementation and required interfaces were not removed by T05. Linux KVM
+  restoration remains the separate T17 task.
 
 ## T06 (P1) Remaining pruning  -  Status: TODO
 Device models still compiled but unused, trace-events of deleted code, QAPI

@@ -40,11 +40,14 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     the KVM implementation. KVM is not currently restored; task T17 tracks restoring the
     Linux KVM build/runtime path and its required dependencies. Until T17 is complete, do
     not describe current Linux binaries as KVM-enabled or advertise Linux runtime support.
-  * TCG optimization work is primarily targeted at the Windows execution path. Linux TCG
-    remains useful as a fallback and for functional CI, but Linux TCG timings are not the
-    primary performance target.
-  * IOMMU, SEV, SGX, TDX, and VFIO are separate optional features and remain subject to
-    their own XP-build dependency audit; their removal must not remove KVM support.
+  * TCG optimization work is exclusively Windows-focused. Internal TCG-only Linux CI/
+    development builds may be used when useful, but they are not supported Linux product
+    builds or a runtime fallback; Linux TCG timings are not a product performance target.
+  * The XP PC machine does not expose IOMMU hotplug or emit DMAR/IVRS tables. The x86 IOMMU
+    stub/interface remains only for the generic KVM split-irqchip path. SEV kernel-loader and
+    pflash hooks, TDX TDVF setup, and SGX EPC ACPI state are removed. CPU feature-masking
+    stubs remain so unsupported features are not exposed. VFIO is disabled in the XP device
+    config; removing its dead machine compatibility hook must not remove generic KVM support.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,

@@ -4,10 +4,6 @@
 #include "qapi/qapi-commands-misc-i386.h"
 #include "qapi/error.h"
 
-void sgx_epc_build_srat(GArray *table_data)
-{
-}
-
 SgxInfo *qmp_query_sgx(Error **errp)
 {
     error_setg(errp, "SGX support is not compiled in");
