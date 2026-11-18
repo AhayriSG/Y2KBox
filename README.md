@@ -67,7 +67,7 @@ or remove that floppy drive if you do not need it. To boot an installer ISO, att
 it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
 select the CD-ROM from the boot menu.
 
-VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso)
+VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
 <br/>- If you experience mouse cursor issues, or graphical glitches in certain games, drop the hardware acceleration level down by one notch in the Windows XP guest: right-click the Windows XP desktop and select Properties. Navigate to Settings > Advanced > Troubleshoot.
 <br/>- Currently, the VMware SVGA II device is hardcoded to 32MB of dedicated VRAM. (Note: This will be increased to 512MB in an upcoming update).
 <br/>- A wxWidgets front end is planned (T12). `vmvga` (VMware SVGA II + SVGA3D, with
