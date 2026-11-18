@@ -1364,6 +1364,7 @@ _Static_assert(SVGA3D_NUM_SHADERTYPE_DX10 == 3,
 _Static_assert(SVGA3D_DX_MAX_CONSTBUFFERS == 16,
                "vGPU10 constant buffer slot count mismatch");
 
+#if defined(CONFIG_LINUX) && defined(__ELF__)
 typedef int32_t VMSVGA3DDxvkVkResult;
 typedef void *VMSVGA3DDxvkVkInstance;
 typedef void *VMSVGA3DDxvkVkPhysicalDevice;
@@ -1420,6 +1421,7 @@ typedef VMSVGA3DDxvkVkResult
         VMSVGA3DDxvkVkPhysicalDevice physical_device, const char *layer_name,
         uint32_t *property_count,
         VMSVGA3DDxvkVkExtensionProperties *properties);
+#endif
 
 typedef struct vmsvga3d_dxvk_present_parameters_s {
     uint32_t back_buffer_width;
@@ -1716,7 +1718,11 @@ static void *vmsvga3d_dxvk_get_symbol(void *library, const char *name)
 #if defined(CONFIG_LINUX) && defined(__ELF__)
     return dlsym(library, name);
 #elif defined(CONFIG_WIN32)
-    return (void *)GetProcAddress((HMODULE)library, name);
+    FARPROC proc = GetProcAddress((HMODULE)library, name);
+    void *addr = NULL;
+
+    memcpy(&addr, &proc, sizeof(addr));
+    return addr;
 #else
     (void)library;
     (void)name;

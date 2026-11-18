@@ -317,6 +317,10 @@ and easy continuation:
   assembled size (<= 510 bytes via GNU `as`), a standalone `gcc` test loading the
   SDL3 sealed-memfd shim with `dxvk-native` 3.1.1 (`Direct3DCreate9` /
   `D3D11CreateDevice` resolution), and balanced `#if`/`#endif` depth in
-  `vmware_vga_dxvk.c`. Full Linux & Windows builds and smoke checks run in GitHub
+  `vmware_vga_dxvk.c`, plus a `-DCONFIG_WIN32` `gcc -fsyntax-only` check across
+  `vmware_vga_dxvk_wsi.c` and `vmware_vga_dxvk.c` after scoping the Linux-only
+  Vulkan typedefs inside `#if defined(CONFIG_LINUX) && defined(__ELF__)` and
+  using `memcpy` for `GetProcAddress` conversion. Full Linux & Windows builds
+  and smoke checks run in GitHub
   Actions on push; XP guest validation (VMware Tools 10.0.12 SVGA driver
   12.01.08 + live 3D apps) remains pending T08/T11.
