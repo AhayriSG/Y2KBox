@@ -96,18 +96,20 @@ measurable improvement; the small difference may be within shared-runner noise
 and is not evidence of a broad regression. Linux result recorded; Windows
 functional CI remains independent and is not required for this Linux measurement.
 
-## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO / KVM call-site leftovers  -  Status: CLAIMED by ChatGPT 2026-11-18
+## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO call-site leftovers (preserve KVM)  -  Status: CLAIMED by ChatGPT 2026-11-18
 Technique: see `xp/strip/05-remove-xen.py` (brace-matching helpers) + fresh build.
-38 files mention IOMMU, 25 SEV/confidential, 20 SGX, 17 VFIO; also `kvm_enabled()`
-branches, `include/system/kvm*.h`, `kvm_i386.h`, `hw/i386/kvm/clock.h`.
+38 files mention IOMMU, 25 SEV/confidential, 20 SGX, 17 VFIO. KVM is explicitly
+out of scope for removal: preserve its required interfaces/call sites and track
+restoration of the Linux accelerator separately in T17.
 * Progress: removed the redundant `pc_machine_init_sgx_epc()` call and its no-op stub/prototype;
   removed unused PC/SGX header dependencies from the remaining SGX stubs. The
   `PCMachineState.sgx_epc` field and `sgx-epc.h` include are retained: the ACPI builder still
   reads that state, so removing the field would break the build. SGX capability-query/CPUID
   stubs and the ACPI SRAT no-op remain because live code still references them. Also removed
   the dead VFIO compatibility property and its `hw/vfio/types.h` include from `pc_piix.c`;
-  VFIO is disabled in the XP device config. Next: trace KVM and IOMMU references by
-  build/config dependency before removing shared call sites; avoid broad grep-based deletion.
+  VFIO is disabled in the XP device config. Next: trace IOMMU / SEV / TDX and remaining
+  VFIO references against the XP build configuration. Do not remove KVM headers, shared
+  interfaces, or call sites as part of T05; KVM restoration is tracked separately by T17.
 
 ## T06 (P1) Remaining pruning  -  Status: TODO
 Device models still compiled but unused, trace-events of deleted code, QAPI
@@ -183,8 +185,8 @@ T16c GL stream receiver/replay (consider a separate process).
 Our own executable + wxWidgets GUI (until then the dev display is `-display sdl`, SDL2 is built in CI, or `-display vnc`): pick a qcow2 disk (made with qemu-img), floppy image,
 CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
 
-## T13 (P1) TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
-Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
+## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
+Primary performance target: Windows TCG. Linux builds should use KVM where available; retain Linux TCG as a fallback and for functional CI/testing, but do not treat Linux TCG timing as the primary optimization target. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
 `xp/bench/README.md` for the baseline table). Measured hotspots, in priority order - each is a
 separate sub-task (T13a..c), claim one:
 * **T13a x87 - Status: PAUSED (part 1 DONE).** DONE: host-x87 fast path for fadd/fsub/fsubr/fmul/fdiv/fdivr
@@ -251,3 +253,23 @@ Re-enable `virtio-net`/`virtio-blk`/`virtio-scsi` (all virtio is OFF in `default
 may need restoring), install the drivers in an XP guest (needs T08) and benchmark disk/network vs
 IDE + RTL8139 under TCG. Only adopt if clearly faster. Verify what that floppy really contains
 for XP. RTL8139 stays the default.
+
+## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only  -  Status: TODO
+Earlier host/accelerator stripping removed the KVM implementation (see the historical
+Session 1 entry in WORKLOG.md). Restore the Linux KVM build and runtime path, including
+the required accelerator sources, x86 KVM hooks, machine/interrupt/clock integration,
+headers, stubs, Meson/Kconfig wiring, and any shared dependencies removed with it.
+Do not blindly copy an upstream directory: compare against this fork's QEMU base and
+current XP-only configuration, then restore the smallest complete dependency set.
+* Linux: compile KVM support into the Linux binary; prefer KVM when the host exposes a
+  usable `/dev/kvm`. Keep TCG available as a fallback and for CI/testing; lack of KVM
+  on a Linux host must not make the binary or guest unusable.
+* Windows: remain TCG/MTTCG-only. Do not restore WHPX or other Windows accelerators.
+* Preserve the XP machine/device constraints and keep IOMMU, SEV, SGX, TDX, and VFIO
+  disabled unless a concrete dependency proves otherwise.
+* DoD: Linux CI builds with KVM support and reports KVM in accelerator availability;
+  a KVM-capable Linux host boots the XP guest with `-accel kvm`; a host without
+  `/dev/kvm` can still use TCG. Windows CI builds and runs the existing TCG checks
+  without KVM dependencies. Record exact host/guest validation and do not claim KVM
+  runtime success from compile-only CI.
+
