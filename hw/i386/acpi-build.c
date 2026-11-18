@@ -1396,6 +1396,29 @@ build_srat(GArray *table_data, BIOSLinker *linker, MachineState *machine)
 /*
  * Insert DMAR scope for PCI bridges and endpoint devices
  */
+/*
+ * Windows ACPI Emulated Devices Table
+ * (Version 1.0 - April 6, 2009)
+ *
+ * Helpful to speed up Windows guests; ignored by other guests.
+ */
+static void
+build_waet(GArray *table_data, BIOSLinker *linker, const char *oem_id,
+           const char *oem_table_id)
+{
+    AcpiTable table = { .sig = "WAET", .rev = 1, .oem_id = oem_id,
+                        .oem_table_id = oem_table_id };
+
+    acpi_table_begin(&table, table_data);
+    /*
+     * Set "ACPI PM timer good" flag.  This tells Windows guests that the
+     * emulated ACPI PM timer can be read once for a reliable value, avoiding
+     * unnecessary VM exits caused by repeated reads.
+     */
+    build_append_int_noprefix(table_data, 1 << 1 /* ACPI PM timer good */, 4);
+    acpi_table_end(linker, &table);
+}
+
 typedef
 struct AcpiBuildState {
     /* Copy of table in RAM (for patching). */
