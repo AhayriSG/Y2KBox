@@ -257,13 +257,21 @@ may need restoring), install the drivers in an XP guest (needs T08) and benchmar
 IDE + RTL8139 under TCG. Only adopt if clearly faster. Verify what that floppy really contains
 for XP. RTL8139 stays the default.
 
-## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only  -  Status: TODO
+## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only  -  Status: CLAIMED by ChatGPT 2026-11-19
 Earlier host/accelerator stripping removed the KVM implementation (see the historical
 Session 1 entry in WORKLOG.md). Restore the Linux KVM build and runtime path, including
 the required accelerator sources, x86 KVM hooks, machine/interrupt/clock integration,
 headers, stubs, Meson/Kconfig wiring, and any shared dependencies removed with it.
 Do not blindly copy an upstream directory: compare against this fork's QEMU base and
 current XP-only configuration, then restore the smallest complete dependency set.
+
+Resume here (2026-11-19): The current fork still has the KVM headers and disabled
+stubs, and retains several x86 machine call sites, but the KVM accelerator sources,
+x86 KVM implementation, and KVM machine device sources are absent. The QEMU 11.1.90
+baseline confirms the minimal x86 path centers on accel/kvm, target/i386/kvm, and
+hw/i386/kvm. The KVM x86 source also includes TDX/SEV/Xen paths; keep TDX/SEV disabled
+and do not restore Xen emulation. Next audit exact source dependencies and Windows
+stub linkage before restoring the Linux-only build wiring.
 * Linux: compile and ship KVM as the only supported runtime accelerator. The launcher
   must check that `/dev/kvm` exists and is accessible before starting QEMU; if not, show a
   clear actionable error such as: `KVM is required. Enable hardware virtualization/KVM
