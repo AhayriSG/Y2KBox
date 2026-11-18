@@ -327,10 +327,12 @@ and easy continuation:
 
 ## Session 13 (ChatGPT), 2026-11-19 - Linux KVM / Windows TCG platform split
 
-The owner changed the accelerator policy: retain and restore KVM support for
-Linux builds, while keeping Windows builds TCG/MTTCG-only. TCG optimization
-work is now primarily targeted at Windows; Linux TCG remains available as a
-fallback and for functional CI/testing.
+The owner clarified the accelerator policy: Linux is KVM-only at product
+runtime, with no TCG fallback. If `/dev/kvm` is missing or inaccessible, the
+launcher must stop and tell the user that KVM must be enabled and access granted.
+Windows is TCG/MTTCG-only. TCG performance work is exclusively Windows-focused.
+Internal TCG-only Linux CI/development builds may be used when useful, but they
+are not supported Linux product builds.
 
 Repository inspection corrected an earlier mistaken assumption in the
 conversation: KVM is not currently present as a working accelerator. The
@@ -342,14 +344,14 @@ this policy requires a restoration task, not merely preserving code that is
 already working.
 
 Documentation updated:
-- README describes Linux KVM support as the intended platform policy and
-  Windows TCG-only execution, while retaining Linux TCG fallback/testing.
-- HANDOFF records the platform split and explicitly warns that KVM has not yet
-  been restored; do not describe current Linux binaries as KVM-enabled.
+- README states Linux KVM is mandatory with no supported Linux TCG fallback;
+  Windows is TCG-only and TCG optimization is Windows-focused.
+- HANDOFF records mandatory Linux KVM, the required launcher error when KVM is
+  unavailable, and the warning that KVM has not yet been restored.
 - T05 no longer includes KVM removal; its scope is limited to IOMMU, SEV, SGX,
   TDX, and VFIO cleanup while preserving KVM interfaces.
-- T13 is explicitly a Windows TCG performance effort; Linux TCG remains a
-  fallback/functional-CI path.
+- T13 is explicitly a Windows-only TCG performance effort; Linux TCG is not a
+  supported product runtime.
 - New T17 tracks restoring the complete Linux KVM accelerator dependency path
   and validating it on a KVM-capable Linux host.
 
