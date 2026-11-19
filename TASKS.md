@@ -295,3 +295,28 @@ validation on a KVM-capable Linux host remains outstanding.
   without KVM dependencies. Record exact host/guest validation and do not claim KVM
   runtime success from compile-only CI.
 
+
+## T18 (P2) Evaluate Windows TCG virtual-memory backend APIs  -  Status: TODO
+Investigate whether Windows guest-memory allocation, reservation, mapping, or remapping
+is a measurable cost in the Windows TCG execution path before implementing a new
+backend. Candidate APIs include `VirtualAlloc2` and `MapViewOfFile3` (Windows 10
+version 1803+), particularly their address requirements and placeholder reservation /
+replacement support. These APIs provide more control over virtual address-space layout;
+they are not assumed to make translated guest instruction execution faster.
+
+* **Profile first:** use representative TCG workloads and generated-host-code / runtime
+  profiling to determine whether guest-memory allocation, mapping, remapping, TLB/page
+  behavior, or address-space layout is a material bottleneck. Separate startup/setup
+  costs from steady-state guest execution.
+* **Prototype only if justified:** compare a narrowly scoped Windows implementation
+  against the existing memory path. Preserve the current implementation as a fallback
+  until the new path's compatibility and reliability are established.
+* **Benchmark:** use repeatable A/B measurements across memory-intensive and
+  representative end-to-end workloads; include startup and memory-footprint effects.
+  Do not accept the change based solely on API novelty or synthetic allocation timings.
+* **Decision gate:** if profiling does not identify a relevant bottleneck, leave the
+  existing backend unchanged and close/defer this task without implementation.
+* **OS policy:** Windows 10 1803+ is the encouraged technical baseline documented in
+  README.md, not an unconditional requirement introduced by this task. Do not raise
+  the formal minimum OS version without a separate compatibility decision.
+* **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.

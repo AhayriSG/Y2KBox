@@ -502,3 +502,17 @@ for NV3/NV4 and its limited, untested NV1x/Celsius support. It is a research
 reference, not an emulator component.
 
 No source code or build configuration changed. No local build/test was run.
+
+
+## Session 20 (ChatGPT), 2026-11-19 - Queue Windows TCG virtual-memory backend investigation
+
+Added T18 as a P2 research/optimization task for evaluating Windows
+`VirtualAlloc2` and `MapViewOfFile3` in a possible TCG guest-memory backend.
+The task is explicitly profiling-first: identify a measurable allocation,
+reservation, mapping, remapping, or address-space-layout bottleneck before
+prototyping. It requires A/B measurements against the existing path and allows
+the task to be deferred without implementation if profiling finds no relevant
+bottleneck. It does not raise the formal Windows minimum beyond the README's
+1803+ encouraged baseline and applies only to Windows TCG; Linux remains KVM-only.
+
+No source code or build configuration changed. No local build/test was run.
