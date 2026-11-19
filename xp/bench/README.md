@@ -151,3 +151,13 @@ Baseline (2026-11-14, sandbox, xp-p4 CPU, TCG, 1 vCPU), net ns per iteration:
 | **x87add** | fld m64; fmul m64; faddp | **72** | ~24 ns per x87 insn |
 | **x87div** | fld; fdiv; fsqrt; faddp | **157** | |
 | x87trig | fld; fsin; faddp | 84 | |
+
+
+## CI benchmark policy (current)
+
+Performance A/B benchmarks run on Windows CI only, because Windows TCG is
+the supported TCG product runtime and the sole TCG optimization target. Linux
+CI remains responsible for compiling the Linux KVM build and running its
+functional checks; it does not run TCG performance benchmarks. The historical
+Linux measurements above are retained as records of earlier experiments, not
+as an ongoing CI requirement.

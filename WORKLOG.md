@@ -407,3 +407,28 @@ implementation's no-IOMMU path. No source files have been changed yet; this entr
 records the claim and audit checkpoint. No local build/test was run and no CI was
 polled.
 
+
+
+## Session 16 (ChatGPT), 2026-11-19 - Restore KVM nested state; Windows TDX stub portability; CI benchmark split
+
+Owner-provided CI logs and GitHub Actions job logs identified two independent
+compile blockers on the prior revision:
+- Linux: target/i386/machine.c migration and nested-state code referenced
+  CPUX86State.nested_state, but the Xen stripping script had removed the
+  entire CONFIG_KVM block along with Xen-only members. Restored the KVM
+  pointer field under CONFIG_KVM and narrowed the script's deletion range
+  to the Xen vCPU members only.
+- Windows: target/i386/kvm/tdx.h unconditionally included Linux's
+  linux/kvm.h, which is unavailable in the Windows/MSYS2 build. The disabled
+  TDX stub only needs an incomplete struct kvm_run pointer type, so the header
+  now forward-declares it instead of importing the Linux UAPI header. TDX
+  remains unsupported.
+
+Also removed the Linux T04/T13 performance A/B benchmark steps and their
+baseline-artifact downloads from GitHub Actions. Linux CI retains its KVM build,
+accelerator policy checks, functional tests, x87 differential test, packaging,
+and smoke tests. Windows CI retains the TCG performance benchmark. Historical
+Linux benchmark results remain documented, but are no longer ongoing CI work.
+
+No local builds/tests were run. The CI failures were diagnosed from the
+owner-supplied logs and GitHub Actions job logs; the changes await the next CI run.

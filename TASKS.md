@@ -189,7 +189,7 @@ Our own executable + wxWidgets GUI (until then the dev display is `-display sdl`
 CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
 
 ## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
-Primary performance target: Windows TCG. Linux builds should use KVM where available; retain Linux TCG as a fallback and for functional CI/testing, but do not treat Linux TCG timing as the primary optimization target. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
+Primary performance target: Windows TCG. Linux product runtime is KVM-only, with no TCG fallback. TCG optimization and performance A/B benchmarks are Windows-only; Linux CI performs KVM build and functional validation. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
 `xp/bench/README.md` for the baseline table). Measured hotspots, in priority order - each is a
 separate sub-task (T13a..c), claim one:
 * **T13a x87 - Status: PAUSED (part 1 DONE).** DONE: host-x87 fast path for fadd/fsub/fsubr/fmul/fdiv/fdivr

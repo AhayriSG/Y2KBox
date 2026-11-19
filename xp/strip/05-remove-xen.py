@@ -199,7 +199,7 @@ def drop_qapi(s, name, p=''):
 # ---- target/i386
 p = 'target/i386/cpu.h'; s = rd(p)
 s = drop_lines(s, '#define XEN_NR_VIRQS 24\n\n', p)
-s = drop_between(s, '#if defined(CONFIG_KVM)\n    struct kvm_nested_state *nested_state;', '    QemuMutex xen_timers_lock;\n#endif\n', p)
+s = drop_between(s, '    MemoryRegion *xen_vcpu_info_mr;', '    QemuMutex xen_timers_lock;\n', p)  # Keep KVM nested_state; remove only Xen vCPU state.
 s = drop_lines(s, '    bool xen_vapic;\n', p)
 wr(p, s)
 p = 'target/i386/cpu.c'; s = rd(p)

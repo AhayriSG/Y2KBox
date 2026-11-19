@@ -425,3 +425,9 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
 ### 4. Benchmarking & Development
 * **Benchmarks:** The sandbox is noisy. Use run durations of at least 1 second, with a minimum of 3 runs. Keep loop counters off the code page (Self-Modifying Code / SMC makes execution ~50x slower).
 * **Validation:** Always compare a changed binary against the *same* binary with its kill switch enabled, rather than an old build.
+
+
+* CI performance policy: Linux CI is a KVM build plus functional validation job;
+  it does not run TCG timing benchmarks. Windows CI is the only ongoing host for
+  TCG performance A/B measurements. Historical Linux benchmark results remain
+  documented for context but are not repeated.
