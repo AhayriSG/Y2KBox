@@ -384,6 +384,11 @@ Real-GPU emulation route (alternative/third 3D idea)
   (GPL). Different approach from paravirtual SVGA3D: emulate real hardware so unmodified vendor drivers work.
   Relevant if the VMware driver's Direct3D 7/8 / DirectDraw coverage proves insufficient. Not evaluated in
   depth (read the PR summary only); the NV register/method emulation is large.
+* **NVPlay / nvplayground:** https://github.com/starfrost013/nvplayground - a DOS/DJGPP-based
+  low-level NVIDIA GPU research and raw-I/O test tool. Useful as a hardware-behavior reference
+  for early NVIDIA architectures, particularly RIVA 128 (NV3) and RIVA TNT (NV4); NV1x/Celsius
+  support is currently basic and largely untested. It is a research/test utility, not an emulator
+  or a drop-in component for Y2KBox.
 
 VBoxVGA / VirtualBox (alternative 3D path)
 * 86Box PR #6183 "Add Initial Support for VBoxVGA Emulation":

@@ -24,6 +24,11 @@ Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 ma
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
+## x86-64-v3 and other host requirements
+
+- **CPU ISA:** x86-64-v3 is the minimum for v3 builds; x86-64-v4 builds require an x86-64-v4-capable host. Choose the binary that matches your processor. Older ISA levels are not supported.
+- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
+- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback.
 
 ## Download & Usage
 
@@ -66,6 +71,12 @@ The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Repla
 or remove that floppy drive if you do not need it. To boot an installer ISO, attach
 it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
 select the CD-ROM from the boot menu.
+
+### Windows XP guest recommendations
+
+- **Display refresh rate:** Set the guest display to **85 Hz** when that refresh rate is available for the selected resolution and VMware SVGA display mode. In XP, open Display Properties > Settings > Advanced > Monitor.
+- **Mouse:** Open Control Panel > Mouse > Pointer Options and clear **Enhance pointer precision** to disable mouse acceleration.
+- **Networking and retro web browsing:** The default `-nic user,model=rtl8139` configuration emulates an RTL8139 network adapter, for which Windows XP has an in-box driver. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
 <br/>- If you experience mouse cursor issues, or graphical glitches in certain games, drop the hardware acceleration level down by one notch in the Windows XP guest: right-click the Windows XP desktop and select Properties. Navigate to Settings > Advanced > Troubleshoot.

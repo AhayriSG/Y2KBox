@@ -479,3 +479,26 @@ were disabled or removed. This correction is based on comparison with the
 owner-designated upstream baseline 9d7d057a558b9a1c232cea390b4481dd20d9c9ce.
 No local build/test was run and no CI was polled after pushing. Linux KVM build
 and runtime validation remain outstanding; Windows CI was previously passing.
+
+
+## Session 19 (ChatGPT), 2026-11-19 - Document Windows baseline and XP guest setup
+
+Updated the public README with a host-requirements section clarifying the
+x86-64-v3/v4 CPU ISA expectations and the Windows policy: Windows 10 version
+1803 (build 17134) or newer is strongly recommended as the intended baseline
+for future Windows TCG memory-management work, but is not described as an
+already-enforced minimum. Linux remains KVM-only with /dev/kvm access required.
+
+Added practical Windows XP guest recommendations to Download & Usage:
+use an 85 Hz refresh rate when offered by the selected display mode, disable
+"Enhance pointer precision" in Control Panel > Mouse, and configure Internet
+Explorer to use Protoweb's current primary HTTP proxy (wayback.protoweb.org:7851)
+for retro web browsing. The README points users to Protoweb's live server list
+because its server addresses and ports can change.
+
+Added starfrost013/nvplayground to HANDOFF.md section 9 as a DOS/DJGPP-based
+low-level NVIDIA GPU research utility, noting its strongest documented support
+for NV3/NV4 and its limited, untested NV1x/Celsius support. It is a research
+reference, not an emulator component.
+
+No source code or build configuration changed. No local build/test was run.
