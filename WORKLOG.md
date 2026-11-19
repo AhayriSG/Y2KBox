@@ -516,3 +516,23 @@ bottleneck. It does not raise the formal Windows minimum beyond the README's
 1803+ encouraged baseline and applies only to Windows TCG; Linux remains KVM-only.
 
 No source code or build configuration changed. No local build/test was run.
+
+
+## Session 21 (ChatGPT), 2026-11-19 - Add isolated Windows x87 store A/B benchmark
+
+After the owner confirmed Windows CI passed for the normal-finite FST m32/m64
+host-x87 fast path (commit bb8a17f), added two focused real-mode benchmark
+images: `xp/bench/micro/x87store32.asm` and `x87store64.asm`. Each repeatedly
+executes a non-popping FST from a constant ST0 value to a hot RAM destination,
+isolating the corresponding destination-format store helper without adding
+arithmetic or a per-iteration x87 reload.
+
+Added a Windows CI A/B step that builds each 100-million-store image and runs
+the same current QEMU executable three times with the fast path disabled via
+`XPQEMU_NO_HX87=1`, then three times with the host-x87 path enabled. It reports
+softfloat and host-x87 medians and relative changes separately for m32 and m64.
+No performance result is recorded or assumed until the owner supplies the CI
+output. Updated the benchmark README and T13a task/handoff notes; the
+differential x87 test remains the correctness gate.
+
+No local build or benchmark was run. No CI was polled after pushing.

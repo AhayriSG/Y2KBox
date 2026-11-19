@@ -192,14 +192,16 @@ CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a 
 Primary performance target: Windows TCG. Linux product runtime is KVM-only, with no TCG fallback. TCG optimization and performance A/B benchmarks are Windows-only; Linux CI performs KVM build and functional validation. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
 `xp/bench/README.md` for the baseline table). Measured hotspots, in priority order - each is a
 separate sub-task (T13a..c), claim one:
-* **T13a x87 - Status: CLAIMED by ChatGPT 2026-11-19 (part 1 DONE; next: FST/FSTP m32/m64 fast path).** DONE: host-x87 fast path for fadd/fsub/fsubr/fmul/fdiv/fdivr
+* **T13a x87 - Status: CLAIMED by ChatGPT 2026-11-19 (parts 1-2 implemented; Windows FST m32/m64 A/B measurement pending).** DONE: host-x87 fast path for fadd/fsub/fsubr/fmul/fdiv/fdivr
   (ST0/FT0 and STN/ST0 forms) and fsqrt on NORMAL FINITE operands, integer-only `fld m32/m64` for normal and
   zero operands, plus an exact-load fix for the softfloat fallback (see HANDOFF 5a3). Result: x87add 65->22 ns,
   x87div 154->34 ns per iteration (3.0x / 4.6x); bit-identical to softfloat on 7.2M randomized operations
-  (`xp/bench/x87cmp.sh`, `XPQEMU_NO_HX87=1` kill switch). TODO (each is separate): `fst/fstp m32/m64` (needs
-  correct rounding + flags), `fild/fist/fistt`, `fcom/fucom/fcomi` compares, `frndint`, `fscale`, `fprem`,
+  (`xp/bench/x87cmp.sh`, `XPQEMU_NO_HX87=1` kill switch). TODO (each is separate): `fild/fist/fistt`, `fcom/fucom/fcomi` compares, `frndint`, `fscale`, `fprem`,
   transcendental ops (`fsin/fcos/fptan/fpatan/f2xm1/fyl2x`), `fadd m80`; denormal/zero/inf/NaN operands for the
-  arithmetic ops (currently softfloat); then the remaining overhead (~7 ns/insn: helper call + env memory
+  arithmetic ops (currently softfloat). The normal-finite FST m32/m64 store fast path is implemented in
+  `bb8a17f`; randomized FST output/flag comparison remains part of `x87cmp.sh`. Windows CI now runs a
+  dedicated same-binary softfloat-vs-host-x87 A/B benchmark for both store widths (three-run medians).
+  Then address the remaining overhead (~7 ns/insn: helper call + env memory
   traffic) by emitting the common ops inline or keeping ST registers in host x87 registers across a block.
   Also audit other conversions for the same bug class: any load/conversion that wrongly honours precision
   control (e.g. `fild m64` with PC=24).

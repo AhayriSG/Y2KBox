@@ -183,6 +183,14 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
   precision/rounding modes x 30 ops; compare the same binary with and without `XPQEMU_NO_HX87=1`. Expected
   checksum for TRIALS=20000 is in `xp/bench/x87diff.expected.txt`. Run it after ANY x87 change.
 * **Results:** x87add 65.3 -> 21.7 ns, x87div 153.9 -> 33.5 ns per iteration (3.0x / 4.6x).
+* **FST m32/m64 store fast path (commit `bb8a17f`):** for normal finite ST0 values,
+  native host `fstps` / `fstpl` performs destination-format rounding under the guest RC;
+  host exception bits are merged into guest status. Exceptional/non-normal inputs and
+  unsupported control-word cases retain the softfloat conversion. Windows CI's randomized
+  differential test passed after this change. A dedicated same-binary A/B benchmark now
+  compares 100M non-popping stores at each width with `XPQEMU_NO_HX87=1` vs enabled fast
+  path (three-run medians); performance result is pending. The benchmark uses a constant
+  ST0 and hot RAM destination to avoid mixing in arithmetic/reload work.
 
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
@@ -250,16 +258,16 @@ idempotent (`git checkout` touched files first).
 - **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
   (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B performance work). Let GitHub Actions handle compilation, smoke tests and
   binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
-- **CI pipeline (`.github/workflows/build.yml`):** automatically runs `configure`, build, the boot and SSE2 functional checks,
-  and the x87 differential test (`xp/bench/x87cmp.sh`) on both **Linux and Windows** for every push. The Linux job also
-  runs the T04 PSHUFD A/B microbenchmark: it downloads the pre-T04 Linux artifact from run
-  44148654097, builds one 300M-iteration PSHUFD image, and runs it five times with each binary
-  on the same runner. It also compares the same 100M-iteration `sse2.asm` workload against the pre-XMM-cache artifact from run 44156398064 (median of three runs) to measure T13d. Linux result: 0.877822 s before vs 0.872720 s after (+0.58%, 1.006x). Windows result: 3.166927 s before vs 3.132343 s after (+1.09%, 1.011x), using the same 300M-iteration image and three-run medians. Both are near-neutral shared-runner measurements, not demonstrated speedups. `xp/bench/run.sh` reports the median wall time; the workflow compares
-  raw medians without subtracting an empty-loop control (TCG translation-block and dispatch
-  costs make that a different workload, not an additive overhead). Earlier negative net times
-  were invalid. The script rejects unexpected QEMU exit statuses, timeouts, and stderr output. The workflow uploads compiled binaries as GitHub
-  Actions Artifacts (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`: `qemu-system-i386[.exe]`, `qemu-img[.exe]`,
-  `pc-bios/`, Windows runtime DLLs; run with `-L pc-bios`).
+- **CI pipeline (`.github/workflows/build.yml`):** Linux CI builds the Linux KVM product and runs accelerator-policy,
+  functional, x87 differential, packaging, and smoke checks; it does not run TCG performance benchmarks.
+  Windows CI builds the TCG product, runs functional and x87 differential checks, and hosts TCG performance A/B
+  measurements. The Windows T13d SSE2 A/B uses the same 300M-iteration image and three-run medians:
+  3.166927 s before vs 3.132343 s after (+1.09%, 1.011x), effectively near-neutral on a shared runner.
+  The T13a x87 store A/B compares the same current Windows executable with `XPQEMU_NO_HX87=1` against the
+  host-x87 path for isolated 100M-iteration FST m32 and FST m64 images (three-run medians); results are pending.
+  `xp/bench/run.sh` reports raw median wall time without subtracting an empty-loop control. It rejects unexpected
+  QEMU exit statuses, timeouts, and stderr output. Both jobs upload compiled binaries as GitHub Actions artifacts
+  (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`; run with `-L pc-bios`).
 - **CI & Codacy feedback loop (never poll after pushing):**
   - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`; also runs on
     `SessionStart` after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and

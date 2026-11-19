@@ -161,3 +161,20 @@ CI remains responsible for compiling the Linux KVM build and running its
 functional checks; it does not run TCG performance benchmarks. The historical
 Linux measurements above are retained as records of earlier experiments, not
 as an ongoing CI requirement.
+
+## T13a x87 FST m32/m64 store benchmark
+
+`micro/x87store32.asm` and `micro/x87store64.asm` each run 100 million
+non-popping `FST m32` or `FST m64` stores from a constant ST0 value to a
+hot RAM destination. This isolates destination-format conversion and the
+`fsts_ST0` / `fstl_ST0` helper path without mixing in x87 arithmetic or a
+per-iteration reload. The Windows CI benchmark runs each image three times
+with the same current QEMU executable: first with `XPQEMU_NO_HX87=1` (the
+softfloat reference), then with the host-x87 store path enabled. It reports
+the raw median wall times and relative change. This is a focused microbenchmark,
+not a guest-application result; interpret small deltas cautiously.
+
+The correctness gate remains `xp/bench/x87cmp.sh`, which compares fast-path
+and softfloat output/exception checksums over randomized operands and all
+12 guest precision/rounding-control combinations. The store benchmark is
+measurement only and does not replace differential testing.
