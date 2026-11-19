@@ -597,3 +597,27 @@ location. The shared run.sh harness is not the cause: the user's successful
 T13d benchmark uses the same runner and reaches isa-debug-exit. No local build,
 assembly, or benchmark was run; the next Windows CI run must validate both
 images before any T13a performance result is recorded.
+
+
+## Session 26 (ChatGPT), 2026-11-19 - Actually apply T13a padding correction
+
+The Windows run still timed out after the purported padding correction. Reviewing
+the committed source (rather than relying on the update response) showed that
+both files still contained the malformed `times 510-($-$) db 0` expression.
+The prior automated edit used JavaScript string replacement with a replacement
+string containing dollar signs; JavaScript interpreted the `$$` replacement
+sequence and collapsed the intended `$-$$` expression back to `$-$`. Thus the
+previous two commits did not actually change the padding expression, despite
+the intended edit.
+
+Re-fetched the current main versions and corrected both expressions using a
+replacement callback (so dollar signs are literal), then verified the fetched
+file contents contain exactly `times 510-($-$$) db 0`. New commits:
+- c9392bea: x87store32.asm
+- 1bb66b0f: x87store64.asm
+
+The Actions log shows the first softfloat m32 run consumed the full 200-second
+timeout. It does not by itself distinguish a non-booting image from a very slow
+5M-store guest loop. With the corrected source now actually committed, the next
+Windows run is the first valid test of the boot-sector padding fix. No local
+assembly/build/benchmark was run and no CI was polled after these commits.
