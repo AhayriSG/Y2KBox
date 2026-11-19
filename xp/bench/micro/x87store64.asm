@@ -1,7 +1,7 @@
 ; Isolated non-popping FST m64 benchmark. The guest ST0 value remains constant.
 ; Compare the same QEMU binary with XPQEMU_NO_HX87=1 and with the fast path enabled.
 %ifndef LOOPS
-%define LOOPS 100000000
+%define LOOPS 5000000
 %endif
 bits 16
 org 0x7c00
