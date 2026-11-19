@@ -164,14 +164,16 @@ as an ongoing CI requirement.
 
 ## T13a x87 FST m32/m64 store benchmark
 
-`micro/x87store32.asm` and `micro/x87store64.asm` each run 100 million
+`micro/x87store32.asm` and `micro/x87store64.asm` each run 5 million
 non-popping `FST m32` or `FST m64` stores from a constant ST0 value to a
 hot RAM destination. This isolates destination-format conversion and the
 `fsts_ST0` / `fstl_ST0` helper path without mixing in x87 arithmetic or a
-per-iteration reload. The Windows CI benchmark runs each image three times
+per-iteration reload. The Windows CI benchmark runs each image five times
 with the same current QEMU executable: first with `XPQEMU_NO_HX87=1` (the
-softfloat reference), then with the host-x87 store path enabled. It reports
-the raw median wall times and relative change. This is a focused microbenchmark,
+softfloat reference), then with the host-x87 store path enabled. The reduced
+iteration count avoids timing out the softfloat reference on shared Windows
+runners while retaining enough samples for a median. It reports raw median
+wall times and relative change. This is a focused hot-cache microbenchmark,
 not a guest-application result; interpret small deltas cautiously.
 
 The correctness gate remains `xp/bench/x87cmp.sh`, which compares fast-path
