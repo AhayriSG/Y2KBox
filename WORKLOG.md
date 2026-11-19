@@ -536,3 +536,18 @@ output. Updated the benchmark README and T13a task/handoff notes; the
 differential x87 test remains the correctness gate.
 
 No local build or benchmark was run. No CI was polled after pushing.
+
+
+## Session 22 (ChatGPT), 2026-11-19 - Fix T13a Windows benchmark shell selection
+
+The first Windows run of the T13a store A/B benchmark failed with exit 127.
+Inspection of the complete Actions job log showed that the build, Windows
+functional checks, T13d benchmark, and x87 differential test all passed; the
+failure occurred immediately when entering the new T13a step. The workflow
+step explicitly overrode the Windows job's `msys2 {0}` shell with generic
+`bash`, which selects Git for Windows Bash rather than the configured MSYS2
+UCRT64 environment. The benchmark expects UCRT64 tools (including NASM) on
+the MSYS2 path. Removed the per-step shell override so T13a inherits the
+job-level MSYS2 shell, matching the working Windows checks and x87 test.
+
+No benchmark result was produced. No local build or benchmark was run.

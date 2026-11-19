@@ -238,7 +238,6 @@ jobs:
               print(f"{name} host-x87 median: {after:.6f}s")
               print(f"{name} relative change: {(before-after)/before*100:+.2f}% (speedup={before/after:.3f}x)")
           PY
-        shell: bash
       - name: Package (binaries, pc-bios, MSYS2 runtime DLLs)
         run: |
           mkdir -p dist/pc-bios
