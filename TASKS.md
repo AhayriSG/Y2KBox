@@ -200,7 +200,7 @@ separate sub-task (T13a..c), claim one:
   transcendental ops (`fsin/fcos/fptan/fpatan/f2xm1/fyl2x`), `fadd m80`; denormal/zero/inf/NaN operands for the
   arithmetic ops (currently softfloat). The normal-finite FST m32/m64 store fast path is implemented in
   `bb8a17f`; randomized FST output/flag comparison remains part of `x87cmp.sh`. Windows CI now runs a
-  dedicated same-binary softfloat-vs-host-x87 A/B benchmark for both store widths (three-run medians).
+  dedicated same-binary softfloat-vs-host-x87 A/B benchmark for both store widths (5M stores per run; five-run medians).
   Then address the remaining overhead (~7 ns/insn: helper call + env memory
   traffic) by emitting the common ops inline or keeping ST registers in host x87 registers across a block.
   Also audit other conversions for the same bug class: any load/conversion that wrongly honours precision
