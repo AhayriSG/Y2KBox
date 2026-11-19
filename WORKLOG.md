@@ -490,7 +490,7 @@ for future Windows TCG memory-management work, but is not described as an
 already-enforced minimum. Linux remains KVM-only with /dev/kvm access required.
 
 Added practical Windows XP guest recommendations to Download & Usage:
-use an 85 Hz refresh rate when offered by the selected display mode, disable
+use the maximum refresh rate when offered by the selected display mode, disable
 "Enhance pointer precision" in Control Panel > Mouse, and configure Internet
 Explorer to use Protoweb's current primary HTTP proxy (wayback.protoweb.org:7851)
 for retro web browsing. The README points users to Protoweb's live server list
