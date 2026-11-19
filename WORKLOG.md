@@ -551,3 +551,18 @@ the MSYS2 path. Removed the per-step shell override so T13a inherits the
 job-level MSYS2 shell, matching the working Windows checks and x87 test.
 
 No benchmark result was produced. No local build or benchmark was run.
+
+
+## Session 23 (ChatGPT), 2026-11-19 - Right-size T13a Windows store benchmark
+
+The T13a Windows A/B step reached QEMU but its first 100-million-store softfloat
+run exceeded the per-run 200-second timeout. This was an oversized benchmark
+workload, not a compile failure or evidence of a guest execution hang. Kept the
+existing timeout as a safety ceiling and reduced each store image to 5 million
+iterations, with five samples per mode and store width. This preserves a useful
+median while substantially reducing expected wall time. Updated the assembly
+defaults, Windows CI invocation, benchmark README, task note, and handoff.
+
+The benchmark remains a narrow constant-ST0, hot-destination microbenchmark;
+no performance result is assumed. No local build or benchmark was run and no
+CI was polled after pushing.
