@@ -33,6 +33,7 @@
 
 #include "cpu.h"
 #include "host-cpu.h"
+#include "vmsr_energy.h"
 #include "system/system.h"
 #include "system/hw_accel.h"
 #include "system/accel-irq.h"
