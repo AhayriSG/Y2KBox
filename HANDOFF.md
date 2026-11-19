@@ -188,9 +188,10 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
   host exception bits are merged into guest status. Exceptional/non-normal inputs and
   unsupported control-word cases retain the softfloat conversion. Windows CI's randomized
   differential test passed after this change. A dedicated same-binary A/B benchmark now
-  compares 100M non-popping stores at each width with `XPQEMU_NO_HX87=1` vs enabled fast
-  path (three-run medians); performance result is pending. The benchmark uses a constant
-  ST0 and hot RAM destination to avoid mixing in arithmetic/reload work.
+  compares 5M non-popping stores at each width with `XPQEMU_NO_HX87=1` vs enabled fast
+  path (five-run medians); performance result is pending. The shorter workload is sized to
+  avoid timing out the softfloat reference on shared Windows runners. The benchmark uses a
+  constant ST0 and hot RAM destination to isolate store conversion from arithmetic/reload work.
 
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
