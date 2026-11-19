@@ -30,7 +30,7 @@ jobs:
         run: |
           cd build
           ./qemu-system-i386 -accel help | tee accel.txt
-          grep -qx kvm accel.txt
+          grep -Eq '^kvm([[:space:]]|$)' accel.txt
           grep -qx tcg accel.txt
           if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
             if ./qemu-system-i386 -L pc-bios -display none -monitor none -serial none -nodefaults -S > kvm-required.out 2>&1; then
