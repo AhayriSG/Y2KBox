@@ -635,3 +635,25 @@ The results are described narrowly as isolated constant-ST0/hot-destination
 microbenchmark improvements, not general x87 or application-level gains. T13a
 remains in progress; integer conversions are the next investigation. No local
 build or benchmark was run and no CI was polled after this documentation update.
+
+
+## Session 28 (ChatGPT), 2026-11-19 - Restore omitted KVM energy and x87 benchmark dependencies
+
+The owner reported Linux CI failing because `target/i386/kvm/kvm.c` referenced
+MSR energy-monitoring types and helpers that were absent, and Windows CI failing
+because the T13a NASM input images were missing from the checkout.
+
+Restored `vmsr_energy.h` and `vmsr_energy.c` from the selected upstream QEMU
+baseline `9d7d057a558b9a1c232cea390b4481dd20d9c9ce`, added the missing header
+include to `kvm.c`, and registered `vmsr_energy.c` in the CONFIG_KVM-gated x86
+KVM source set. This preserves the existing virtual RAPL/MSR implementation
+rather than deleting or stubbing its call sites.
+
+Restored `xp/bench/micro/x87store32.asm` and `x87store64.asm` from the
+previously verified fork versions, including the 5M default loop count and
+BIOS boot signature. These files had been omitted during the earlier tree
+recovery even though the workflow and documentation still referenced them.
+
+Verified the current main-branch contents, helper declarations/definitions,
+Meson registration, both benchmark paths, loop counts, and boot signatures.
+No local build or test was run; CI must validate the repair.
