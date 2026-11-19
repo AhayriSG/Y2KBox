@@ -621,3 +621,17 @@ timeout. It does not by itself distinguish a non-booting image from a very slow
 5M-store guest loop. With the corrected source now actually committed, the next
 Windows run is the first valid test of the boot-sector padding fix. No local
 assembly/build/benchmark was run and no CI was polled after these commits.
+
+
+## Session 27 (ChatGPT), 2026-11-19 - Record T13a FST store benchmark results
+
+The first successful Windows T13a store A/B run completed after the x87store32
+and x87store64 boot-sector padding/signature corrections. Both tests used the
+same QEMU executable, 5M non-popping stores per run, and five-run medians.
+FST m32: softfloat 2.474809 s, host-x87 2.383368 s, +3.69% (1.038x).
+FST m64: softfloat 2.508467 s, host-x87 2.359847 s, +5.92% (1.063x).
+Recorded the measurements in TASKS.md, xp/bench/README.md, and HANDOFF.md.
+The results are described narrowly as isolated constant-ST0/hot-destination
+microbenchmark improvements, not general x87 or application-level gains. T13a
+remains in progress; integer conversions are the next investigation. No local
+build or benchmark was run and no CI was polled after this documentation update.

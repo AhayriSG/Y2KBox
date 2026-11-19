@@ -3485,7 +3485,6 @@ if have_system
     'hw/i2c',
     'hw/i3c',
     'hw/i386',
-    'hw/i386/kvm',
     'hw/ide',
     'hw/input',
     'hw/intc',
@@ -3522,12 +3521,6 @@ if have_system
     'system',
     'ui',
     'hw/remote',
-  ]
-endif
-if have_system
-  trace_events_subdirs += [
-    'accel/kvm',
-    'target/i386/kvm',
   ]
 endif
 if have_system or have_user

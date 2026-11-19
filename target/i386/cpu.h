@@ -2299,9 +2299,6 @@ typedef struct CPUArchState {
     uint64_t tsc;
     void *xsave_buf;
     uint32_t xsave_buf_len;
-#if defined(CONFIG_KVM)
-    struct kvm_nested_state *nested_state;
-#endif
 #if defined(CONFIG_MSHV)
     /* Shared register page */
     struct hv_vp_register_page *regs_page;

@@ -180,3 +180,20 @@ The correctness gate remains `xp/bench/x87cmp.sh`, which compares fast-path
 and softfloat output/exception checksums over randomized operands and all
 12 guest precision/rounding-control combinations. The store benchmark is
 measurement only and does not replace differential testing.
+
+
+## T13a Windows FST m32/m64 results
+
+The first successful Windows CI A/B run after correcting both boot-sector images
+reported these five-run medians, using the same QEMU executable and 5M stores
+per run:
+
+| Operation | Softfloat median | Host-x87 median | Relative change | Speedup |
+|---|---:|---:|---:|---:|
+| FST m32 | 2.474809 s | 2.383368 s | +3.69% | 1.038x |
+| FST m64 | 2.508467 s | 2.359847 s | +5.92% | 1.063x |
+
+Both widths improved in this isolated constant-ST0, hot-destination benchmark.
+These measurements support retaining the fast path, but do not establish a
+corresponding gain in general x87 workloads or guest applications. The
+randomized output/exception differential test remains the correctness gate.

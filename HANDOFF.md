@@ -78,7 +78,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   `dxvk-native` (`SDL2`/`SDL3` sealed-memfd WSI) and Windows `d3d9.dll`/`d3d11.dll` (hidden HWND WSI, WARP
   fallback, optional DXVK Windows DLLs) host 3D backends. CI builds and smoke checks run on push; in-guest XP
   driver/3D verification awaits T08/T11.
-* T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
+* T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Remaining T13a operations are in progress.\n* T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
 
@@ -187,11 +187,12 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
   native host `fstps` / `fstpl` performs destination-format rounding under the guest RC;
   host exception bits are merged into guest status. Exceptional/non-normal inputs and
   unsupported control-word cases retain the softfloat conversion. Windows CI's randomized
-  differential test passed after this change. A dedicated same-binary A/B benchmark now
-  compares 5M non-popping stores at each width with `XPQEMU_NO_HX87=1` vs enabled fast
-  path (five-run medians); performance result is pending. The shorter workload is sized to
-  avoid timing out the softfloat reference on shared Windows runners. The benchmark uses a
-  constant ST0 and hot RAM destination to isolate store conversion from arithmetic/reload work.
+  differential test passed after this change. The dedicated same-binary A/B benchmark uses
+  5M non-popping stores per width and five-run medians. First successful Windows result:
+  FST m32 2.474809 s softfloat vs 2.383368 s host-x87 (+3.69%, 1.038x); FST m64
+  2.508467 s vs 2.359847 s (+5.92%, 1.063x). Both results support retaining the fast path,
+  but the constant-ST0/hot-destination microbenchmark does not establish a general x87 or
+  application-level speedup.
 
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
