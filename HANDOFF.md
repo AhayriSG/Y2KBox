@@ -433,3 +433,14 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
   it does not run TCG timing benchmarks. Windows CI is the only ongoing host for
   TCG performance A/B measurements. Historical Linux benchmark results remain
   documented for context but are not repeated.
+
+
+### KVM trace-generation checkpoint (2026-11-19)
+
+The restored KVM trace-event directories are registered in root `meson.build`.
+Their directory-local `trace.h` wrappers were initially missing, so KVM sources
+resolved the wrong/no group header and produced undeclared trace calls followed
+by linker failures. The three wrappers have now been restored from the exact
+upstream baseline. Re-run Linux CI on the resulting commit; do not mark T17 done
+until Linux KVM build and host runtime validation are complete. Windows CI had
+passed the preceding changes.

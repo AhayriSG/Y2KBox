@@ -455,3 +455,27 @@ to reflect the restored KVM source state and the outstanding Linux CI/runtime
 validation.
 
 No local builds/tests were run. No CI was polled after this change.
+
+
+
+## Session 18 (ChatGPT), 2026-11-19 - Restore directory-local KVM trace headers
+
+The owner supplied another Linux CI link failure after commit c8e797e registered
+three restored KVM trace-event directories in the root Meson trace list. The
+linker still reported missing KVM trace symbols, and the compiler warnings
+showed the corresponding calls had no declarations.
+
+The missing piece was the directory-local trace.h wrapper headers. QEMU source
+files include "trace.h" relative to their source directory; each wrapper
+includes the generated group header for that directory. The KVM source and
+trace-events files had been restored, but these wrappers had not. Restored the
+three exact upstream-baseline wrappers:
+- accel/kvm/trace.h -> trace/trace-accel_kvm.h
+- target/i386/kvm/trace.h -> trace/trace-target_i386_kvm.h
+- hw/i386/kvm/trace.h -> trace/trace-hw_i386_kvm.h
+
+The Meson trace-event registrations from c8e797e are retained. No tracepoints
+were disabled or removed. This correction is based on comparison with the
+owner-designated upstream baseline 9d7d057a558b9a1c232cea390b4481dd20d9c9ce.
+No local build/test was run and no CI was polled after pushing. Linux KVM build
+and runtime validation remain outstanding; Windows CI was previously passing.
