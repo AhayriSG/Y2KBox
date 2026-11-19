@@ -4,6 +4,7 @@ i386_kvm_ss = ss.source_set()
 i386_kvm_ss.add(files(
   'kvm.c',
   'kvm-cpu.c',
+  'vmsr_energy.c',
   'tdx-stub.c',
 ))
 i386_system_ss.add(files('hyperv-stub.c'))
