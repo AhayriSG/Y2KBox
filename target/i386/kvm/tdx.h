@@ -6,7 +6,7 @@
 
 #include "cpu.h"
 #include "qapi/error.h"
-#include <linux/kvm.h>
+struct kvm_run;
 
 #define is_tdx_vm() 0
 
