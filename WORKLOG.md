@@ -566,3 +566,15 @@ defaults, Windows CI invocation, benchmark README, task note, and handoff.
 The benchmark remains a narrow constant-ST0, hot-destination microbenchmark;
 no performance result is assumed. No local build or benchmark was run and no
 CI was polled after pushing.
+
+
+## Session 24 (ChatGPT), 2026-11-19 - Fix T13a store benchmark boot images
+
+The reduced 5M-iteration T13a Windows benchmark still timed out at the
+200-second per-run limit. Inspection of the boot images found the actual cause:
+both x87store32.asm and x87store64.asm padded to 510 bytes but omitted the
+required 0xAA55 BIOS boot signature. The BIOS therefore did not execute the
+benchmark code, so changing the loop count could not resolve the timeout.
+Added the signature word to both images, matching the working x87 microbench
+images. No benchmark result is available yet; no local build or benchmark was
+run and no CI was polled after pushing.
