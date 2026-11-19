@@ -578,3 +578,22 @@ benchmark code, so changing the loop count could not resolve the timeout.
 Added the signature word to both images, matching the working x87 microbench
 images. No benchmark result is available yet; no local build or benchmark was
 run and no CI was polled after pushing.
+
+
+## Session 25 (ChatGPT), 2026-11-19 - Correct T13a boot-sector padding expression
+
+The T13a Windows FST benchmark continued to time out after the boot signature
+was added. Comparing both store images directly with the working x87/SSE2
+boot sectors exposed a second boot-sector construction error: each store image
+used `times 510-($-$) db 0` instead of NASM's required current-offset minus
+section-origin expression, `times 510-($-$$) db 0`. The malformed expression
+padded by a fixed 510 bytes after the code/data rather than placing the boot
+signature at offsets 510-511. Consequently, the BIOS still did not see a valid
+boot sector, and QEMU waited until the 200-second timeout.
+
+Corrected the padding expression in both x87store32.asm and x87store64.asm.
+The existing `dw 0xAA55` now follows the padding at the proper boot-sector
+location. The shared run.sh harness is not the cause: the user's successful
+T13d benchmark uses the same runner and reaches isa-debug-exit. No local build,
+assembly, or benchmark was run; the next Windows CI run must validate both
+images before any T13a performance result is recorded.
