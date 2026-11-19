@@ -333,6 +333,39 @@ static inline bool hx87_sqrt(CPUX86State *env, floatx80 a, floatx80 *res)
     return true;
 }
 
+/*
+ * FST/FSTP m32/m64: let the host x87 perform the destination-format
+ * rounding.  The guest control word is already installed by hx87_prepare;
+ * x87 stores use the guest rounding-control field, independently of the
+ * precision-control field.  Exceptional and non-normal inputs retain the
+ * softfloat path.
+ */
+static inline bool hx87_store32(CPUX86State *env, floatx80 a, uint32_t *res)
+{
+    uint16_t sw;
+
+    if (!fx_normal(a) || !hx87_prepare(env)) {
+        return false;
+    }
+    asm volatile("fldt %[a]\n\tfstps %[r]\n\tfnstsw %%ax"
+                 : [r] "=m"(*res), "=a"(sw) : [a] "m"(a) : "st");
+    fpu_set_exception(env, sw & 0x3f);
+    return true;
+}
+
+static inline bool hx87_store64(CPUX86State *env, floatx80 a, uint64_t *res)
+{
+    uint16_t sw;
+
+    if (!fx_normal(a) || !hx87_prepare(env)) {
+        return false;
+    }
+    asm volatile("fldt %[a]\n\tfstpl %[r]\n\tfnstsw %%ax"
+                 : [r] "=m"(*res), "=a"(sw) : [a] "m"(a) : "st");
+    fpu_set_exception(env, sw & 0x3f);
+    return true;
+}
+
 static inline floatx80 fx_add(CPUX86State *env, floatx80 a, floatx80 b)
 {
     floatx80 r;
@@ -549,12 +582,16 @@ void HELPER(fildll_ST0)(CPUX86State *env, int64_t val)
 
 uint32_t HELPER(fsts_ST0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
     union {
         float32 f;
         uint32_t i;
     } u;
 
+    if (hx87_store32(env, ST0, &u.i)) {
+        return u.i;
+    }
+
+    int old_flags = save_exception_flags(env);
     u.f = floatx80_to_float32(ST0, &env->fp_status);
     merge_exception_flags(env, old_flags);
     return u.i;
@@ -562,12 +599,16 @@ uint32_t HELPER(fsts_ST0)(CPUX86State *env)
 
 uint64_t HELPER(fstl_ST0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
     union {
         float64 f;
         uint64_t i;
     } u;
 
+    if (hx87_store64(env, ST0, &u.i)) {
+        return u.i;
+    }
+
+    int old_flags = save_exception_flags(env);
     u.f = floatx80_to_float64(ST0, &env->fp_status);
     merge_exception_flags(env, old_flags);
     return u.i;
