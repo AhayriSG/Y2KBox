@@ -265,19 +265,25 @@ headers, stubs, Meson/Kconfig wiring, and any shared dependencies removed with i
 Do not blindly copy an upstream directory: compare against this fork's QEMU base and
 current XP-only configuration, then restore the smallest complete dependency set.
 
-Resume here (2026-11-19): The current fork still has the KVM headers and disabled
-stubs, and retains several x86 machine call sites, but the KVM accelerator sources,
-x86 KVM implementation, and KVM machine device sources are absent. The QEMU 11.1.90
-baseline confirms the minimal x86 path centers on accel/kvm, target/i386/kvm, and
-hw/i386/kvm. The KVM x86 source also includes TDX/SEV/Xen paths; keep TDX/SEV disabled
-and do not restore Xen emulation. Next audit exact source dependencies and Windows
-stub linkage before restoring the Linux-only build wiring.
+Resume checkpoint (2026-11-19): The Linux x86 KVM accelerator, x86 backend,
+and PC KVM interrupt/clock integration have been restored with Linux-only Meson
+wiring. Windows remains TCG-only. CI exposed two follow-up dependency issues:
+KVM nested-state migration data was over-pruned with Xen members, and the disabled
+TDX stub imported a Linux-only UAPI header; both were corrected. The next Linux
+build exposed the optional RAPL energy-MSR implementation still present in
+target/i386/kvm/kvm.c even though xp/strip/03-remove-virt-accels.sh intentionally
+removed vmsr_energy.c/.h. Remove that unsupported optional integration and its
+orphaned KVM properties/state; do not remove the core KVM backend. KVM runtime
+validation on a KVM-capable Linux host remains outstanding.
 * Linux: compile and ship KVM as the only supported runtime accelerator. The launcher
   must check that `/dev/kvm` exists and is accessible before starting QEMU; if not, show a
   clear actionable error such as: `KVM is required. Enable hardware virtualization/KVM
   and grant your user access to /dev/kvm, then restart Y2KBox.` Do not silently fall back
   to TCG. Internal TCG-only Linux CI/development builds may exist, but are not product
   builds and do not define a supported Linux runtime.
+* Optional KVM RAPL guest energy-MSR emulation is outside the XP product scope;
+  its vmsr_energy backend was removed by the original pruning pass and must not be
+  partially referenced by the restored KVM implementation.
 * Windows: remain TCG/MTTCG-only. Do not restore WHPX or other Windows accelerators.
 * TCG performance work and optimization acceptance are Windows-only.
 * Preserve the XP machine/device constraints and keep IOMMU, SEV, SGX, TDX, and VFIO

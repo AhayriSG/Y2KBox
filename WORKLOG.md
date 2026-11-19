@@ -432,3 +432,26 @@ Linux benchmark results remain documented, but are no longer ongoing CI work.
 
 No local builds/tests were run. The CI failures were diagnosed from the
 owner-supplied logs and GitHub Actions job logs; the changes await the next CI run.
+
+
+## Session 17 (ChatGPT), 2026-11-19 - Remove incomplete optional KVM RAPL integration
+
+The owner reported that Windows CI passed after Session 16, while Linux CI
+still failed compiling target/i386/kvm/kvm.c. The diagnostics identified
+undeclared vmsr energy-statistics types, constants, and helper functions.
+
+The root cause was a partial feature restoration: xp/strip/03-remove-virt-accels.sh
+had intentionally removed target/i386/kvm/vmsr_energy.c and vmsr_energy.h, but
+the restored KVM backend still contained the optional RAPL worker, MSR handlers,
+initialization path, and the generic accelerator's rapl/rapl-helper-socket
+properties. This optional guest energy-MSR feature is not required for the XP
+KVM runtime.
+
+Removed that incomplete RAPL integration from target/i386/kvm/kvm.c,
+accel/kvm/kvm-all.c, and include/system/kvm_int.h. The generic KVM accelerator,
+KVM MSR core-thread-count support, Linux-only build wiring, and standalone
+qemu-vmsr-helper utility were left intact. Updated T17 and HANDOFF checkpoints
+to reflect the restored KVM source state and the outstanding Linux CI/runtime
+validation.
+
+No local builds/tests were run. No CI was polled after this change.

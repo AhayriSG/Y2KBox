@@ -36,10 +36,10 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   required access. There is no supported Linux TCG runtime fallback. Windows builds are
   TCG/MTTCG-only; WHPX and every other Windows hardware-accelerator path remain out of scope.
   TCG performance development is exclusively for Windows. The XP guest/device target is unchanged.
-  * **Important current-state correction:** the earlier accelerator-stripping pass removed
-    the KVM implementation. KVM is not currently restored; task T17 tracks restoring the
-    Linux KVM build/runtime path and its required dependencies. Until T17 is complete, do
-    not describe current Linux binaries as KVM-enabled or advertise Linux runtime support.
+  * **Current restoration status:** the Linux x86 KVM implementation and build wiring
+    have been restored on main. T17 remains in progress while Linux CI compile issues are
+    resolved and KVM runtime validation on a KVM-capable host is still pending. Do not claim
+    Linux runtime success from compile-only CI.
   * TCG optimization work is exclusively Windows-focused. Internal TCG-only Linux CI/
     development builds may be used when useful, but they are not supported Linux product
     builds or a runtime fallback; Linux TCG timings are not a product performance target.
@@ -48,6 +48,8 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     pflash hooks, TDX TDVF setup, and SGX EPC ACPI state are removed. CPU feature-masking
     stubs remain so unsupported features are not exposed. VFIO is disabled in the XP device
     config; removing its dead machine compatibility hook must not remove generic KVM support.
+    Optional KVM RAPL guest energy-MSR emulation is unsupported; its vmsr_energy backend was
+    removed during XP pruning.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
