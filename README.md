@@ -33,7 +33,7 @@ License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 - **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
 - **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
-- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback.
+- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
 
 ## Download & Usage
 
@@ -78,10 +78,9 @@ it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonl
 select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
-<br/>- If you experience mouse cursor issues, or graphical glitches in certain games, drop the hardware acceleration level down by one notch in the Windows XP guest: right-click the Windows XP desktop and select Properties. Navigate to Settings > Advanced > Troubleshoot.
-<br/>- Currently, the VMware SVGA II device is hardcoded to 32MB of dedicated VRAM. (Note: This will be increased to 512MB in an upcoming update).
-<br/>- A wxWidgets front end is planned (T12). `vmvga` (VMware SVGA II + SVGA3D, with
-`vgabios-vmware.bin`) is the default display device. Linux binaries require the
+<br/>- `vmvga` (VMware SVGA II + SVGA3D, with `vgabios-vmware.bin`) is the default display device with **512 MB** of dedicated VRAM (plus 512 MB surface memory) and hardware cursor support at full Windows XP hardware acceleration.
+<br/>- Interactive display output uses **SDL** (`-display sdl`; VNC support is disabled, while `-display none` remains for headless checks). A wxWidgets front end is planned (T12).
+<br/>- On Linux, launch with KVM (`-accel kvm`) and make sure `kvm.enable_vmware_backdoor=1` is enabled on the host kernel module (`qemu-system-i386` warns at startup if `/sys/module/kvm/parameters/enable_vmware_backdoor` is disabled). Linux binaries require the
 usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).

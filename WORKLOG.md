@@ -657,3 +657,25 @@ recovery even though the workflow and documentation still referenced them.
 Verified the current main-branch contents, helper declarations/definitions,
 Meson registration, both benchmark paths, loop counts, and boot signatures.
 No local build or test was run; CI must validate the repair.
+
+## Session 29, 2026-11-20 - Fix SVGA hardware cursor, 512 MiB VRAM, D3D refresh flush, Linux KVM backdoor warning, and disable VNC
+
+Fixed five issues reported after Windows XP SP3 guest testing with VMware SVGA II 12.01.08 (`VMware Tools 10.0.12`):
+
+1. **Missing hardware mouse cursor at full XP hardware acceleration (`hw/display/vmware_vga.c`, `ui/sdl2.c`):**
+   - Added `vmsvga_cursor_bpp_supported()` accepting `1/8/15/16/24/32` bpp in `SVGA_CMD_DEFINE_CURSOR` and `SVGA_COLOR_CURSOR` MOB submission (XP queries `SVGA_REG_DEPTH == 24` in 32-bpp mode and submits 24-bpp XOR cursor masks, which were previously rejected because `vmsvga_active_depth()` returned `32`).
+   - Clamped cursor hotspots (`hot_x`/`hot_y`) into `[0, width-1] x [0, height-1]`, computed `SVGA_CMD_DEFINE_CURSOR` mask word counts via `vmsvga_cursor_row_bytes()` (handling 15-bpp storage pitch), fixed `vmsvga_qemu_rgb()` channel order (`0xRRGGBB` to match `ui/sdl2.c` RGB masks), re-applied active cursor definitions immediately on `vmsvga_cursor_define()`/`vmsvga_rgba_cursor_define()`/`vmsvga_cursor_palette_changed()`, and fell back to `cursor_builtin_left_ptr()` when no cached cursor matches rather than leaving the hidden boot cursor active.
+   - Fixed `ui/sdl2.c` `sdl_mouse_warp()` ordering (`guest_cursor = on` before `sdl_show_cursor()`), null-guarded `guest_sprite`, freed orphaned `guest_sprite_surface` on `SDL_CreateColorCursor` failure and nulled freed pointers in `sdl_mouse_define()`, and scaled guest warp coordinates to window size via `sdl_warp_guest_cursor()`.
+2. **VRAM increase (`hw/display/vmware_vga.c`):**
+   - Increased `VMSVGA_DEFAULT_VRAM_SIZE` from `32` MiB to `512` MiB (updating the `vmsvga_memory_size` comment accordingly).
+3. **Intermittent D3D7/D3D8/D3D9 freeze / black screen (`hw/display/vmware_vga.c`):**
+   - Flushed deferred legacy 3D presents via `(void)vmsvga3d_legacy_present_flush_live(s);` in `vmsvga_update_display()` before `vmsvga3d_screen_target_flush_live(s)` so pure-3D render loops stay visible on display refreshes without waiting for a 2D GDI barrier.
+   - Fixed `SVGA_CMD_NOP` and `SVGA_CMD_NOP_ERROR` FIFO handling to consume 1 word (`len -= 1`) rather than rewinding `fifo_stop` forever.
+   - Enabled `15`-bpp and `16`-bpp mode commits in `SVGA_REG_BITS_PER_PIXEL` under `CONFIG_PIXMAN`.
+4. **Linux KVM VMware backdoor check & docs (`target/i386/kvm/kvm.c`, `README.md`):**
+   - Added a startup `warn_report()` in `kvm_arch_init()` when `/sys/module/kvm/parameters/enable_vmware_backdoor` is present and disabled (`N`/`n`/`0`), instructing users to enable `kvm.enable_vmware_backdoor=1`.
+   - Updated `README.md` to remove the obsolete 1-notch hardware-acceleration workaround and 32 MB VRAM note, document the 512 MB VRAM default, and document Linux `kvm.enable_vmware_backdoor=1`.
+5. **Disable VNC while keeping SDL and headless `-display none` (`meson_options.txt`, `.github/workflows/build.yml`, `TASKS.md`):**
+   - Set `qemu_vnc`, `vnc`, `vnc_jpeg`, and `vnc_sasl` defaults to `disabled` in `meson_options.txt` and added `--disable-vnc` to both Linux and Windows CI configure lines while preserving `-display sdl` and `-display none`.
+
+No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime fixes.
