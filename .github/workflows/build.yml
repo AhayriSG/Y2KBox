@@ -23,7 +23,7 @@ jobs:
       - name: Configure
         run: |
           mkdir build && cd build
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl --enable-kvm
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl --disable-vnc --enable-kvm
       - name: Build
         run: ninja -C build qemu-system-i386 qemu-img
       - name: Checks (boot + memory-op test + CPUID)
@@ -133,7 +133,7 @@ jobs:
         run: |
           mkdir build && cd build
           set +e
-          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl 2>&1 | tee configure.log
+          ../configure --target-list=i386-softmmu --disable-guest-agent --disable-werror --enable-sdl --disable-vnc 2>&1 | tee configure.log
           rc=${PIPESTATUS[0]}
           if [ $rc -ne 0 ]; then
             { tail -n 30 configure.log; echo '--- meson-log'; tail -n 25 meson-logs/meson-log.txt 2>/dev/null; } > err.txt
