@@ -78,7 +78,7 @@ it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonl
 select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
-<br/>- `vmvga` (VMware SVGA II + SVGA3D, with `vgabios-vmware.bin`) is the default display device with **512 MB** of dedicated VRAM (plus 512 MB surface memory) and hardware cursor support at full Windows XP hardware acceleration.
+<br/>- `vmvga` (VMware SVGA II + SVGA3D, with `vgabios-vmware.bin`) is the default display device with **512 MB** of dedicated VRAM (plus 512 MB surface memory) and hardware cursor support at full Windows XP hardware acceleration. Note: 32-bit Windows XP's VMware XPDM driver (`vmx_svga.sys` 12.01.08) caps reported adapter VRAM in `dxdiag` to **128 MB** (`SVGA_VRAM_MAX_SIZE`) to fit 32-bit kernel system PTE limits even though the virtual device exposes the full 512 MB VRAM BAR1.
 <br/>- Interactive display output uses **SDL** (`-display sdl`; VNC support is disabled, while `-display none` remains for headless checks). A wxWidgets front end is planned (T12).
 <br/>- On Linux, launch with KVM (`-accel kvm`) and make sure `kvm.enable_vmware_backdoor=1` is enabled on the host kernel module (`qemu-system-i386` warns at startup if `/sys/module/kvm/parameters/enable_vmware_backdoor` is disabled). Linux binaries require the
 usual shared libraries from your distribution, including glib2, pixman,

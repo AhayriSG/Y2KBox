@@ -8544,6 +8544,8 @@ static bool vmsvga3d_legacy_present_host_scanout_ensure(
     s->screen_destroyed_reuse_valid = false;
     s->legacy_handoff_active = true;
     s->legacy_handoff_rebind = false;
+    s->legacy_handoff_timeout_armed = false;
+    s->legacy_handoff_hold_frames = 0;
     s->svga_surface_bound = false;
     return true;
 }
@@ -8725,9 +8727,8 @@ static bool vmsvga3d_legacy_present_mode_quiesce_live(
 {
     struct vmsvga3d_state_s *state = s != NULL ? s->svga3d : NULL;
 
-    if (state != NULL && state->legacy_present_pending &&
-        !vmsvga3d_legacy_present_flush_live(s)) {
-        return false;
+    if (state != NULL && state->legacy_present_pending) {
+        (void)vmsvga3d_legacy_present_flush_live(s);
     }
 
     /* Bind the old-mode host mirror before active geometry changes.  The next
@@ -8852,16 +8853,63 @@ static bool vmsvga3d_present_screen_rect(
         return false;
     }
 
+    if (s->screen_defined && s->screen_handoff_active &&
+        s->screen_backing_valid &&
+        s->screen_backing_gmr_id == SVGA_GMR_FRAMEBUFFER) {
+        SVGA3dCopyRect clipped;
+
+        if (!vmsvga3d_present_rect_to_buffer_internal(
+                s, surface, image, desc, rect, screen_base, screen_size,
+                s->screen_width, s->screen_height, 32, screen_stride, 0,
+                false, false, execute)) {
+            return false;
+        }
+        if (!execute) {
+            return true;
+        }
+        vmsvga3d_clip_present_rect(rect, &image->size, s->screen_width,
+                                   s->screen_height, &clipped);
+        if (clipped.w != 0 && clipped.h != 0) {
+            vmsvga_screen_handoff_mirror_to_backing(
+                s, clipped.x, clipped.y, clipped.w, clipped.h);
+            vmsvga_damage_add_visible_mirror(
+                s, clipped.x, clipped.y, clipped.w, clipped.h);
+            if (clipped.x == 0 && clipped.y == 0 &&
+                clipped.w == s->screen_width &&
+                clipped.h == s->screen_height &&
+                !vmsvga_screen_mirror_rect_is_zero(
+                    s, 0, 0, clipped.w, clipped.h)) {
+                vmsvga_screen_handoff_complete(
+                    s, "screen-handoff-3d-present");
+            }
+        }
+        return true;
+    }
+
     mark_dirty = s->screen_backing_valid;
 
     if (mark_dirty) {
         dirty_base = s->screen_backing_offset;
     }
 
-    return vmsvga3d_present_rect_to_buffer(
-        s, surface, image, desc, rect, screen_base, screen_size,
-        s->screen_width, s->screen_height, 32, screen_stride, dirty_base,
-        mark_dirty, execute);
+    if (!vmsvga3d_present_rect_to_buffer_internal(
+            s, surface, image, desc, rect, screen_base, screen_size,
+            s->screen_width, s->screen_height, 32, screen_stride,
+            dirty_base, mark_dirty, false, execute)) {
+        return false;
+    }
+
+    if (execute) {
+        SVGA3dCopyRect clipped;
+        vmsvga3d_clip_present_rect(rect, &image->size, s->screen_width,
+                                   s->screen_height, &clipped);
+        if (clipped.w != 0 && clipped.h != 0) {
+            vmsvga_damage_add_visible_mirror(
+                s, clipped.x, clipped.y, clipped.w, clipped.h);
+        }
+    }
+
+    return true;
 }
 
 static bool vmsvga3d_present_screen_rect_damage_only(
@@ -8903,7 +8951,8 @@ static bool vmsvga3d_present_screen_rect_damage_only(
                                     clipped.h);
     }
 
-    vmsvga_damage_add_visible(s, clipped.x, clipped.y, clipped.w, clipped.h);
+    vmsvga_damage_add_visible_mirror(
+        s, clipped.x, clipped.y, clipped.w, clipped.h);
     return true;
 }
 
@@ -9020,12 +9069,29 @@ static bool vmsvga3d_present_scaled_screen_rect(
         }
     }
 
-    vmsvga_screen_mark_dirty(s, (uint32_t)dst_left, (uint32_t)dst_top,
-                             (uint32_t)(dst_right - dst_left),
-                             (uint32_t)(dst_bottom - dst_top));
-    vmsvga_damage_add_visible(s, (uint32_t)dst_left, (uint32_t)dst_top,
-                              (uint32_t)(dst_right - dst_left),
-                              (uint32_t)(dst_bottom - dst_top));
+    if (s->screen_defined && s->screen_handoff_active &&
+        s->screen_backing_valid &&
+        s->screen_backing_gmr_id == SVGA_GMR_FRAMEBUFFER) {
+        uint32_t copy_w = (uint32_t)(dst_right - dst_left);
+        uint32_t copy_h = (uint32_t)(dst_bottom - dst_top);
+        vmsvga_screen_handoff_mirror_to_backing(
+            s, (uint32_t)dst_left, (uint32_t)dst_top, copy_w, copy_h);
+        vmsvga_damage_add_visible_mirror(
+            s, (uint32_t)dst_left, (uint32_t)dst_top, copy_w, copy_h);
+        if (dst_left == 0 && dst_top == 0 && copy_w == s->screen_width &&
+            copy_h == s->screen_height &&
+            !vmsvga_screen_mirror_rect_is_zero(s, 0, 0, copy_w, copy_h)) {
+            vmsvga_screen_handoff_complete(s, "screen-handoff-3d-blit");
+        }
+    } else {
+        vmsvga_screen_mark_dirty(s, (uint32_t)dst_left, (uint32_t)dst_top,
+                                 (uint32_t)(dst_right - dst_left),
+                                 (uint32_t)(dst_bottom - dst_top));
+        vmsvga_damage_add_visible_mirror(
+            s, (uint32_t)dst_left, (uint32_t)dst_top,
+            (uint32_t)(dst_right - dst_left),
+            (uint32_t)(dst_bottom - dst_top));
+    }
 
     return true;
 }
@@ -16864,12 +16930,16 @@ static bool vmsvga3d_screen_target_retired_snapshot_service_live(
                 if (w == 0 || h == 0) {
                     continue;
                 }
-                if (s->screen_backing_valid) {
+                if (s->screen_defined && s->screen_handoff_active &&
+                    s->screen_backing_valid &&
+                    s->screen_backing_gmr_id == SVGA_GMR_FRAMEBUFFER) {
+                    vmsvga_screen_handoff_mirror_to_backing(s, x, y, w, h);
+                } else if (s->screen_backing_valid) {
                     vmsvga_mark_vram_dirty_rect(
                         s, s->screen_backing_offset, screen_stride, 4,
                         x, y, w, h);
                 }
-                vmsvga_damage_add_visible(s, x, y, w, h);
+                vmsvga_damage_add_visible_mirror(s, x, y, w, h);
             }
             ready_entries++;
             if (next_bytes > UINT64_MAX - ready_bytes) {

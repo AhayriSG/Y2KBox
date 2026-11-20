@@ -117,6 +117,7 @@
 #define VMSVGA_PSEUDOCOLOR_ENTRIES 256
 #define VMSVGA_BLIT_SCRATCH_SIZE (VMSVGA_MAX_WIDTH * 4)
 #define VMSVGA_SCREEN_REBUILD_HOLD_FRAMES 1U
+#define VMSVGA_HANDOFF_MAX_FRAMES 8U
 
 /* #define ANY_FENCE_OFF */
 /* #define EXPCAPS */
@@ -560,6 +561,7 @@ struct vmsvga_state_s {
      * transition image. */
     bool screen_handoff_same_backing;
     bool screen_handoff_skipped_same_backing_full;
+    uint32_t screen_handoff_hold_frames;
     uint32_t screen_backing_gmr_id;
     uint32_t screen_backing_offset;
     uint32_t screen_backing_pitch;
@@ -675,6 +677,8 @@ struct vmsvga_state_s {
      * storage used by the existing Screen Object handoff. */
     bool legacy_handoff_active;
     bool legacy_handoff_rebind;
+    bool legacy_handoff_timeout_armed;
+    uint32_t legacy_handoff_hold_frames;
 };
 DECLARE_INSTANCE_CHECKER(struct pci_vmsvga_state_s, VMVGA, "vmvga")
 
@@ -1378,6 +1382,8 @@ static inline void vmsvga_legacy_handoff_reset_state(
 {
     s->legacy_handoff_active = false;
     s->legacy_handoff_rebind = false;
+    s->legacy_handoff_timeout_armed = false;
+    s->legacy_handoff_hold_frames = 0;
 }
 
 static inline bool vmsvga_legacy_vga_shadow_rendering(
@@ -1752,6 +1758,15 @@ static inline void vmsvga_legacy_handoff_sync_dirty_rect(
     uint32_t h);
 static void vmsvga3d_legacy_present_external_scanout_write_live(
     struct vmsvga_state_s *s);
+static bool vmsvga3d_legacy_present_mode_quiesce_live(
+    struct vmsvga_state_s *s);
+static void vmsvga3d_legacy_present_reset_live(
+    struct vmsvga_state_s *s);
+static bool vmsvga_screen_handoff_present_rect(
+    struct vmsvga_state_s *s, uint32_t x, uint32_t y, uint32_t w,
+    uint32_t h);
+static void vmsvga_screen_handoff_complete(struct vmsvga_state_s *s,
+                                           const char *reason);
 
 static inline void vmsvga_damage_flush(struct vmsvga_state_s *s)
 {
@@ -1858,6 +1873,19 @@ static inline void vmsvga_damage_queue(struct vmsvga_state_s *s,
     s->damage[s->damage_count++] = rect;
 }
 
+static inline void vmsvga_damage_add_mirror(struct vmsvga_state_s *s,
+                                            uint32_t x, uint32_t y,
+                                            uint32_t w, uint32_t h)
+{
+    if (w == 0 || h == 0) {
+        return;
+    }
+
+    vmsvga_legacy_handoff_present_rect(s, x, y, w, h);
+    vmsvga3d_legacy_present_external_scanout_write_live(s);
+    vmsvga_damage_queue(s, x, y, w, h);
+}
+
 static inline void vmsvga_damage_add(struct vmsvga_state_s *s, uint32_t x,
                                      uint32_t y, uint32_t w, uint32_t h)
 {
@@ -1866,9 +1894,13 @@ static inline void vmsvga_damage_add(struct vmsvga_state_s *s, uint32_t x,
     }
 
     /* Explicit SVGA presentation/mutation rectangles are exact.  During a
-     * register-mode handoff they replace the same rectangle in the preserved
-     * transition mirror before normal frontend damage processing. */
+     * register-mode or Screen Object handoff they replace the same rectangle
+     * in the preserved transition mirror before normal frontend damage
+     * processing. */
     vmsvga_legacy_handoff_present_rect(s, x, y, w, h);
+    if (!vmsvga_screen_handoff_present_rect(s, x, y, w, h)) {
+        return;
+    }
     vmsvga3d_legacy_present_external_scanout_write_live(s);
     vmsvga_damage_queue(s, x, y, w, h);
 }
@@ -1979,6 +2011,27 @@ static inline void vmsvga_damage_add_visible(struct vmsvga_state_s *s,
 
     vmsvga_damage_add(s, x, y, (uint32_t)(right - x),
                       (uint32_t)(bottom - y));
+}
+
+static inline void vmsvga_damage_add_visible_mirror(
+    struct vmsvga_state_s *s, uint32_t x, uint32_t y, uint32_t w,
+    uint32_t h)
+{
+    uint64_t surface_width_px = vmsvga_active_width(s);
+    uint64_t surface_height_px = vmsvga_active_height(s);
+    uint64_t right;
+    uint64_t bottom;
+
+    if ((uint64_t)x >= surface_width_px || (uint64_t)y >= surface_height_px ||
+        w == 0 || h == 0) {
+        return;
+    }
+
+    right = MIN((uint64_t)x + w, surface_width_px);
+    bottom = MIN((uint64_t)y + h, surface_height_px);
+
+    vmsvga_damage_add_mirror(s, x, y, (uint32_t)(right - x),
+                             (uint32_t)(bottom - y));
 }
 
 static inline void vmsvga_mark_vram_dirty_range(
@@ -8993,6 +9046,8 @@ static bool vmsvga_legacy_handoff_arm(struct vmsvga_state_s *s)
      * register-mode handoff has rotated it into the new mirror. */
     s->screen_destroyed_reuse_valid = false;
     s->legacy_handoff_active = true;
+    s->legacy_handoff_timeout_armed = true;
+    s->legacy_handoff_hold_frames = VMSVGA_HANDOFF_MAX_FRAMES;
 
     VMVGA_TRACE_LOCAL(VMVGA_TRACE_STATE,
                        "REG_HANDOFF arm width=%u height=%u",
@@ -9826,6 +9881,7 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
               vmsvga_legacy_vga_enter(s);
           } else if (was_enabled && !enabled) {
               vmsvga3d_command_buffer_drain(s, "svga-disable");
+              (void)vmsvga3d_legacy_present_mode_quiesce_live(s);
               vmsvga_trace_vga_state(s, "svga-disable-before");
               /*
                * The SVGA cursor belongs to this display mode. Hide it before
@@ -9898,6 +9954,8 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
 
         if (was_config && !config) {
             vmsvga3d_command_buffer_drain(s, "config-done-clear");
+            (void)vmsvga3d_legacy_present_mode_quiesce_live(s);
+            vmsvga3d_legacy_present_reset_live(s);
         }
         s->config = config;
         if (s->config) {
@@ -10446,6 +10504,34 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display(void *opaque)
             s->trace_activity_seq++;
         }
         goto done;
+    }
+
+    /*
+     * A Screen or register transition mirror must not trap the frontend when
+     * the guest transitions with partial updates, valid black clears, or direct
+     * BAR1 writes.  Retire the temporary mirror once its bounded hold window
+     * expires so direct BAR1 scanout and VGA dirty tracking resume.
+     */
+    if (s->screen_defined && s->screen_handoff_active) {
+        if (s->screen_handoff_hold_frames > 0) {
+            s->screen_handoff_hold_frames--;
+        }
+        if (s->screen_handoff_hold_frames == 0) {
+            vmsvga_screen_handoff_complete(s, "screen-handoff-timeout");
+        }
+    } else if (!s->screen_defined && s->legacy_handoff_active &&
+               !s->legacy_handoff_rebind &&
+               s->legacy_handoff_timeout_armed) {
+        if (s->legacy_handoff_hold_frames > 0) {
+            s->legacy_handoff_hold_frames--;
+        }
+        if (s->legacy_handoff_hold_frames == 0) {
+            s->legacy_handoff_rebind = true;
+            s->legacy_handoff_timeout_armed = false;
+            VMVGA_TRACE_LOCAL(VMVGA_TRACE_STATE,
+                               "REG_HANDOFF timeout width=%u height=%u",
+                               s->active_width, s->active_height);
+        }
     }
 
     /*
@@ -11275,10 +11361,13 @@ static int vmsvga_post_load(void *opaque, int version_id)
         s->vga.vram_ptr = vmsvga_svga_vram_ptr(s);
     }
 
+    s->screen_handoff_hold_frames = 0;
     vmsvga_legacy_handoff_reset_state(s);
     if (legacy_mirror_restored) {
         s->legacy_handoff_active = true;
         s->legacy_handoff_rebind = false;
+        s->legacy_handoff_timeout_armed = true;
+        s->legacy_handoff_hold_frames = VMSVGA_HANDOFF_MAX_FRAMES;
     }
     s->cursor_dirty = true;
     s->damage_count = 0;

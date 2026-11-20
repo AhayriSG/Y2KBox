@@ -679,3 +679,19 @@ Fixed five issues reported after Windows XP SP3 guest testing with VMware SVGA I
    - Set `qemu_vnc`, `vnc`, `vnc_jpeg`, and `vnc_sasl` defaults to `disabled` in `meson_options.txt` and added `--disable-vnc` to both Linux and Windows CI configure lines while preserving `-display sdl` and `-display none`.
 
 No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime fixes.
+
+## Session 30, 2026-11-20 - Fix post-mode-change scanout lockups and document XP 128 MiB dxdiag cap
+
+Fixed the screen freeze after guest video mode changes (e.g., entering/exiting fullscreen `dxdiag` D3D tests or changing desktop modes) and investigated the 128 MB `dxdiag` VRAM report:
+
+1. **Screen Object & Legacy Handoff Scanout Freeze (`hw/display/vmware_vga.c`, `hw/display/vmware_vga_gmr.c`, `hw/display/vmware_vga_3d.c`):**
+   - Added a bounded transition window (`VMSVGA_HANDOFF_MAX_FRAMES = 8U`) for both `screen_handoff_active` (Screen Object transitions) and non-D3D9 `legacy_handoff_active` (legacy register transitions via `legacy_handoff_timeout_armed`) in `vmsvga_update_display()` so partial updates, valid black clears, or direct CPU writes to BAR1 cannot trap the SDL frontend on a stale `screen_base` snapshot with `DIRTY_MEMORY_VGA` disabled.
+   - Added `vmsvga_screen_handoff_complete()`, `vmsvga_screen_handoff_present_rect()`, and `vmsvga_screen_handoff_mirror_to_backing()` so `SVGA_CMD_UPDATE` / `SVGA_CMD_UPDATE_VERBOSE` / 2D FIFO BAR1 draws update `screen_base` during an active Screen Object handoff (and complete on full-screen non-zero updates), while `SVGA_3D_CMD_PRESENT` / `SVGA_3D_CMD_BLIT_SURFACE_TO_SCREEN` / retired screen readback mirror frames into BAR1 backing so direct BAR1 rebind has current pixels.
+   - Separated BAR1-originated damage (`vmsvga_damage_add()`) from pre-updated mirror damage (`vmsvga_damage_add_mirror()`, `vmsvga_damage_add_visible_mirror()`), avoiding stale BAR1 overwrites of preserved zero-guards or 3D mirror frames.
+   - Quiesced and reset `legacy_present` state on `SVGA_REG_ENABLE = 0` and `SVGA_REG_CONFIG_DONE = 0`, cleared `legacy_handoff_timeout_armed` when live D3D9 GPU scanout owns `screen_base` (`vmsvga3d_legacy_present_host_scanout_ensure()`), and prevented `vmsvga3d_legacy_present_mode_quiesce_live()` from returning `false` and blocking `vmsvga_try_commit_mode()` across incompatible mode transitions.
+
+2. **128 MB VRAM shown in Windows XP `dxdiag` (`README.md`):**
+   - Verified `vmvga` exposes `512 MiB` BAR1 VRAM (`VMSVGA_DEFAULT_VRAM_SIZE = 512`, `SVGA_REG_VRAM_SIZE = 512 MiB`, `SVGA_REG_MEMORY_SIZE = 1024 MiB`); 32-bit Windows XP's VMware XPDM driver (`vmx_svga.sys` 12.01.08) caps adapter-reported VRAM at `SVGA_VRAM_MAX_SIZE` (128 MiB) to fit 32-bit kernel address-space/PTE limits.
+   - Documented this guest driver limit in `README.md`.
+
+No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.

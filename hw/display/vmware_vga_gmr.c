@@ -1442,6 +1442,193 @@ static inline void vmsvga_screen_mark_dirty(struct vmsvga_state_s *s,
     }
 }
 
+static bool vmsvga_screen_rect_is_zero_32(const uint8_t *buf,
+                                          uint32_t stride,
+                                          uint32_t x, uint32_t y,
+                                          uint32_t width, uint32_t height)
+{
+    uint32_t row;
+
+    for (row = 0; row < height; row++) {
+        const uint8_t *pixels =
+            buf + (size_t)(y + row) * stride + (size_t)x * 4U;
+        uint32_t col;
+
+        for (col = 0; col < width; col++) {
+            uint32_t pixel;
+
+            memcpy(&pixel, pixels + (size_t)col * 4U, sizeof(pixel));
+            if ((le32_to_cpu(pixel) & 0x00ffffffU) != 0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool vmsvga_screen_mirror_rect_is_zero(
+    const struct vmsvga_state_s *s, uint32_t x, uint32_t y,
+    uint32_t width, uint32_t height)
+{
+    if (s == NULL || s->screen_base == NULL || width == 0 || height == 0 ||
+        x >= s->screen_width || y >= s->screen_height ||
+        width > s->screen_width - x || height > s->screen_height - y ||
+        s->screen_stride < (uint64_t)s->screen_width * 4U ||
+        (uint64_t)s->screen_stride * s->screen_height >
+            s->screen_base_size) {
+        return false;
+    }
+
+    return vmsvga_screen_rect_is_zero_32(
+        s->screen_base, s->screen_stride, x, y, width, height);
+}
+
+static void vmsvga_screen_handoff_complete(struct vmsvga_state_s *s,
+                                           const char *reason)
+{
+    if (s == NULL || !s->screen_handoff_active) {
+        return;
+    }
+
+    s->screen_handoff_active = false;
+    s->screen_handoff_same_backing = false;
+    s->screen_handoff_skipped_same_backing_full = false;
+    s->screen_handoff_hold_frames = 0;
+    s->screen_frontend_hold_frames = 0;
+    if (s->screen_backing_valid) {
+        s->svga_surface_bound = false;
+    }
+    vmsvga_invalidate(s, reason);
+
+    if (vmsvga_trace_flight_enabled()) {
+        fprintf(stderr,
+                "VMVGA-SCREEN-HANDOFF phase=complete reason=%s "
+                "size=%ux%u pitch=%u backing=%u:0x%08x\n",
+                reason != NULL ? reason : "unknown",
+                s->screen_width, s->screen_height, s->screen_backing_pitch,
+                s->screen_backing_gmr_id, s->screen_backing_offset);
+    }
+
+    if (s->screen_backing_valid) {
+        vmsvga_check_size(s);
+    }
+    vmsvga_update_dirty_log(s);
+}
+
+static bool vmsvga_screen_handoff_present_rect(struct vmsvga_state_s *s,
+                                               uint32_t x, uint32_t y,
+                                               uint32_t w, uint32_t h)
+{
+    uint8_t *backing;
+    size_t backing_size;
+    uint32_t backing_stride;
+    uint64_t right;
+    uint64_t bottom;
+    uint32_t copy_width;
+    uint32_t copy_height;
+    uint32_t row;
+    size_t row_bytes;
+    bool is_zero;
+
+    if (s == NULL || !s->screen_defined || !s->screen_backing_valid ||
+        !s->screen_handoff_active ||
+        s->screen_backing_gmr_id != SVGA_GMR_FRAMEBUFFER ||
+        w == 0 || h == 0 || x >= s->screen_width ||
+        y >= s->screen_height) {
+        return true;
+    }
+
+    if (!vmsvga_screen_base_layer_storage(
+            s, &backing, &backing_size, &backing_stride) ||
+        !vmsvga_screen_base_resize(
+            s, s->screen_width, s->screen_height, backing_stride)) {
+        return true;
+    }
+
+    (void)backing_size;
+    right = MIN((uint64_t)x + w, (uint64_t)s->screen_width);
+    bottom = MIN((uint64_t)y + h, (uint64_t)s->screen_height);
+    if (right <= x || bottom <= y) {
+        return true;
+    }
+
+    copy_width = (uint32_t)(right - x);
+    copy_height = (uint32_t)(bottom - y);
+    is_zero = vmsvga_screen_rect_is_zero_32(
+        backing, backing_stride, x, y, copy_width, copy_height);
+    if (is_zero && s->screen_handoff_hold_frames != 0) {
+        return false;
+    }
+
+    row_bytes = (size_t)copy_width * 4U;
+    for (row = 0; row < copy_height; row++) {
+        memcpy(s->screen_base + (size_t)(y + row) * s->screen_stride +
+                   (size_t)x * 4U,
+               backing + (size_t)(y + row) * backing_stride +
+                   (size_t)x * 4U,
+               row_bytes);
+    }
+
+    if (!is_zero && x == 0 && y == 0 && copy_width == s->screen_width &&
+        copy_height == s->screen_height) {
+        vmsvga_screen_handoff_complete(s, "screen-handoff-update");
+    }
+
+    return true;
+}
+
+static void vmsvga_screen_handoff_mirror_to_backing(
+    struct vmsvga_state_s *s, uint32_t x, uint32_t y, uint32_t width,
+    uint32_t height)
+{
+    uint8_t *backing;
+    size_t backing_size;
+    uint32_t backing_stride;
+    uint64_t right;
+    uint64_t bottom;
+    uint32_t copy_width;
+    uint32_t copy_height;
+    uint32_t row;
+    size_t row_bytes;
+
+    if (s == NULL || !s->screen_defined || !s->screen_handoff_active ||
+        !s->screen_backing_valid ||
+        s->screen_backing_gmr_id != SVGA_GMR_FRAMEBUFFER ||
+        s->screen_base == NULL || width == 0 || height == 0 ||
+        x >= s->screen_width || y >= s->screen_height) {
+        return;
+    }
+
+    if (!vmsvga_screen_base_layer_storage(
+            s, &backing, &backing_size, &backing_stride) ||
+        s->screen_stride != backing_stride ||
+        (uint64_t)s->screen_stride * s->screen_height >
+            s->screen_base_size) {
+        return;
+    }
+
+    (void)backing_size;
+    right = MIN((uint64_t)x + width, (uint64_t)s->screen_width);
+    bottom = MIN((uint64_t)y + height, (uint64_t)s->screen_height);
+    if (right <= x || bottom <= y) {
+        return;
+    }
+
+    copy_width = (uint32_t)(right - x);
+    copy_height = (uint32_t)(bottom - y);
+    row_bytes = (size_t)copy_width * 4U;
+    for (row = 0; row < copy_height; row++) {
+        memcpy(backing + (size_t)(y + row) * backing_stride +
+                   (size_t)x * 4U,
+               s->screen_base + (size_t)(y + row) * s->screen_stride +
+                   (size_t)x * 4U,
+               row_bytes);
+    }
+
+    vmsvga_screen_mark_dirty(s, x, y, copy_width, copy_height);
+}
+
 static void vmsvga_screen_reset(struct vmsvga_state_s *s)
 {
     vmsvga_screen_direct_clear(s);
@@ -1458,6 +1645,7 @@ static void vmsvga_screen_reset(struct vmsvga_state_s *s)
     s->screen_handoff_active = false;
     s->screen_handoff_same_backing = false;
     s->screen_handoff_skipped_same_backing_full = false;
+    s->screen_handoff_hold_frames = 0;
     s->screen_backing_gmr_id = SVGA_GMR_NULL;
     s->screen_backing_offset = 0;
     s->screen_backing_pitch = 0;
@@ -1652,6 +1840,7 @@ static bool vmsvga_screen_define(struct vmsvga_state_s *s, uint32_t id,
         s->screen_handoff_active = false;
         s->screen_handoff_same_backing = false;
         s->screen_handoff_skipped_same_backing_full = false;
+        s->screen_handoff_hold_frames = 0;
         s->screen_backing_gmr_id = backing_gmr_id;
         s->screen_backing_offset = backing_offset;
         s->screen_backing_pitch = backing_pitch;
@@ -1849,6 +2038,8 @@ static bool vmsvga_screen_define(struct vmsvga_state_s *s, uint32_t id,
     s->screen_handoff_active = handoff_active && backing_present;
     s->screen_handoff_same_backing = handoff_same_backing;
     s->screen_handoff_skipped_same_backing_full = false;
+    s->screen_handoff_hold_frames =
+        s->screen_handoff_active ? VMSVGA_HANDOFF_MAX_FRAMES : 0U;
     if (handoff_active) {
         /*
          * Damage queued for the old scanout belongs to a different coordinate
@@ -2146,6 +2337,7 @@ static bool vmsvga_screen_destroy(struct vmsvga_state_s *s,
     s->screen_handoff_active = false;
     s->screen_handoff_same_backing = false;
     s->screen_handoff_skipped_same_backing_full = false;
+    s->screen_handoff_hold_frames = 0;
     s->screen_backing_gmr_id = SVGA_GMR_NULL;
     s->screen_backing_offset = 0;
     s->screen_backing_pitch = 0;
@@ -2759,7 +2951,7 @@ static bool vmsvga_screen_blit_one_from_gmrfb(
     }
 
     /* Keep vmsvga_update_display() as the single frontend refresh point. */
-    vmsvga_damage_add(s, (uint32_t)left, (uint32_t)top, width, height);
+    vmsvga_damage_add_mirror(s, (uint32_t)left, (uint32_t)top, width, height);
 
     return true;
 }
@@ -2867,20 +3059,7 @@ static bool vmsvga_screen_blit_gmrfb_to_screen(
 
     if (ok && s->screen_handoff_active &&
         !preserved_handoff_present && full_present) {
-        s->screen_handoff_active = false;
-        s->screen_handoff_same_backing = false;
-        s->screen_handoff_skipped_same_backing_full = false;
-        s->svga_surface_bound = false;
-        vmsvga_invalidate(s, "screen-handoff-complete");
-        if (trace_flight) {
-            fprintf(stderr,
-                    "VMVGA-SCREEN-HANDOFF phase=complete seq=%" PRIu64
-                    " size=%ux%u pitch=%u backing=%u:0x%08x\n",
-                    s->trace_now.gmrfb_to_screen + 1, s->screen_width,
-                    s->screen_height, s->screen_backing_pitch,
-                    s->screen_backing_gmr_id, s->screen_backing_offset);
-        }
-        vmsvga_check_size(s);
+        vmsvga_screen_handoff_complete(s, "screen-handoff-complete");
     }
 
     s->screen_annotation_type = VMSVGA_ANNOTATION_NONE;
