@@ -3469,8 +3469,23 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     }
 
     if (first) {
+        g_autofree char *vmware_backdoor = NULL;
+
         /* Tell fw_cfg to notify the BIOS to reserve the range. */
         e820_add_entry(KVM_IDENTITY_BASE, 0x4000, E820_RESERVED);
+
+        if (g_file_get_contents(
+                "/sys/module/kvm/parameters/enable_vmware_backdoor",
+                &vmware_backdoor, NULL, NULL) &&
+            (vmware_backdoor[0] == 'N' || vmware_backdoor[0] == 'n' ||
+             vmware_backdoor[0] == '0')) {
+            warn_report("kvm: enable_vmware_backdoor is disabled on the host "
+                        "(%s). VMware SVGA/vmport guest driver communication "
+                        "may fail unless kvm.enable_vmware_backdoor=1 is set "
+                        "(e.g. 'options kvm enable_vmware_backdoor=1' in "
+                        "/etc/modprobe.d/kvm.conf).",
+                        g_strstrip(vmware_backdoor));
+        }
     }
     ret = kvm_vm_set_nr_mmu_pages(s);
     if (ret < 0) {
