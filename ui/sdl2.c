@@ -228,6 +228,35 @@ static void sdl_hide_cursor(struct sdl2_console *scon)
     }
 }
 
+static void sdl_warp_guest_cursor(struct sdl2_console *scon, int x, int y)
+{
+    int scr_w, scr_h;
+    int surf_w, surf_h;
+    int wx = x;
+    int wy = y;
+
+    if (!scon->real_window) {
+        return;
+    }
+
+    SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
+    if (scon->surface) {
+        surf_w = surface_width(scon->surface);
+        surf_h = surface_height(scon->surface);
+        if (surf_w > 0 && surf_h > 0 && scr_w > 0 && scr_h > 0) {
+            wx = (int)((int64_t)x * scr_w / surf_w);
+            wy = (int)((int64_t)y * scr_h / surf_h);
+        }
+    }
+    if (scr_w > 0) {
+        wx = MAX(0, MIN(wx, scr_w - 1));
+    }
+    if (scr_h > 0) {
+        wy = MAX(0, MIN(wy, scr_h - 1));
+    }
+    SDL_WarpMouseInWindow(scon->real_window, wx, wy);
+}
+
 static void sdl_show_cursor(struct sdl2_console *scon)
 {
     if (scon->opts->has_show_cursor && scon->opts->show_cursor) {
@@ -238,7 +267,7 @@ static void sdl_show_cursor(struct sdl2_console *scon)
         SDL_SetRelativeMouseMode(SDL_FALSE);
     }
 
-    if (guest_cursor &&
+    if (guest_cursor && guest_sprite &&
         (gui_grab || qemu_input_is_absolute(scon->dcl.con) || absolute_enabled)) {
         SDL_SetCursor(guest_sprite);
     } else {
@@ -264,9 +293,9 @@ static void sdl_grab_start(struct sdl2_console *scon)
         return;
     }
     if (guest_cursor) {
-        SDL_SetCursor(guest_sprite);
+        SDL_SetCursor(guest_sprite ? guest_sprite : sdl_cursor_normal);
         if (!qemu_input_is_absolute(scon->dcl.con) && !absolute_enabled) {
-            SDL_WarpMouseInWindow(scon->real_window, guest_x, guest_y);
+            sdl_warp_guest_cursor(scon, guest_x, guest_y);
         }
     } else {
         sdl_hide_cursor(scon);
@@ -734,38 +763,49 @@ static void sdl_mouse_warp(DisplayChangeListener *dcl,
                            int x, int y, bool on)
 {
     struct sdl2_console *scon = container_of(dcl, struct sdl2_console, dcl);
+    bool was_guest_cursor = guest_cursor;
 
     if (!qemu_console_is_graphic(scon->dcl.con)) {
         return;
     }
 
+    guest_cursor = on;
+    guest_x = x;
+    guest_y = y;
+
     if (on) {
-        if (!guest_cursor) {
+        if (!was_guest_cursor) {
             sdl_show_cursor(scon);
         }
         if (gui_grab || qemu_input_is_absolute(scon->dcl.con) || absolute_enabled) {
-            SDL_SetCursor(guest_sprite);
+            SDL_SetCursor(guest_sprite ? guest_sprite : sdl_cursor_normal);
             if (!qemu_input_is_absolute(scon->dcl.con) && !absolute_enabled) {
-                SDL_WarpMouseInWindow(scon->real_window, x, y);
+                sdl_warp_guest_cursor(scon, x, y);
             }
         }
     } else if (gui_grab) {
         sdl_hide_cursor(scon);
     }
-    guest_cursor = on;
-    guest_x = x, guest_y = y;
 }
 
 static void sdl_mouse_define(DisplayChangeListener *dcl,
                              QEMUCursor *c)
 {
+    int hot_x;
+    int hot_y;
 
     if (guest_sprite) {
         SDL_FreeCursor(guest_sprite);
+        guest_sprite = NULL;
     }
 
     if (guest_sprite_surface) {
         SDL_FreeSurface(guest_sprite_surface);
+        guest_sprite_surface = NULL;
+    }
+
+    if (!c || c->width <= 0 || c->height <= 0) {
+        return;
     }
 
     guest_sprite_surface =
@@ -776,10 +816,14 @@ static void sdl_mouse_define(DisplayChangeListener *dcl,
         fprintf(stderr, "Failed to make rgb surface from %p\n", c);
         return;
     }
+    hot_x = c->hot_x >= c->width ? c->width - 1 : (int)c->hot_x;
+    hot_y = c->hot_y >= c->height ? c->height - 1 : (int)c->hot_y;
     guest_sprite = SDL_CreateColorCursor(guest_sprite_surface,
-                                         c->hot_x, c->hot_y);
+                                         hot_x, hot_y);
     if (!guest_sprite) {
         fprintf(stderr, "Failed to make color cursor from %p\n", c);
+        SDL_FreeSurface(guest_sprite_surface);
+        guest_sprite_surface = NULL;
         return;
     }
     if (guest_cursor &&
