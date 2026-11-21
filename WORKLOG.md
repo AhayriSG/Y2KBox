@@ -1064,3 +1064,12 @@ Interpretation boundaries:
 - No performance fix or xemu TCG patch was applied. In particular, xemu #3140/#3141 remain candidates pending evidence; #3028 remains non-applicable as a direct port based on current Y2KBox invalidation behavior.
 
 No local build or XP runtime test was run (per project workflow), and CI was not polled. The code changes require Windows/Linux CI validation before owner testing. T13e remains CLAIMED, not complete.
+
+
+## Session 50 (ChatGPT), 2026-11-21 - Include VMVGA display servicing and audio callback gaps
+
+Extended the initial T13e instrumentation to cover the full VMVGA display-update callback (vmsvga_update_display()), which also services pending D3D queries, deferred presents, and screen-target/readback work. This complements the FIFO timing and helps distinguish FIFO command processing from work performed during display refresh.
+
+Added separate interval metrics for SDL audio output callbacks and the audio mixer output service. These report callback-to-callback/service-to-service gaps as well as execution durations, so delayed servicing can be detected even when the callback itself is short. Aggregate duration fields now report microseconds to preserve sub-millisecond detail; capture duration remains milliseconds. The summary continues to include threshold counts above 1/10/100 ms and a warning that categories overlap.
+
+Updated TASKS.md and HANDOFF.md. No performance optimization was applied. No local build/test was run and CI was not polled; all source changes still require Windows/Linux CI validation and owner runtime capture.
