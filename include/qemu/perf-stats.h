@@ -2,7 +2,7 @@
 #ifndef QEMU_PERF_STATS_H
 #define QEMU_PERF_STATS_H
 
-#include "qemu/osdep.h"
+#include <stdint.h>
 
 /*
  * Opt-in, low-volume timing for the Y2KBox scene-stall investigation.
