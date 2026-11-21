@@ -126,36 +126,34 @@ implementation already exists for the same QEMU generation, GPL-2.0-or-later, XP
 supported, no 100k-line port of legacy VirtualBox/Chromium code. Still unverified until tested in an
 XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windows-host backend.
 
-**Q3 NIC / storage drivers (owner proposed VirtIO as a possible faster path).** Keep
-**RTL8139 + PIIX IDE** as the working defaults: RTL8139 has an in-box XP driver and IDE
-requires no additional boot driver. The earlier config-only VirtIO enablement failed
-because XP pruning had removed the implementation sources; that attempt was reverted
-in `72165a8`. T15 has now restored the minimal VirtIO Block + Net source set from the
-upstream QEMU 11.1.90 baseline (`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`): shared
-VirtIO core, PCI transport, `virtio-blk-pci`, `virtio-net-pci`, their device implementations,
-and missing public headers. Meson wiring is restored and the two guest device selections
-are enabled. Linux CI first exposed the `vhost_vdpa` feature gate; disabling that alone
-then exposed unresolved generic vhost symbols at link time because Linux's `vhost_kernel`
-and `vhost_user` options default to auto and enabled the host vhost layer despite its
-sources being intentionally pruned. The product now explicitly disables `vhost_kernel`,
-`vhost_user`, `vhost_crypto`, `vhost_net`, and `vhost_vdpa`. Plain guest VirtIO devices use
-QEMU's userspace queues and do not need these host-side backends. The optional
-`efi-virtio.rom` request was also removed because the XP BIOS product does not ship a UEFI
-PXE ROM. Windows CI passed and owner reports successfully booting XP with VirtIO; the
-latest Linux linker fix still needs CI confirmation. Keep all host vhost/vDPA acceleration,
-VirtIO SCSI, virtio-serial/vdagent, ballooning and other unrelated devices out of scope.
+**Q3 NIC / storage drivers (owner proposed VirtIO as a faster path).** The standard XP
+launch profile now uses **VirtIO Net + VirtIO Block**: `virtio-net-pci` for networking and
+`virtio-blk-pci` for the system disk. Linux and Windows CI both pass on the validated
+source state at `d95d75703577a65e913d2451d0f01bfbb915a477`; owner reports that QEMU launches
+and boots XP with VirtIO enabled and that initial interactive performance is substantially
+better. The minimal guest VirtIO source set was restored from upstream QEMU 11.1.90
+(`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`), including shared core, PCI transport,
+Block/Net frontends and implementations, and required headers.
 
-The two choices are independent: the future T12 wxWidgets launcher will offer separate
-network-adapter (RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block)
-selectors. Keep the CD-ROM on IDE/PIIX initially. For a new XP install, use the XP x86
-`viostor` driver from `virtio-win-0.1.141_x86.vfd` via text-mode Setup's F6 storage-driver
-flow; install the XP x86 NetKVM driver after setup. Verify the exact floppy contents and
-XP driver compatibility rather than assuming every bundled driver supports XP. Existing
-IDE installations must have `viostor` installed before switching their boot disk to
-VirtIO Block. Owner will compare disk and network performance manually under Windows
-TCG; no recurring CI performance benchmark is planned. Do not change either default
-until owner-reported compatibility, reliability and performance results justify it.
+The earlier Linux failures were host-backend build-gate issues, not guest VirtIO queue
+requirements. The product explicitly disables `vhost_kernel`, `vhost_user`,
+`vhost_crypto`, `vhost_net`, and `vhost_vdpa`; plain guest VirtIO uses QEMU userspace
+queues. The optional `efi-virtio.rom` request was removed because this BIOS-based XP
+product does not ship a UEFI PXE ROM. Keep Linux KVM and Windows TCG policies unchanged.
 
+Keep **PIIX IDE** and **RTL8139** enabled as independent fallbacks. The future T12
+wxWidgets launcher should expose independent network-adapter and system-disk-controller
+selectors, with VirtIO Net and VirtIO Block as their defaults. The CD-ROM is deliberately
+separate: retain the existing **PIIX IDE CD-ROM** as the default, preserving its optical
+drive emulation behavior. T12 may offer an optional **VirtIO SCSI CD-ROM** choice after
+the SCSI device implementation and XP driver path are restored and validated; do not
+enable VirtIO SCSI in the current Block/Net restoration.
+
+For a fresh XP installation, load the XP x86 `viostor` driver from
+`virtio-win-0.1.141_x86.vfd` through text-mode Setup's F6 flow; install XP x86 NetKVM
+after setup. An existing IDE installation must have `viostor` installed before switching
+its boot disk to VirtIO Block. Owner-led disk/network performance comparisons remain
+manual; do not add recurring CI performance benchmarks.
 **Q4 RAM.** Decision (owner): always 2048 MB, automatic, no user setting. Implemented as
 `mc->default_ram_size = 2 GiB` in `hw/i386/pc.c`; the above-4G/hole64 code is dead and is
 removed by T01.
