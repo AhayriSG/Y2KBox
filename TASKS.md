@@ -358,15 +358,40 @@ librashader integration delay the frontend or higher-priority compatibility
 work. See HANDOFF.md section 9 for librashader and emulator integration
 references.
 
-## T23 (P3) Revisit configurable RAM / VRAM presets  -  Status: TODO (after T12)
-After the wxWidgets frontend is implemented, consider a simple user-facing
-toggle for era-appropriate RAM presets: 512, 1024, and 2048 MB. The current
-machine remains fixed at 2048 MB until this is explicitly designed and
-implemented.
+## T23 (P3) Configurable RAM and vGPU memory presets  -  Status: TODO (after T12)
+After the wxWidgets frontend is implemented, add simple user-facing memory
+presets in the launcher. RAM candidates remain 512, 1024, and 2048 MB; the
+current machine stays fixed at 2048 MB until that GUI work is implemented.
 
-Also reconsider whether configurable VRAM presets are appropriate, with
-128, 256, 512, and 768 MB as provisional candidates only. **Do not treat
-these VRAM sizes or the option itself as approved:** revisit the owner's
-earlier Gemini 4 discussion/note and check the device/guest-driver constraints
-before deciding. The current VRAM configuration remains unchanged until that
-review and a separate implementation decision.
+For Options -> vGPU, expose two distinct memory controls rather than one
+ambiguous "VRAM" setting:
+
+* **Framebuffer VRAM** (`vgamem_mb` / `SVGA_REG_VRAM_SIZE` / PCI BAR1):
+  initial/default value **128 MiB**. Candidate choices: 16, 32, 64, and
+  128 MiB. This controls the legacy framebuffer aperture and its PCI MMIO
+  reservation; 128 MiB is the practical target for the project's 32-bit
+  Windows XP guest configuration.
+* **3D Surface Memory** (Y2KBox's SVGA3D surface-memory budget):
+  initial/default value **512 MiB**. Candidate choices: 64, 128, 256, 512,
+  and 768 MiB. This budget is distinct from the BAR1 framebuffer and backs
+  SVGA3D surface/resource allocations.
+
+The device reports the combined value through `SVGA_REG_MEMORY_SIZE`, which
+is currently calculated as framebuffer VRAM plus the surface-memory budget.
+Keep the combined value at or below **1024 MiB**; validate the pair rather
+than allowing a GUI selection that exceeds this limit. With the current
+128 MiB + 512 MiB defaults, `SVGA_REG_MEMORY_SIZE` is **640 MiB**. The
+largest listed 3D Surface Memory preset (768 MiB) fits with the 128 MiB
+framebuffer exactly at the 1024 MiB ceiling.
+
+The 128 MiB framebuffer default is chosen to avoid reserving an unnecessarily
+large BAR1 aperture for the 32-bit XP target. The precise XPDM driver's
+mapping/clamping behavior should still be confirmed against the VMware Tools
+12.01.08 guest driver and by checking the reported local framebuffer memory
+and PCI BAR1 mapping in the XP guest; do not present the driver-specific
+128 MiB behavior as a universal SVGA hardware limit.
+
+The current device defaults are implemented separately from this future GUI
+task. The GUI must expose the two pools accurately, retain the combined
+1024 MiB limit, and explain that the 3D surface budget is not the same as
+dxdiag's local framebuffer-memory figure.
