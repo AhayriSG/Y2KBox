@@ -898,3 +898,24 @@ Source and build wiring are committed, but no local build was run and CI was not
 T15 remains CLAIMED pending owner confirmation of Linux + Windows CI. After CI passes,
 update README device guidance and proceed with manual XP `viostor`/NetKVM compatibility,
 boot, networking and performance tests. Keep the defaults unchanged until owner results.
+
+
+## Session 40 (ChatGPT), 2026-11-21 - Correct VirtIO Linux host-backend gate and optional ROM
+
+Owner reported Linux CI failure at `net/vhost-vdpa.c` because
+`hw/virtio/vhost-vdpa.h` remains intentionally pruned. Root cause: the previous change
+set Meson's `vhost_net` feature to disabled, but `net/meson.build` compiles
+`net/vhost-vdpa.c` under `have_vhost_net_vdpa`, which is controlled by the separate
+`vhost_vdpa` feature. Corrected `meson_options.txt` so `vhost_vdpa` also defaults to
+`disabled`; kept `vhost_net` disabled as well. No vhost-vDPA sources or headers were
+restored because host vhost acceleration is outside the product scope.
+
+Owner also reported `Failed to open file efi-virtio.rom`. Traced it to the upstream
+`virtio-net-pci.c` class default `k->romfile = "efi-virtio.rom"`. The fork does not ship
+that optional UEFI PXE ROM and targets BIOS-based Windows XP, so removed the default ROM
+request rather than adding an unused firmware binary. This does not disable the VirtIO
+Net device or its guest driver networking path; UEFI/PXE network boot is not in scope.
+
+No local build or CI polling performed. Await owner confirmation of fresh Linux and
+Windows CI results. Keep T15 claimed and README availability wording unchanged until
+both platforms pass.
