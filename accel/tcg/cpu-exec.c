@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qemu/qemu-print.h"
 #include "qapi/error.h"
 #include "qapi/type-helpers.h"
@@ -1029,6 +1030,7 @@ static int cpu_exec_setjmp(CPUState *cpu, SyncClocks *sc)
 int cpu_exec(CPUState *cpu)
 {
     int excp;
+    uint64_t perf_start_ns;
     SyncClocks sc = { 0 };
 
     /* replay_interrupt may need current_cpu */
@@ -1042,6 +1044,8 @@ int cpu_exec(CPUState *cpu)
         assert(!cpu->halted);
     }
 #endif
+
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_CPU_EXEC);
 
     RCU_READ_LOCK_GUARD();
     cpu_exec_enter(cpu);
@@ -1057,6 +1061,7 @@ int cpu_exec(CPUState *cpu)
     excp = cpu_exec_setjmp(cpu, &sc);
 
     cpu_exec_exit(cpu);
+    qemu_perf_stats_end(QEMU_PERF_CPU_EXEC, perf_start_ns);
     return excp;
 }
 
