@@ -283,14 +283,16 @@ static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
 
     if (view->nr == view->nr_allocated) {
         size_t old_capacity = view->nr_allocated;
+        uint64_t realloc_start_ns;
         view->nr_allocated = MAX(2 * view->nr, 10);
-        perf_start_ns = qemu_perf_stats_begin(
+        realloc_start_ns = qemu_perf_stats_begin(
             QEMU_PERF_FLATVIEW_RANGE_REALLOC);
         view->ranges = g_realloc(view->ranges,
                                     view->nr_allocated * sizeof(*view->ranges));
         qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_RANGE_REALLOC,
                                  view->nr_allocated - old_capacity);
-        qemu_perf_stats_end(QEMU_PERF_FLATVIEW_RANGE_REALLOC, perf_start_ns);
+        qemu_perf_stats_end(QEMU_PERF_FLATVIEW_RANGE_REALLOC,
+                            realloc_start_ns);
     }
     memmove(view->ranges + pos + 1, view->ranges[pos],
             (view->nr - pos) * sizeof(FlatRange));
@@ -614,14 +616,14 @@ static void render_memory_region(FlatView *view,
                                  bool unmergeable)
 {
     MemoryRegion *subregion;
-
-    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, 1);
     unsigned i;
     hwaddr offset_in_region;
     Int128 remain;
     Int128 now;
     FlatRange fr;
     AddrRange tmp;
+
+    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, 1);
 
     if (!mr->enabled) {
         return;
