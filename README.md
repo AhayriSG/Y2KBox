@@ -71,27 +71,6 @@ qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
   -drive media=cdrom,readonly=on ^
   -boot menu=on
 ```
-
-### On-demand diagnostic logging
-
-Diagnostic capture is available only when VMVGA is explicitly enabled with
-`-device vmvga,debug=on`. This option is intended for testers; leave it off in
-normal use. With it enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
-to capture VMVGA, VMPort GuestRPC, and vdagent diagnostics to
-`vmvga_freeze.log` in the launch working directory; press again to stop.
-The VM continues running. The first capture truncates the file; later capture
-intervals in the same QEMU run append.
-
-When `debug=on` is set but capture is inactive, these diagnostic streams remain
-disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output, and no
-capture start/stop messages in the command prompt. The hotkey is unavailable
-unless `debug=on` is present. No separate `-trace "vdagent*"` option is needed;
-the hotkey enables the relevant VMVGA, VMPort, and vdagent trace events only
-for the selected interval.
-
-Do **not** use shell-level `2> vmvga_freeze.log` redirection with this feature:
-it redirects stderr before QEMU starts and defeats interval capture.
-
 The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
 or remove that floppy drive if you do not need it. To boot an installer ISO, attach
 it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
@@ -104,6 +83,20 @@ VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10
 usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
+
+Diagnostic capture is available only when VMVGA is explicitly enabled with
+`-device vmvga,debug=on`. This option is intended for testers; not for normal use.
+With it enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
+to capture VMVGA, VMPort GuestRPC, and vdagent diagnostics to
+`vmvga_freeze.log` in the launch working directory; press again to stop.
+The VM continues running. The first capture truncates the file; later capture
+intervals in the same QEMU run append. When `debug=on` is set but capture is inactive,
+these diagnostic streams remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
+and no capture start/stop messages in the command prompt. The hotkey is unavailable
+unless `debug=on` is present. No separate `-trace "vdagent*"` option is needed;
+the hotkey enables the relevant VMVGA, VMPort, and vdagent trace events only
+for the selected interval. Do **not** use shell-level `2> vmvga_freeze.log`
+redirection with this feature: it redirects stderr before QEMU starts and defeats interval capture.
 
 ### Windows XP guest recommendations
 
