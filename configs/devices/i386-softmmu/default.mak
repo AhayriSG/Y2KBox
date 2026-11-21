@@ -1,9 +1,10 @@
 # Default configuration for i386-softmmu -- XP fork.
 #
 # Target: Windows XP (32-bit) guests on the i440fx "pc" machine.
-# Everything below is switched off because XP cannot use it, or it only
-# exists for other guests (modern PCIe machines, confidential computing,
-# paravirtual Xen/KVM-only bits, UEFI).
+# Everything not explicitly enabled below is switched off because XP cannot use it,
+# or it only exists for other guests (modern PCIe machines, confidential computing,
+# paravirtual Xen/KVM-only bits, UEFI). A narrow VirtIO Block/Net subset is enabled
+# separately for optional XP driver evaluation (T15).
 
 CONFIG_Q35=n
 CONFIG_MICROVM=n
@@ -17,7 +18,8 @@ CONFIG_X86_FW_OVMF=n
 # ---- XP device set --------------------------------------------------------
 # Kept: PC/i440FX platform, PIIX IDE, floppy, PS/2, serial/parallel, VGA +
 # Cirrus (in-box XP driver), RTL8139/PCnet/e1000 NICs, AC97/ES1370/SB16 audio,
-# USB UHCI/OHCI/EHCI + HID + mass storage. Everything below is off.
+# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are also enabled as
+# optional owner-tested devices; unrelated VirtIO devices remain off.
 
 # Optional paravirtual devices for owner-tested XP drivers (T15).
 # Keep the initial VirtIO surface deliberately narrow: PCI + block + network.
