@@ -50,12 +50,12 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     config; removing its dead machine compatibility hook must not remove generic KVM support.
     Optional KVM RAPL guest energy-MSR emulation is unsupported; its vmsr_energy backend was
     removed during XP pruning.
-* **KVM trace-generation checkpoint (2026-11-19):** the restored KVM trace-event
-  directories are registered in root `meson.build`. Their directory-local `trace.h`
-  wrappers were initially missing, causing undeclared trace calls and linker failures;
-  the three wrappers have since been restored from the exact upstream baseline. Linux
-  KVM build/CI validation is restored; KVM runtime validation on a KVM-capable host
-  remains a separate requirement before T17 can be closed.
+  * **KVM trace-generation checkpoint (2026-11-19):** the restored KVM trace-event
+    directories are registered in root `meson.build`. Their directory-local `trace.h`
+    wrappers were initially missing, causing undeclared trace calls and linker failures;
+    the three wrappers have since been restored from the exact upstream baseline. Linux
+    KVM build/CI validation is restored; KVM runtime validation on a KVM-capable host
+    remains a separate requirement before T17 can be closed.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
