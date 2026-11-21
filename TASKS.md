@@ -414,3 +414,14 @@ The current device defaults are implemented separately from this future GUI
 task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
+
+
+T13e follow-up (2026-11-22): the owner capture isolated most measured GART time
+inside `memory_region_transaction_commit()`, not GPA resolution or per-page alias
+installation. Added opt-in internal transaction-stage timings for coalesced-MMIO
+flush, flatview rebuild, global listener begin/commit, per-address-space flatview
+publication, and ioeventfd updates. These counters are enabled only during the
+existing Ctrl+Alt+L capture. This is diagnostic instrumentation only; no memory
+mapping semantics or transaction boundaries are changed. Use the next capture to
+identify which internal stage dominates before attempting commit batching or
+alias representation changes.
