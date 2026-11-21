@@ -57,6 +57,7 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_FLATVIEW_MEMMOVE] = "memory.flatview_memmove",
     [QEMU_PERF_FLATVIEW_REF] = "memory.flatview_ref",
     [QEMU_PERF_FLATVIEW_SIZE] = "memory.flatview_size",
+    [QEMU_PERF_FLATVIEW_SIMPLIFIED_SIZE] = "memory.flatview_simplified_size",
     [QEMU_PERF_VMVGA_DISPLAY_UPDATE] = "vmvga.display_update",
     [QEMU_PERF_DXVK_SHADER_CREATE] = "dxvk.d3d9_shader_create",
     [QEMU_PERF_AUDIO_MIX_OUT] = "audio.mix_out",
