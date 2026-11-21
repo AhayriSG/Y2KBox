@@ -425,3 +425,16 @@ existing Ctrl+Alt+L capture. This is diagnostic instrumentation only; no memory
 mapping semantics or transaction boundaries are changed. Use the next capture to
 identify which internal stage dominates before attempting commit batching or
 alias representation changes.
+
+
+T13e follow-up (2026-11-22): the owner capture measured 13.276 s in
+`flatviews_reset()` across 159 calls, while address-space publication, ioeventfd
+updates, and global listener callbacks were negligible. Added opt-in breakdown of
+`generate_memory_topology()`: recursive region-render time and visited-region
+count, pre/post-simplification FlatRange counts, simplification time, dispatch
+construction time, dispatch compaction time, total topology generation time,
+unique roots generated, FlatRange insertions, and range-array reallocations/
+capacity growth. This remains diagnostic only; no FlatView caching, topology
+semantics, or transaction boundaries changed. Use the next capture to identify
+whether render traversal, range construction, dispatch generation, or compaction
+dominates before proposing an optimization.
