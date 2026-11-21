@@ -35,6 +35,9 @@
 #include "qemu/log.h"
 #include "qemu-main.h"
 
+#include <fcntl.h>
+#include <glib/gstdio.h>
+
 #ifdef CONFIG_X11
 #include <X11/Xlib.h>
 #endif
@@ -50,6 +53,9 @@ static bool ctrl_grab;
 static int gui_saved_grab;
 static int gui_fullscreen;
 static int gui_grab_code = KMOD_LALT | KMOD_LCTRL;
+static bool sdl_log_capture_enabled;
+static bool sdl_log_capture_created;
+static int sdl_log_capture_saved_stderr = -1;
 static SDL_Cursor *sdl_cursor_normal;
 static SDL_Cursor *sdl_cursor_hidden;
 static int absolute_enabled;
@@ -198,11 +204,87 @@ static void sdl2_redraw(struct sdl2_console *scon)
     }
 }
 
+static const char *sdl_log_capture_hotkey(void)
+{
+#ifdef CONFIG_DARWIN
+    if (ctrl_grab) {
+        return "Right-Control-L";
+    } else if (alt_grab) {
+        return "Control-Option-Shift-L";
+    }
+    return "Control-Option-L";
+#else
+    if (ctrl_grab) {
+        return "Right-Ctrl-L";
+    } else if (alt_grab) {
+        return "Ctrl-Alt-Shift-L";
+    }
+    return "Ctrl-Alt-L";
+#endif
+}
+
+static void sdl_toggle_log_capture(struct sdl2_console *scon)
+{
+    int fd;
+    int flags;
+    int saved_errno;
+
+    if (!sdl_log_capture_enabled) {
+        if (sdl_log_capture_saved_stderr < 0) {
+            sdl_log_capture_saved_stderr = dup(STDERR_FILENO);
+            if (sdl_log_capture_saved_stderr < 0) {
+                error_report("Could not save stderr for diagnostic capture: %s",
+                             strerror(errno));
+                return;
+            }
+        }
+
+        flags = O_WRONLY | O_CREAT |
+                (sdl_log_capture_created ? O_APPEND : O_TRUNC);
+#ifdef O_BINARY
+        flags |= O_BINARY;
+#endif
+        fd = g_open("vmvga_freeze.log", flags, 0666);
+        if (fd < 0) {
+            error_report("Could not open vmvga_freeze.log: %s",
+                         strerror(errno));
+            return;
+        }
+
+        fflush(stderr);
+        if (dup2(fd, STDERR_FILENO) < 0) {
+            saved_errno = errno;
+            g_close(fd, NULL);
+            error_report("Could not redirect stderr to vmvga_freeze.log: %s",
+                         strerror(saved_errno));
+            return;
+        }
+        g_close(fd, NULL);
+        sdl_log_capture_enabled = true;
+        sdl_log_capture_created = true;
+        fprintf(stderr, "VMVGA-LOG capture started\n");
+        fflush(stderr);
+    } else {
+        fprintf(stderr, "VMVGA-LOG capture stopped\n");
+        fflush(stderr);
+        if (dup2(sdl_log_capture_saved_stderr, STDERR_FILENO) < 0) {
+            error_report("Could not restore stderr after diagnostic capture: %s",
+                         strerror(errno));
+            return;
+        }
+        sdl_log_capture_enabled = false;
+    }
+
+    sdl_update_caption(scon);
+}
+
 static void sdl_update_caption(struct sdl2_console *scon)
 {
     char win_title[1024];
     char icon_title[1024];
+    char log_status[160];
     const char *status = "";
+    const char *hotkey = sdl_log_capture_hotkey();
 
     if (!runstate_is_running()) {
         status = " [Stopped]";
@@ -224,12 +306,20 @@ static void sdl_update_caption(struct sdl2_console *scon)
         }
     }
 
+    if (sdl_log_capture_enabled) {
+        snprintf(log_status, sizeof(log_status),
+                 " - VMVGA log recording (%s to stop)", hotkey);
+    } else {
+        snprintf(log_status, sizeof(log_status),
+                 " - %s to start VMVGA log", hotkey);
+    }
+
     if (qemu_name) {
-        snprintf(win_title, sizeof(win_title), "QEMU (%s-%d)%s", qemu_name,
-                 scon->idx, status);
+        snprintf(win_title, sizeof(win_title), "QEMU (%s-%d)%s%s", qemu_name,
+                 scon->idx, status, log_status);
         snprintf(icon_title, sizeof(icon_title), "QEMU (%s)", qemu_name);
     } else {
-        snprintf(win_title, sizeof(win_title), "QEMU%s", status);
+        snprintf(win_title, sizeof(win_title), "QEMU%s%s", status, log_status);
         snprintf(icon_title, sizeof(icon_title), "QEMU");
     }
 
@@ -492,6 +582,10 @@ static void handle_keydown(SDL_Event *ev)
             } else if (!gui_fullscreen) {
                 sdl_grab_end(scon);
             }
+            break;
+        case SDL_SCANCODE_L:
+            scon->gui_keysym = true;
+            sdl_toggle_log_capture(scon);
             break;
         case SDL_SCANCODE_0:
             sdl2_window_resize(scon);
