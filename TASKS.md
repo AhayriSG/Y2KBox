@@ -310,3 +310,29 @@ they are not assumed to make translated guest instruction execution faster.
   README.md, not an unconditional requirement introduced by this task. Do not raise
   the formal minimum OS version without a separate compatibility decision.
 * **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.
+
+
+## T19 (P1) SDL hotkey for on-demand diagnostic log capture  -  Status: CLAIMED by ChatGPT 2026-11-21
+Add an SDL2 host-side keyboard shortcut that starts and stops capturing QEMU's
+standard-error diagnostics while the VM keeps running. The goal is to retain only
+the interval relevant to a guest-side freeze instead of recording boot-to-exit.
+
+* Use the existing SDL host-hotkey modifier chord and add **Ctrl+Alt+L** to toggle
+  capture; consume the key so it is not sent to the guest.
+* While capture is inactive, leave stderr connected to its original destination
+  (normally the console). While active, redirect stderr to `vmvga_freeze.log` in
+  the launch working directory; restore the original stderr destination when
+  stopped. The first activation truncates the file; later activations in the same
+  QEMU run append another captured interval.
+* Include a visible SDL title-bar hint and an active/inactive indication. Flush
+  before switching descriptors and report open/redirect failures without claiming
+  capture started.
+* This intentionally captures all stderr-based diagnostics during the selected
+  interval, including VMVGA local diagnostics and any trace-log backend output
+  routed to stderr. It does not alter trace-event enablement; `trace-event` remains
+  independently controllable from the HMP monitor.
+* Update the README example to remove shell-level `2>` redirection and explain the
+  shortcut/file behavior. Keep `-monitor stdio`, `debug=on`, and `-trace` usage.
+* DoD: Linux and Windows SDL builds compile in CI; static review confirms stderr is
+  restored on stop and repeated intervals append; owner verifies the hotkey and
+  resulting file with an XP guest. No branch or PR.
