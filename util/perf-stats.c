@@ -20,6 +20,7 @@ static uint64_t perf_stats_last_mark_ns[QEMU_PERF_STAT__MAX];
 
 static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_CPU_EXEC] = "cpu.exec",
+    [QEMU_PERF_CPU_EXEC_GAP] = "cpu.exec_gap",
     [QEMU_PERF_TB_FLUSH] = "tcg.tb_flush",
     [QEMU_PERF_TB_INVALIDATE_RANGE] = "tcg.tb_invalidate_range",
     [QEMU_PERF_TLB_RESET_DIRTY] = "tcg.tlb_reset_dirty",
