@@ -231,6 +231,22 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
   but the constant-ST0/hot-destination microbenchmark does not establish a general x87 or
   application-level speedup.
 
+### 5a4. P0: Windows TCG scene-transition stalls (T13e)
+
+Owner reports repeatable 1-3 second pauses in FIFA 2003 around match-intro camera cuts / newly visible stadium or LOD views, followed by normal operation. Treat this as a top-priority responsiveness defect, but **the root cause is not established**. A scene transition can exercise several subsystems at once; do not label it a TCG, DXVK, SVGA3D, shader-cache, TB-invalidation, or scheduling problem until a capture correlates the pause with one of them.
+
+Candidate layers to measure on the Windows product path:
+- VMVGA FIFO and SVGA3D command processing; GMR-backed texture/vertex uploads and resource creation.
+- DXVK shader and graphics-pipeline creation, cache lookup/hit/miss behavior, and any synchronous waits on the render/device path. Verify the actual qemu-vmvga/DXVK integration before assuming a particular cache environment variable or async compilation facility exists.
+- TCG code-generation buffer exhaustion and full TB flushes; physical TB invalidation / SMC dirty-page handling; SoftMMU TLB flush and lookup paths.
+- vCPU, main-loop, render, and host-driver thread scheduling/contention; distinguish CPU work from GPU waits, blocking synchronization, and guest/host I/O.
+
+Instrumentation should be explicitly opt-in and disabled in normal runs. Prefer monotonic elapsed-time measurements plus aggregate counts, total time, and maximum duration; avoid per-command/per-page log spam that can itself perturb the workload. Correlate timestamps across the VMVGA capture and TCG-side counters. Do not enlarge the code-generation buffer unless evidence shows a full code-buffer flush at the time of the pause. Do not implement thread affinity before measuring actual contention.
+
+Xemu is a valuable source of candidate TCG optimizations, especially around TB invalidation and lookup/dirty-page handling, but it is an older QEMU-derived tree with a different target machine and memory/device workload. Compare individual commits and source paths against our QEMU 11.1.90 base; validate x86 PC/SoftMMU semantics and retain only narrowly applicable changes. Do not replace our TCG tree or cherry-pick patches wholesale.
+
+**Priority gate:** T13e P0 precedes further isolated x87 instruction expansion. Existing T13a guarded helper fast paths remain in place; they do not map the guest x87 register stack wholesale onto host x87 registers. Keep the differential test and kill switch. Resume more x87 work only after the scene-stall capture has identified and addressed (or ruled out) the dominant cause.
+
 ### 5a2. DONE: `qemu_ld_vec` / `qemu_st_vec` (128-bit guest memory <-> XMM)
 
 New TCG ops (include/tcg/tcg-opc.h) used by `gen_ldo_env_A0`/`gen_sto_env_A0`
