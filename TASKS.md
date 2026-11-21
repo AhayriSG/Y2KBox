@@ -239,7 +239,7 @@ Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin
 APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
 Measure with and without (1 vCPU default; 2-vCPU experimental mode if added).
 
-## T15 (P3) Restore and evaluate VirtIO Block + Net for XP  -  Status: PAUSED (source restoration required)
+## T15 (P3) Restore and evaluate VirtIO Block + Net for XP  -  Status: CLAIMED by ChatGPT 2026-11-21
 The first config-only enablement attempt exposed that the earlier XP pruning removed the actual VirtIO implementation sources, not just their device selections. The Windows binary therefore did not register `virtio-net-pci`; Linux also attempted to compile the optional vhost-vDPA network backend and failed because its header had been pruned. The temporary config enablement was reverted in commit `72165a8`; all VirtIO device selections remain disabled until the required source/build dependencies are restored.
 
 Restore the minimal upstream QEMU 11.1.90 source set for `virtio-blk-pci` and `virtio-net-pci`: shared VirtIO core and PCI transport, the block and network device implementations, their public headers, and exact Meson/Kconfig wiring. Keep unrelated vhost/vDPA, SCSI, virtio-serial/vdagent, ballooning, and other VirtIO devices out of scope. The Linux network build must not pull the pruned vhost-vDPA backend merely because userspace VirtIO Net is enabled. Preserve Linux KVM and Windows TCG support. Only re-enable the device selections after source/build wiring is complete and both platform builds compile.
