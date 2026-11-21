@@ -296,15 +296,15 @@ option('pipewire', type: 'feature', value: 'auto',
 option('sndio', type: 'feature', value: 'auto',
        description: 'sndio sound support')
 
-option('vhost_kernel', type: 'feature', value: 'auto',
+// The XP product uses QEMU's userspace VirtIO queues only. Disable every
+// host-side vhost backend; these are independent of guest VirtIO device support.
+option('vhost_kernel', type: 'feature', value: 'disabled',
        description: 'vhost kernel backend support')
-# The XP product uses userspace VirtIO devices only. Keep host vhost-net and
-# vhost-vDPA acceleration out of the product build.
 option('vhost_net', type: 'feature', value: 'disabled',
        description: 'vhost-net kernel acceleration support')
-option('vhost_user', type: 'feature', value: 'auto',
+option('vhost_user', type: 'feature', value: 'disabled',
        description: 'vhost-user backend support')
-option('vhost_crypto', type: 'feature', value: 'auto',
+option('vhost_crypto', type: 'feature', value: 'disabled',
        description: 'vhost-user crypto backend support')
 option('vhost_vdpa', type: 'feature', value: 'disabled',
        description: 'vhost-vdpa kernel backend support')
