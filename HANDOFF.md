@@ -233,19 +233,19 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
 
 ### 5a4. P0: Windows TCG scene-transition stalls (T13e)
 
-Owner reports a general Windows TCG responsiveness problem across multiple Windows XP games: scene transitions, camera changes, newly visible LOD/geometry, and other content changes can produce pauses of roughly 1-3 seconds before execution resumes. Reproduced in FIFA 2003, Joint Operations: Typhoon Rising, and F1 Challenge '99-'02; these titles are representative examples, not the scope of the issue or evidence of a game-specific defect. Treat this as a cross-game guest/host performance problem. **The root cause is not established.** A scene/content transition can exercise several subsystems at once; do not label it a TCG, DXVK, SVGA3D, shader-cache, TB-invalidation, or scheduling problem until a capture correlates the pause with one of them.
+Owner reports a general Windows TCG responsiveness problem across multiple Windows XP games: scene transitions, camera changes, newly visible LOD/geometry, and other content changes can produce pauses of roughly 1-3 seconds before execution resumes. Reproduced in FIFA 2003, Joint Operations: Typhoon Rising, and F1 Challenge '99-'02; these titles are representative examples, not the scope of the issue or evidence of a game-specific defect. Treat this as a cross-game guest/host performance problem. Owner confirms audio also loops, stutters, or freezes during these pauses, so the symptom is not limited to display presentation; it may involve guest execution/audio production or a shared host execution path. This does not identify the cause. **The root cause is not established.** A scene/content transition can exercise several subsystems at once; do not label it a TCG, DXVK, SVGA3D, shader-cache, TB-invalidation, or scheduling problem until a capture correlates the pause with one of them.
 
 Candidate layers to measure across affected Windows XP games on the Windows product path:
 - VMVGA FIFO and SVGA3D command processing; GMR-backed texture/vertex uploads and resource creation.
 - DXVK shader and graphics-pipeline creation, cache lookup/hit/miss behavior, and any synchronous waits on the render/device path. Verify the actual qemu-vmvga/DXVK integration before assuming a particular cache environment variable or async compilation facility exists.
 - TCG code-generation buffer exhaustion and full TB flushes; physical TB invalidation / SMC dirty-page handling; SoftMMU TLB flush and lookup paths.
-- vCPU, main-loop, render, and host-driver thread scheduling/contention; distinguish CPU work from GPU waits, blocking synchronization, and guest/host I/O.
+- guest audio production and host audio callback/queue servicing, alongside vCPU, main-loop, render, and host-driver thread scheduling/contention; distinguish CPU work from GPU waits, blocking synchronization, and guest/host I/O.
 
 Instrumentation should be explicitly opt-in and disabled in normal runs. Prefer monotonic elapsed-time measurements plus aggregate counts, total time, and maximum duration; avoid per-command/per-page log spam that can itself perturb the workload. Correlate timestamps across the VMVGA capture and TCG-side counters. Do not enlarge the code-generation buffer unless evidence shows a full code-buffer flush at the time of the pause. Do not implement thread affinity before measuring actual contention.
 
 Source check: this QEMU 11.1.90 tree sizes the 64-bit system-emulation TCG code buffer in `tcg/region.c` with a 1 GiB default, then caps automatic sizing at `phys_mem / 8`. With the fixed 2 GiB guest this is approximately 256 MiB, subject to actual physical-memory sizing and alignment. This is not the 32 MiB default assumed in some older QEMU discussions; inspect the actual allocated size and flush reason before proposing a larger buffer. The SVGA3D path reaches `vmsvga_fifo_run()` from `hw/display/vmware_vga_3d.c`; D3D9 shader object creation is routed through `vmsvga3d_dxvk_shader_create()` in `hw/display/vmware_vga_dxvk.c`. Instrument those synchronous host calls and the FIFO caller before concluding that shader/pipeline compilation is the cause.
 
-Xemu is a valuable source of candidate TCG optimizations, especially around TB invalidation and lookup/dirty-page handling, but it is an older QEMU-derived tree with a different target machine and memory/device workload. Compare individual commits and source paths against our QEMU 11.1.90 base; validate x86 PC/SoftMMU semantics and retain only narrowly applicable changes. Do not replace our TCG tree or cherry-pick patches wholesale.
+xemu is a valuable source of candidate TCG optimizations, but the current proposals need to be distinguished carefully. Source audit against Y2KBox QEMU 11.1.90: #3028 is not a direct port because our SoftMMU `tb_invalidate_phys_page_range__locked()` already checks actual TB/range overlap before invalidating; #3028 addresses xemu's own whole-page invalidation behavior. #3140 is directly comparable: our `tlb_reset_dirty()` walks every `NB_MMU_MODES` table even though `cpu->neg.tlb.c.dirty` already tracks populated MMU indexes in `tlb_set_page_full()`; measure reset call frequency and duration before considering the small bitmap-iteration adaptation. #3141 targets the per-indirect-branch `get_tb_cpu_state` function-pointer dispatch and `curr_cflags()` path in `helper_lookup_tb_ptr()`; it may improve steady-state guest throughput, but is not evidence for a multi-second stall cause. Its xemu implementation assumes a single x86 target and must not be copied without preserving Y2KBox target/debug behavior. The #3141 maintainer requested profiling data; no performance proof is present in the PR discussion. These PRs were open proposals when reviewed on 2026-11-21, not merged fixes. Do not replace our TCG tree or cherry-pick patches wholesale.
 
 **Priority gate:** T13e P0 precedes further isolated x87 instruction expansion. Existing T13a guarded helper fast paths remain in place; they do not map the guest x87 register stack wholesale onto host x87 registers. Keep the differential test and kill switch. Resume more x87 work only after the scene-stall capture has identified and addressed (or ruled out) the dominant cause.
 
@@ -423,15 +423,20 @@ QEMU-based x86 emulation
   QEMU fork, a PIII-era CPU model, and host-GL-backed guest GPU emulation.
   Specific TCG research candidates (all were OPEN proposals when reviewed on
   2026-11-21; do not describe them as merged or proven fixes):
-  - #3028, https://github.com/xemu-project/xemu/pull/3028 - avoid broad whole-page
-    TB invalidation when the store executes from the same page as the current TB;
-    preserve the precise overlap check for that self-modifying-code case.
+  - #3028, https://github.com/xemu-project/xemu/pull/3028 - xemu-specific fix for
+    broad whole-page TB invalidation when the store executes from the current TB's
+    page. Y2KBox's QEMU 11.1.90 SoftMMU path already performs precise TB/range
+    overlap checks in `tb_invalidate_phys_page_range__locked()`; do not port this
+    change without first finding a different broad-invalidation path in our tree.
   - #3140, https://github.com/xemu-project/xemu/pull/3140 - skip MMU indexes with
-    no populated entries during `tlb_reset_dirty()`; its reported benefit depends
-    on how many MMU-index tables the target actually uses.
+    no populated entries during `tlb_reset_dirty()`. Y2KBox already sets the
+    `cpu->neg.tlb.c.dirty` bit on TLB population but still scans every mode in
+    `tlb_reset_dirty()`; measure call frequency/duration before adapting.
   - #3141, https://github.com/xemu-project/xemu/pull/3141 - avoid generic indirect
-    CPU-operation dispatch in `helper_lookup_tb_ptr()` for xemu's single x86 CPU
-    target. Any adaptation here must retain the correct x86 CPU/TB semantics.
+    CPU-operation dispatch and `curr_cflags()` work in `helper_lookup_tb_ptr()` for
+    xemu's single x86 CPU target. Potential steady-state indirect-branch optimization;
+    maintainer requested profiling evidence. Any adaptation must preserve Y2KBox's
+    target selection and debug/single-step flag behavior.
   These are narrow optimizations from a different Xbox/UMA workload. Compare the
   exact patches with this QEMU 11.1.90 source and profile before adapting them.
 
