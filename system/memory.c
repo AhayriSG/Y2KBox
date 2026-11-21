@@ -1044,14 +1044,13 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
     FlatView *view;
     uint64_t total_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_TOTAL);
     uint64_t perf_start_ns;
-
-    view = flatview_new(mr);
-
     bool use_batched = g_strcmp0(g_getenv("Y2KBOX_FLATVIEW_BUILDER"),
-                                  "batched") == 0;
+                                 "batched") == 0;
     bool verify_builder = g_strcmp0(g_getenv("Y2KBOX_FLATVIEW_VERIFY"),
                                     "1") == 0;
     FlatView *reference = NULL;
+
+    view = flatview_new(mr);
 
     if (mr) {
         perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_RENDER);
