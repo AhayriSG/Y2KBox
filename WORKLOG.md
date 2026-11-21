@@ -778,3 +778,24 @@ include), plus documentation.
 
 No local build or runtime test was performed. Linux/Windows CI and owner XP guest
 verification remain pending; T19 stays PAUSED.
+
+
+## Session 35 (ChatGPT), 2026-11-21 - Document CD media workflow and future frontend priorities
+
+- Added the Windows XP guest recommendation to transfer BIN/CUE images into the
+  guest and mount them with Daemon Tools 3.47 until Y2KBox has full BIN/CUE parsing
+  (including all CUE flags such as DCP) and emulated-CD-ROM insert/eject support.
+- Added T20 for complete BIN/CUE parsing and referenced libcdio, 86Box, DuckStation,
+  CUE-sheet format documentation, and disc-drive/copy-protection resources in HANDOFF.
+- Updated T12 to make SDL2 the only planned interactive display path, keep VNC and
+  `-display none` out of frontend scope, and include emulated CD-ROM insert/eject
+  for multi-disc swapping. Kept the initial frontend's fixed 2048 MB RAM behavior.
+- Removed priority labels from the human-led XP validation tasks T08 and T11;
+  changed T15 to P3.
+- Added ReShade injection compatibility as higher priority than the low-priority
+  post-wxWidgets librashader consideration, with ares, PCSX2, and DuckStation
+  integration references.
+- Added a post-wxWidgets RAM/VRAM preset reconsideration task. RAM values are
+  candidates; VRAM values remain explicitly provisional pending review of the
+  earlier Gemini 4 note, which was not retrievable in this session.
+- No source code changed. No local build or CI polling was performed.
