@@ -1035,3 +1035,32 @@ Reviewed the current xemu PRs and compared their affected code paths with Y2KBox
 - All three xemu proposals were still open on 2026-11-21. They are candidate ideas, not merged or proven fixes.
 
 Updated TASKS.md and HANDOFF.md with the audio symptom and these source-level applicability findings. No emulator source or instrumentation changed. No local build/test was run, and no CI was polled. T13e remains CLAIMED; next source task is to implement opt-in aggregate timing/counters (including audio servicing) before deciding whether any xemu optimization or other fix is justified.
+
+
+## Session 49 (ChatGPT), 2026-11-21 - Add opt-in aggregate scene-stall instrumentation
+
+Implemented the first T13e instrumentation pass, connected to the existing Ctrl+Alt+L VMVGA diagnostic capture. The counters are reset/enabled when capture starts and disabled/reported when capture stops; aggregate output is appended to vmvga_freeze.log as Y2KBOX-PERF lines. No per-event logging was added.
+
+New shared API/module:
+- include/qemu/perf-stats.h and util/perf-stats.c, registered in util/meson.build.
+- Uses host-monotonic microsecond timestamps converted to nanoseconds and atomic aggregate counters: invocation/interval count, total elapsed time, maximum elapsed time, and counts above 1/10/100 ms.
+- The summary explicitly warns that categories overlap and must not be summed. Timing is wall-clock duration, not CPU-cycle accounting.
+
+Instrumented paths:
+- accel/tcg/cpu-exec.c: duration of each cpu_exec slice (after halted polling).
+- accel/tcg/tb-maint.c: full TB flush and system-mode physical TB range invalidation.
+- accel/tcg/cputlb.c: tlb_reset_dirty, including time waiting for/acquiring its TLB lock.
+- hw/display/vmware_vga.c: full vmsvga_fifo_run pass, including the command work it invokes.
+- hw/display/vmware_vga_dxvk.c: D3D9 shader-object creation call.
+- audio/audio-mixeng-be.c: guest-to-host mixer output service duration and inter-service interval.
+- audio/sdlaudio.c: SDL host output callback duration and callback-to-callback interval.
+- ui/sdl2.c: starts/stops and reports the counters with the existing VMVGA log capture; if stderr restoration fails, the capture and counters are re-enabled together.
+
+Interpretation boundaries:
+- cpu_exec duration includes host scheduling delays and waits; it is not pure CPU time.
+- SDL callback interval can expose missed/late servicing even when callback execution duration is short.
+- This first pass does not directly measure Windows scheduler ready/running time, GPU hardware queue wait duration, or non-SDL host audio callback servicing. WPR/ETW remains the follow-up if counters do not attribute the pause.
+- Existing VMVGA flight logs continue to provide command/update/fence/readback counts; FIFO timing now gives a wall-duration envelope around those command passes.
+- No performance fix or xemu TCG patch was applied. In particular, xemu #3140/#3141 remain candidates pending evidence; #3028 remains non-applicable as a direct port based on current Y2KBox invalidation behavior.
+
+No local build or XP runtime test was run (per project workflow), and CI was not polled. The code changes require Windows/Linux CI validation before owner testing. T13e remains CLAIMED, not complete.
