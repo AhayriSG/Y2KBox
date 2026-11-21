@@ -42,8 +42,8 @@ system_ss.add(when: 'CONFIG_COLDFIRE', if_true: files())
 specific_ss.add(when: 'CONFIG_PSERIES', if_true: files())
 system_ss.add(when: 'CONFIG_XILINX_ETHLITE', if_true: files())
 
-system_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files())
-system_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files())
+system_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files('net_rx_pkt.c'))
+system_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files('virtio-net.c'))
 
 if have_vhost_net
   system_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files())
