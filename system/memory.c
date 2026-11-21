@@ -294,7 +294,7 @@ static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
         qemu_perf_stats_end(QEMU_PERF_FLATVIEW_RANGE_REALLOC,
                             realloc_start_ns);
     }
-    memmove(view->ranges + pos + 1, view->ranges[pos],
+    memmove(view->ranges + pos + 1, view->ranges + pos,
             (view->nr - pos) * sizeof(FlatRange));
     view->ranges[pos] = *range;
     memory_region_ref(range->mr);
