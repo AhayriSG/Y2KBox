@@ -23,6 +23,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include <SDL.h>
 #include <SDL_thread.h>
 #include "qemu/module.h"
@@ -212,7 +213,7 @@ static void sdl_close_out(SDLVoiceOut *sdl)
     }
 }
 
-static void sdl_callback_out(void *opaque, Uint8 *buf, int len)
+static void sdl_callback_out_impl(void *opaque, Uint8 *buf, int len)
 {
     SDLVoiceOut *sdl = opaque;
     HWVoiceOut *hw = &sdl->hw;
@@ -241,6 +242,15 @@ static void sdl_callback_out(void *opaque, Uint8 *buf, int len)
         audio_pcm_info_clear_buf(&hw->info, buf,
                                  len / hw->info.bytes_per_frame);
     }
+}
+
+static void sdl_callback_out(void *opaque, Uint8 *buf, int len)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_AUDIO_SDL_CALLBACK_OUT);
+
+    sdl_callback_out_impl(opaque, buf, len);
+    qemu_perf_stats_end(QEMU_PERF_AUDIO_SDL_CALLBACK_OUT, perf_start_ns);
 }
 
 static void sdl_close_in(SDLVoiceIn *sdl)
