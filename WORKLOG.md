@@ -1192,3 +1192,22 @@ stage durations.
 
 No local build/test or CI polling performed. Windows/Linux CI must validate before
 the next owner capture. No optimization applied; T13e remains CLAIMED.
+
+
+## Session 56 (ChatGPT), 2026-11-22 - Profile FlatView scan, shift, and reference costs
+
+Owner reports Linux and Windows CI passed for the previous FlatView topology instrumentation. The new 17.385 s capture measured:
+- `memory.topology_total`: 12.962 s across 795 generated roots.
+- `memory.topology_render`: 12.799 s; 7,772,434 recursive region visits.
+- 3,890,387 FlatRange insertions; 3,508,092 ranges remained after simplification.
+- Dispatch construction: 151.988 ms; simplification: 8.315 ms; range-array reallocations: 59.134 ms.
+- `memory.txn_flatviews_reset`: 12.962 s; GART map commits: 11.188 s; GART unmap commits: 1.805 s. Address-space publication and listener/ioeventfd stages remain negligible.
+
+Added another opt-in profiling layer in `system/memory.c` and the perf-stats API:
+- `memory.flatview_scan`: range-search loop duration, total examined entries, and maximum entries examined in one render loop. This timer includes nested insertions.
+- `memory.flatview_memmove`: array-shift duration, total shifted FlatRange entries, and maximum shifted entries in one insertion.
+- `memory.flatview_ref`: `memory_region_ref()` duration and call count.
+- `memory.flatview_size` and `memory.flatview_simplified_size`: count, aggregate ranges, and maximum per-root range count before/after simplification.
+- Perf summaries now include `max_work_units`, allowing the largest individual work item to be seen alongside the aggregate.
+
+The range-scan, insertion, memmove, and reference timers are nested/overlapping and must not be summed. All remain opt-in under Ctrl+Alt+L. No GART transaction, cache, FlatView ordering, or memory mapping behavior was changed. No optimization was applied. No local build/test or CI polling was performed; latest instrumentation requires Linux/Windows CI validation and owner capture.
