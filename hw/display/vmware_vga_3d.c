@@ -1969,6 +1969,7 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
     uint32_t mob_page = 0;
     uint32_t run_index;
     uint32_t page;
+    uint64_t perf_start_ns;
     bool ok = false;
 
     if (state == NULL || !state->gart_enabled || state->gart_pages == NULL ||
@@ -2015,6 +2016,9 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
      * leaf for the MOB page, keeping CPU aperture accesses coherent with MOB
      * reads/writes without a software shadow copy.
      */
+    qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_RESOLVE,
+                             mob->gbo.page_count);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_RESOLVE);
     for (run_index = 0; run_index < mob->gbo.run_count; run_index++) {
         const VMSVGA3DGBORun *run = &mob->gbo.runs[run_index];
         uint32_t run_page;
@@ -2025,16 +2029,21 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
 
             if (mob_page >= mob->gbo.page_count ||
                 !vmsvga3d_gart_resolve_page(gpa, &sections[mob_page])) {
+                qemu_perf_stats_end(QEMU_PERF_GART_MAP_RESOLVE, perf_start_ns);
                 goto out;
             }
             gpas[mob_page] = gpa;
         }
     }
+    qemu_perf_stats_end(QEMU_PERF_GART_MAP_RESOLVE, perf_start_ns);
 
     if (mob_page != mob->gbo.page_count) {
         goto out;
     }
 
+    qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_ALIAS,
+                             mob->gbo.page_count);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_ALIAS);
     memory_region_transaction_begin();
     for (page = 0; page < mob->gbo.page_count; page++) {
         VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
@@ -2046,7 +2055,12 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
         entry->mobid = mobid;
         entry->mob_page = page;
     }
+    qemu_perf_stats_end(QEMU_PERF_GART_MAP_ALIAS, perf_start_ns);
+    qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
+                             mob->gbo.page_count);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
     memory_region_transaction_commit();
+    qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
     ok = true;
 
 out:
@@ -2075,6 +2089,7 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
     struct vmsvga3d_state_s *state = s != NULL ? s->svga3d : NULL;
     uint32_t first_page;
     uint32_t page;
+    uint64_t perf_start_ns;
 
     if (state == NULL || !state->gart_enabled || state->gart_pages == NULL ||
         (gart_offset & (VMSVGA3D_GBO_PAGE_SIZE - 1u)) != 0) {
@@ -2087,6 +2102,8 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
         return false;
     }
 
+    qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_ALIAS, num_pages);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_ALIAS);
     memory_region_transaction_begin();
     for (page = 0; page < num_pages; page++) {
         VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
@@ -2096,7 +2113,11 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
         entry->mobid = SVGA3D_INVALID_ID;
         entry->mob_page = 0;
     }
+    qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
+    qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, num_pages);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
     memory_region_transaction_commit();
+    qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT, perf_start_ns);
 
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
