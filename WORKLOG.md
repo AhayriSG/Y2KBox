@@ -772,7 +772,9 @@ diagnostic generation is enabled only during the Ctrl+Alt+L capture interval:
 
 Commits: `5db3304` (VMVGA capture gate), `f5f3309` (GuestRPC gate),
 `2168a69` / `749c2b6` (SDL capture and trace control),
-`110afd1` (unused parameter), `a398c44` (gate comment), plus documentation.
+`110afd1` (unused parameter), `a398c44` (gate comment),
+`7b07747` / `41c56af` / `db59fd9` (atomic capture gate and explicit QOM
+include), plus documentation.
 
 No local build or runtime test was performed. Linux/Windows CI and owner XP guest
 verification remain pending; T19 stays PAUSED.
