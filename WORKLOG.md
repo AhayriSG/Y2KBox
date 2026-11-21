@@ -799,3 +799,22 @@ verification remain pending; T19 stays PAUSED.
   candidates; VRAM values remain explicitly provisional pending review of the
   earlier Gemini 4 note, which was not retrievable in this session.
 - No source code changed. No local build or CI polling was performed.
+
+
+## Session 36 (ChatGPT), 2026-11-21 - SDL fullscreen hint and CI benchmark cleanup
+
+- Updated the SDL window title to advertise the configured fullscreen toggle chord
+  (Ctrl+Alt+F by default), alongside the existing grab-release and optional VMVGA
+  diagnostic-capture hints. The title is refreshed when fullscreen mode changes.
+- Removed the completed T13d Windows SSE2 A/B and T13a Windows FST A/B benchmark
+  steps from the per-artifact Windows workflow, including the download of the fixed
+  historical pre-cache artifact. Kept the x87 differential test in CI; it checks
+  correctness rather than performance. Benchmark sources and scripts remain available
+  for deliberate manual A/B runs.
+- Reorganized the KVM trace-generation checkpoint under HANDOFF section 1's host
+  accelerator policy. Clarified that the XP-32 guest must work under Windows TCG and
+  Linux product builds/runtime must retain mandatory KVM support. Updated the CI
+  description to match the removal of recurring A/B benchmarks.
+- No local build/test was run and no CI was polled. The source/workflow/doc edits are
+  committed directly to main; compile/runtime validation remains the normal CI and
+  owner verification path.
