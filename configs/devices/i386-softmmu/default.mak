@@ -4,7 +4,7 @@
 # Everything not explicitly enabled below is switched off because XP cannot use it,
 # or it only exists for other guests (modern PCIe machines, confidential computing,
 # paravirtual Xen/KVM-only bits, UEFI). A narrow VirtIO Block/Net subset is enabled
-# separately for optional XP driver evaluation (T15).
+# for optional XP driver evaluation; IDE and RTL8139 remain the defaults.
 
 CONFIG_Q35=n
 CONFIG_MICROVM=n
@@ -18,18 +18,16 @@ CONFIG_X86_FW_OVMF=n
 # ---- XP device set --------------------------------------------------------
 # Kept: PC/i440FX platform, PIIX IDE, floppy, PS/2, serial/parallel, VGA +
 # Cirrus (in-box XP driver), RTL8139/PCnet/e1000 NICs, AC97/ES1370/SB16 audio,
-# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are also enabled as
+# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are available as
 # optional owner-tested devices; unrelated VirtIO devices remain off.
 
 # Optional paravirtual devices for owner-tested XP drivers (T15).
-# VirtIO implementation sources are currently pruned from this fork; keep off
-# until T15 restores the required core, PCI, block, and network source files.
-CONFIG_VIRTIO=n
-CONFIG_VIRTIO_PCI=n
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
 CONFIG_VIRTIO_9P=n
 CONFIG_VIRTIO_BALLOON=n
-CONFIG_VIRTIO_BLK=n
-CONFIG_VIRTIO_NET=n
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
 CONFIG_VIRTIO_CRYPTO=n
 CONFIG_VIRTIO_GPU=n
 CONFIG_VIRTIO_INPUT=n
