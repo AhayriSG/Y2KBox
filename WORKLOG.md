@@ -1014,3 +1014,10 @@ Follow-up source review for T13e:
 - Refined T13e to require opt-in aggregate timing/counters and a measured cause before code changes. No claim is made that shader compilation, TB invalidation, TLB work, or thread contention is the cause of FIFA 2003's pauses.
 
 No emulator source code or runtime instrumentation changed. No local build/test was run and no CI was polled. T13e remains CLAIMED; next step is to design and implement the smallest opt-in instrumentation, then collect the owner's repeatable Windows-host capture.
+
+
+## Session 47 (ChatGPT), 2026-11-21 - Generalize T13e across affected XP games
+
+Owner clarified that the 1-3 second Windows TCG pauses are not specific to FIFA 2003. Similar behavior occurs in Joint Operations: Typhoon Rising and F1 Challenge '99-'02. Updated T13e and HANDOFF section 5a4 to describe a general cross-game Windows XP guest/host responsiveness problem. FIFA 2003, Joint Operations, and F1 Challenge are now explicitly listed as representative reproductions, not the scope of the issue or evidence of a game-specific bug. The capture plan now calls for repeatable measurements across representative affected games/workloads.
+
+No emulator source code or profiling instrumentation changed. No local build/test was run and no CI was polled.
