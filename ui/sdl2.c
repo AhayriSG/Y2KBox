@@ -226,6 +226,25 @@ static const char *sdl_log_capture_hotkey(void)
 #endif
 }
 
+static const char *sdl_fullscreen_hotkey(void)
+{
+#ifdef CONFIG_DARWIN
+    if (ctrl_grab) {
+        return "Right-Control-F";
+    } else if (alt_grab) {
+        return "Control-Option-Shift-F";
+    }
+    return "Control-Option-F";
+#else
+    if (ctrl_grab) {
+        return "Right-Ctrl-F";
+    } else if (alt_grab) {
+        return "Ctrl-Alt-Shift-F";
+    }
+    return "Ctrl-Alt-F";
+#endif
+}
+
 static bool sdl_vmvga_debug_enabled(Object **vmvga)
 {
     *vmvga = object_resolve_path_type("", "vmvga", NULL);
@@ -325,8 +344,10 @@ static void sdl_update_caption(struct sdl2_console *scon)
     char win_title[1024];
     char icon_title[1024];
     char log_status[160] = "";
+    char fullscreen_status[96] = "";
     const char *status = "";
     const char *hotkey = sdl_log_capture_hotkey();
+    const char *fullscreen_hotkey = sdl_fullscreen_hotkey();
     Object *vmvga;
     bool debug_available = sdl_vmvga_debug_enabled(&vmvga);
 
@@ -350,6 +371,14 @@ static void sdl_update_caption(struct sdl2_console *scon)
         }
     }
 
+    if (!gui_fullscreen) {
+        snprintf(fullscreen_status, sizeof(fullscreen_status),
+                 " - %s for fullscreen", fullscreen_hotkey);
+    } else {
+        snprintf(fullscreen_status, sizeof(fullscreen_status),
+                 " - %s to exit fullscreen", fullscreen_hotkey);
+    }
+
     if (debug_available && sdl_log_capture_enabled) {
         snprintf(log_status, sizeof(log_status),
                  " - VMVGA log recording (%s to stop)", hotkey);
@@ -359,11 +388,12 @@ static void sdl_update_caption(struct sdl2_console *scon)
     }
 
     if (qemu_name) {
-        snprintf(win_title, sizeof(win_title), "QEMU (%s-%d)%s%s", qemu_name,
-                 scon->idx, status, log_status);
+        snprintf(win_title, sizeof(win_title), "QEMU (%s-%d)%s%s%s", qemu_name,
+                 scon->idx, status, fullscreen_status, log_status);
         snprintf(icon_title, sizeof(icon_title), "QEMU (%s)", qemu_name);
     } else {
-        snprintf(win_title, sizeof(win_title), "QEMU%s%s", status, log_status);
+        snprintf(win_title, sizeof(win_title), "QEMU%s%s%s", status, fullscreen_status,
+                 log_status);
         snprintf(icon_title, sizeof(icon_title), "QEMU");
     }
 
@@ -558,6 +588,7 @@ static void toggle_full_screen(struct sdl2_console *scon)
         SDL_SetWindowFullscreen(scon->real_window, 0);
         sdl2_window_resize(scon);
     }
+    sdl_update_caption(scon);
     sdl2_redraw(scon);
 }
 
