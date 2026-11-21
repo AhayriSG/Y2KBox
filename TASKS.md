@@ -321,7 +321,7 @@ selected by the tester, without continuously generating diagnostic output.
 * Use the existing SDL host-hotkey modifier chord and add **Ctrl+Alt+L** to toggle
   capture; consume the key so it is not sent to the guest.
 * On activation, redirect stderr to `vmvga_freeze.log` and enable VMVGA local
-  diagnostics, VMPort GuestRPC diagnostics, and the relevant VMVGA/vdagent trace
+  diagnostics, VMPort GuestRPC diagnostics, and the relevant VMVGA/VMPort/vdagent trace
   events. On stop, disable those diagnostic sources and restore original stderr.
   The VM keeps running. The first activation truncates the file; later intervals
   append. Do not emit capture start/stop markers or routine diagnostic output to
