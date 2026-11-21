@@ -871,3 +871,30 @@ No local build or CI polling was performed after the rollback. The rollback remo
 this specific newly introduced configuration trigger; CI status still needs to be
 checked by the owner. The original Windows unknown-device failure remains expected
 until the source restoration task is completed.
+
+
+## Session 39 (ChatGPT), 2026-11-21 - Restore VirtIO Block + Net implementation sources (T15)
+
+Resumed T15 after the owner confirmed the rollback revision's CI passed. Claimed T15 and
+restored the minimal implementation set from upstream QEMU 11.1.90 commit
+`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`:
+
+- Shared VirtIO bus, core, config I/O, QMP and PCI transport sources.
+- VirtIO Block PCI frontend, block implementation/common code and missing public headers.
+- VirtIO Net PCI frontend, network implementation, `net_rx_pkt.c`, and its existing header.
+- Meson source wiring for only the shared core/PCI transport and the selected Block/Net
+  implementations. Kconfig already defined the required `VIRTIO`, `VIRTIO_PCI`,
+  `VIRTIO_BLK` and `VIRTIO_NET` symbols; no broad Kconfig restoration was needed.
+- Re-enabled only those four device selections in the i386 target configuration. IDE and
+  RTL8139 remain the defaults; CD-ROM remains IDE/PIIX.
+- Changed the Meson `vhost_net` feature default to `disabled`. This prevents Linux from
+  compiling the optional host vhost-vDPA backend as a side effect of enabling guest
+  userspace VirtIO Net. Host vhost networking is outside this product's current scope.
+- Added Linux and Windows CI smoke assertions that `-device help` lists both
+  `virtio-blk-pci` and `virtio-net-pci`. These are device-registration checks, not
+  performance benchmarks; no recurring performance CI was added.
+
+Source and build wiring are committed, but no local build was run and CI was not polled.
+T15 remains CLAIMED pending owner confirmation of Linux + Windows CI. After CI passes,
+update README device guidance and proceed with manual XP `viostor`/NetKVM compatibility,
+boot, networking and performance tests. Keep the defaults unchanged until owner results.
