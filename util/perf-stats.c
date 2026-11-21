@@ -48,6 +48,7 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_TOPOLOGY_DISPATCH_BUILD] = "memory.topology_dispatch_build",
     [QEMU_PERF_TOPOLOGY_DISPATCH_COMPACT] = "memory.topology_dispatch_compact",
     [QEMU_PERF_TOPOLOGY_FLAT_RANGES] = "memory.topology_flat_ranges",
+    [QEMU_PERF_TOPOLOGY_SIMPLIFIED_RANGES] = "memory.topology_simplified_ranges",
     [QEMU_PERF_TOPOLOGY_ROOTS] = "memory.topology_roots",
     [QEMU_PERF_FLATVIEW_INSERT] = "memory.flatview_insert",
     [QEMU_PERF_FLATVIEW_RANGE_REALLOC] = "memory.flatview_range_realloc",
