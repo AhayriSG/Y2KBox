@@ -3,8 +3,8 @@
 # Target: Windows XP (32-bit) guests on the i440fx "pc" machine.
 # Everything not explicitly enabled below is switched off because XP cannot use it,
 # or it only exists for other guests (modern PCIe machines, confidential computing,
-# paravirtual Xen/KVM-only bits, UEFI). A narrow VirtIO Block/Net subset is enabled
-# for optional XP driver evaluation; IDE and RTL8139 remain the defaults.
+# paravirtual Xen/KVM-only bits, UEFI). VirtIO Block/Net are used by the standard
+# XP launch profile; PIIX IDE and RTL8139 remain available as fallbacks. CD-ROM stays IDE.
 
 CONFIG_Q35=n
 CONFIG_MICROVM=n
@@ -18,10 +18,10 @@ CONFIG_X86_FW_OVMF=n
 # ---- XP device set --------------------------------------------------------
 # Kept: PC/i440FX platform, PIIX IDE, floppy, PS/2, serial/parallel, VGA +
 # Cirrus (in-box XP driver), RTL8139/PCnet/e1000 NICs, AC97/ES1370/SB16 audio,
-# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are available as
-# optional owner-tested devices; unrelated VirtIO devices remain off.
+# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are the standard launch
+# devices; PIIX IDE and RTL8139 remain independent fallbacks. Unrelated VirtIO devices stay off.
 
-# Optional paravirtual devices for owner-tested XP drivers (T15).
+# Paravirtual devices used by the standard XP launch profile (T15).
 CONFIG_VIRTIO=y
 CONFIG_VIRTIO_PCI=y
 CONFIG_VIRTIO_9P=n
