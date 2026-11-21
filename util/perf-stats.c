@@ -138,12 +138,12 @@ void qemu_perf_stats_stop(void)
 
         fprintf(stderr,
                 "Y2KBOX-PERF stat=%s count=%" PRIu64
-                " total_ms=%" PRIu64 " max_ms=%" PRIu64
+                " total_us=%" PRIu64 " max_us=%" PRIu64
                 " over_1ms=%" PRIu64 " over_10ms=%" PRIu64
                 " over_100ms=%" PRIu64 "\n",
                 perf_stat_names[i], count,
-                qatomic_read(&counter->total_ns) / 1000000,
-                qatomic_read(&counter->max_ns) / 1000000,
+                qatomic_read(&counter->total_ns) / 1000,
+                qatomic_read(&counter->max_ns) / 1000,
                 qatomic_read(&counter->over_1ms),
                 qatomic_read(&counter->over_10ms),
                 qatomic_read(&counter->over_100ms));
