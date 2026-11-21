@@ -414,12 +414,30 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
 * SoftGPU (guest software 3D driver): https://github.com/JHRobotics/softgpu
 * DXVK: https://github.com/doitsujin/DXVK ; d3d8to9: https://github.com/crosire/d3d8to9/
   (D3D8/9 -> modern API translation ideas for an XP D3D path).
+* **D7VK**: https://github.com/WinterSnowfall/d7vk - a DXVK spin-off targeting Direct3D 7/6/5. It uses a modified DXVK D3D9 Vulkan backend together with Wine's DirectDraw implementation or the native Windows DirectDraw implementation as a proxy layer. DirectDraw immediate-mode applications are in scope; Direct3D retained-mode applications are not supported.
 * viogpu3d (Virtio GPU 3D for Windows) PR:
   https://github.com/virtio-win/kvm-guest-drivers-windows/pull/943
 * virglrenderer: https://github.com/utmapp/virglrenderer (host-side virtual GL;
   guest drivers are WDDM, so not directly usable by XP).
 * Yttrium (D3D GPU driver for KVM/QEMU Windows guests):
   https://github.com/arehnman/yttrium-virtio-gpu
+
+
+CD-ROM, BIN/CUE parsing, and disc-drive behavior
+* libcdio C library: https://github.com/libcdio/libcdio-C - reference implementation/library for optical-disc and CUE/BIN handling.
+* 86Box CD-ROM implementation: https://github.com/86Box/86Box/tree/master/src/cdrom - reference for CD-ROM device and media behavior.
+* DuckStation CUE parser: https://github.com/stenzek/duckstation/blob/master/src/util/cd_image_cue.cpp - a mature emulator CUE-sheet parser.
+* Cue sheet (.cue) format overview: https://emulation.gametechwiki.com/index.php/Cue_sheet_(.cue)
+* GNU ccd2cue CUE-sheet format documentation: https://www.gnu.org/software/ccd2cue/manual/html_node/CUE-sheet-format.html#CUE-sheet-format
+* Copy protection overview: https://emulation.gametechwiki.com/index.php/Copy_protection
+* Disc-drive emulation overview: https://emulation.gametechwiki.com/index.php/Disc_Drive_emulation
+
+Shader and post-processing integration
+* librashader: https://github.com/SnowflakePowered/librashader - Rust library for integrating libretro-style shader pipelines into standalone applications.
+* ares librashader integration: https://github.com/ares-emulator/ares/pull/1397
+* PCSX2 librashader integration: https://github.com/PCSX2/pcsx2/pull/14433
+* DuckStation Slang post-processing implementation: https://github.com/stenzek/duckstation/blob/master/src/util/postprocessing_shader_slang.cpp - reference for a standalone emulator's Slang shader integration.
+
 
 
 ## Handoff Rules & Sandbox Gotchas
