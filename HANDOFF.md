@@ -462,21 +462,22 @@ until Linux KVM build and host runtime validation are complete. Windows CI had
 passed the preceding changes.
 
 
-### SDL on-demand diagnostic capture (2026-11-21)
+### SDL on-demand diagnostic capture (2026-11-21; updated)
 
-`ui/sdl2.c` provides a host-side **Ctrl+Alt+L** hotkey (using the configured
-SDL host modifier chord) to toggle process stderr capture without stopping the VM.
-The SDL title bar displays the start/stop hint and recording state. While inactive,
-stderr remains connected to its original destination; while active, descriptor 2
-is redirected to `vmvga_freeze.log` in the process working directory. The first
-successful activation truncates the file and later activations append. The switch
-flushes stderr before changing the descriptor and reports failures to the original
-stderr destination whenever possible.
+The SDL **Ctrl+Alt+L** shortcut is an opt-in tester feature, available only when
+the VM is launched with `-device vmvga,debug=on`. With debug off, the shortcut
+is unavailable and the title bar does not advertise it.
 
-This captures all stderr-based diagnostics during the interval, not just VMVGA
-prefixes. That includes the VMVGA local `debug=on` messages and trace-log backend
-output if it is routed to stderr. HMP `trace-event` commands still independently
-control which trace events are enabled. Do not shell-redirect stderr with `2>` when
-using the shortcut, because that changes the original descriptor before SDL can
-capture it. The user should validate the hotkey and file contents in an XP guest;
-CI compilation is still pending and no runtime success is claimed.
+The `debug` property enables the capability, not continuous output. The shortcut
+redirects stderr to `vmvga_freeze.log`, then activates VMVGA local diagnostics,
+VMPort GuestRPC diagnostics, and the existing `vmware_*` / `vdagent*` trace
+events. Pressing it again disables those sources and restores the original stderr
+descriptor. There are no routine start/stop markers or continuous diagnostic
+messages in the console while capture is inactive. The first capture truncates
+the file; later capture intervals in the same QEMU run append.
+
+Do not add shell-level `2>` redirection or require `-trace "vdagent*"`; SDL
+controls the relevant trace events for the capture interval. Exceptional file or
+descriptor errors are still reported. The feature has not been locally built or
+runtime-tested; keep T19 PAUSED until Linux/Windows CI and owner XP guest
+verification are reported.
