@@ -765,7 +765,7 @@ diagnostic generation is enabled only during the Ctrl+Alt+L capture interval:
   enabling the tester option alone does not continuously print GuestRPC data.
 - SDL checks for a VMVGA device with `debug=on` before advertising or handling
   the shortcut. Capture redirects stderr without routine start/stop markers,
-  enables the `vmware_*` and `vdagent*` trace events dynamically, and disables
+  enables the `vmware_*`, `vmport_*`, and `vdagent*` trace events dynamically, and disables
   them again when capture stops. No separate `-trace "vdagent*"` option is needed.
 - Updated README, TASKS, and this handoff. Shell-level `2>` redirection remains
   incompatible with interval capture.
