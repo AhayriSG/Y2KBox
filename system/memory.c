@@ -279,16 +279,26 @@ static FlatView *flatview_new(MemoryRegion *mr_root)
  */
 static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
 {
+    uint64_t perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_INSERT);
+
     if (view->nr == view->nr_allocated) {
+        size_t old_capacity = view->nr_allocated;
         view->nr_allocated = MAX(2 * view->nr, 10);
+        perf_start_ns = qemu_perf_stats_begin(
+            QEMU_PERF_FLATVIEW_RANGE_REALLOC);
         view->ranges = g_realloc(view->ranges,
                                     view->nr_allocated * sizeof(*view->ranges));
+        qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_RANGE_REALLOC,
+                                 view->nr_allocated - old_capacity);
+        qemu_perf_stats_end(QEMU_PERF_FLATVIEW_RANGE_REALLOC, perf_start_ns);
     }
-    memmove(view->ranges + pos + 1, view->ranges + pos,
+    memmove(view->ranges + pos + 1, view->ranges[pos],
             (view->nr - pos) * sizeof(FlatRange));
     view->ranges[pos] = *range;
     memory_region_ref(range->mr);
     ++view->nr;
+    qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_INSERT, 1);
+    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_INSERT, perf_start_ns);
 }
 
 static void flatview_destroy(FlatView *view)
@@ -604,6 +614,8 @@ static void render_memory_region(FlatView *view,
                                  bool unmergeable)
 {
     MemoryRegion *subregion;
+
+    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, 1);
     unsigned i;
     hwaddr offset_in_region;
     Int128 remain;
@@ -751,24 +763,38 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
 {
     int i;
     FlatView *view;
+    uint64_t perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_TOTAL);
 
     view = flatview_new(mr);
 
     if (mr) {
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_RENDER);
         render_memory_region(view, mr, int128_zero(),
                              addrrange_make(int128_zero(), int128_2_64()),
                              false, false, false);
+        qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_RENDER, perf_start_ns);
     }
-    flatview_simplify(view);
+    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_FLAT_RANGES, view->nr);
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_SIMPLIFY);
+    flatview_simplify(view);
+    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_SIMPLIFY, perf_start_ns);
+
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_DISPATCH_BUILD);
     view->dispatch = address_space_dispatch_new(view);
     for (i = 0; i < view->nr; i++) {
         MemoryRegionSection mrs =
             section_from_flat_range(&view->ranges[i], view);
         flatview_add_to_dispatch(view, &mrs);
     }
+    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_DISPATCH_BUILD, perf_start_ns);
+
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_DISPATCH_COMPACT);
     address_space_dispatch_compact(view->dispatch);
+    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_DISPATCH_COMPACT, perf_start_ns);
+
     g_hash_table_replace(flat_views, mr, view);
+    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_TOTAL, perf_start_ns);
 
     return view;
 }
@@ -1079,6 +1105,7 @@ static void flatviews_reset(void)
             continue;
         }
 
+        qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_ROOTS, 1);
         generate_memory_topology(physmr);
     }
 }
