@@ -637,3 +637,26 @@ boundaries, cache behavior, or memory semantics. Linux/Windows CI and another
 owner capture are required before selecting an optimization. Do not batch GART
 transactions or replace the FlatView construction algorithm until these results
 and QEMU's overlap/alias invariants have been reviewed.
+
+
+### T13e: opt-in batched FlatView builder prototype (2026-11-22)
+
+The existing renderer remains the default/reference. The alternative is selected
+with Y2KBOX_FLATVIEW_BUILDER=batched. It binary-searches the first existing range
+that can overlap a region, collects uncovered gaps in address order, and merges
+the batch backwards into the sorted range array once per terminating region.
+Recursive subregion priority remains unchanged. This avoids repeated per-gap
+array shifts; it has not yet been shown to improve end-to-end performance.
+
+Set Y2KBOX_FLATVIEW_VERIFY=1 to compare the selected builder against the other
+builder for every generated root, before and after simplification. The comparison
+checks range count/order, MemoryRegion pointer, address/size, region offset,
+dirty-log mask, ROMD, readonly, nonvolatile, and unmergeable fields. A mismatch
+reports the stage/range and aborts. Verification executes both renderers and is
+expensive; do not enable it during performance captures.
+
+New counters: memory.flatview_search, memory.flatview_merge, and
+memory.flatview_batch_ranges. Keep legacy as default until Linux and Windows CI,
+runtime equivalence checking, and representative XP guest tests pass. First run
+verification without Ctrl+Alt+L; then run performance capture with batched
+selected and verification unset. No GART transaction changes.
