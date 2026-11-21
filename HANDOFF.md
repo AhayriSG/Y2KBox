@@ -134,10 +134,16 @@ in `72165a8`. T15 has now restored the minimal VirtIO Block + Net source set fro
 upstream QEMU 11.1.90 baseline (`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`): shared
 VirtIO core, PCI transport, `virtio-blk-pci`, `virtio-net-pci`, their device implementations,
 and missing public headers. Meson wiring is restored and the two guest device selections
-are enabled again; Linux + Windows CI validation is pending. The Meson `vhost_net`
-feature defaults to disabled, preventing the optional host vhost-vDPA backend from being
-compiled merely because guest VirtIO Net is enabled. Keep vhost/vDPA, VirtIO SCSI,
-virtio-serial/vdagent, ballooning and other unrelated devices out of scope.
+are enabled. Linux CI first exposed the `vhost_vdpa` feature gate; disabling that alone
+then exposed unresolved generic vhost symbols at link time because Linux's `vhost_kernel`
+and `vhost_user` options default to auto and enabled the host vhost layer despite its
+sources being intentionally pruned. The product now explicitly disables `vhost_kernel`,
+`vhost_user`, `vhost_crypto`, `vhost_net`, and `vhost_vdpa`. Plain guest VirtIO devices use
+QEMU's userspace queues and do not need these host-side backends. The optional
+`efi-virtio.rom` request was also removed because the XP BIOS product does not ship a UEFI
+PXE ROM. Windows CI passed and owner reports successfully booting XP with VirtIO; the
+latest Linux linker fix still needs CI confirmation. Keep all host vhost/vDPA acceleration,
+VirtIO SCSI, virtio-serial/vdagent, ballooning and other unrelated devices out of scope.
 
 The two choices are independent: the future T12 wxWidgets launcher will offer separate
 network-adapter (RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block)
