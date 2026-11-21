@@ -845,3 +845,29 @@ benchmark work is planned:
 
 No local build, guest test, or CI polling was performed. T15 remains CLAIMED;
 source compilation and owner-run XP boot/network/performance checks are pending.
+
+
+## Session 38 (ChatGPT), 2026-11-21 - Revert premature VirtIO config enablement
+
+Owner testing exposed two failures from the initial T15 config-only enablement:
+
+- Windows QEMU rejected `virtio-net-pci` as an unknown device. Inspection of the
+  repository tree showed the actual VirtIO implementation sources had been removed
+  by earlier pruning: the shared core/PCI transport in `hw/virtio`, `hw/net/virtio-net.c`,
+  `hw/block/virtio-blk.c`, and related public headers were absent. Enabling Kconfig
+  symbols alone cannot register devices when their implementations are missing.
+- Linux CI attempted to compile `net/vhost-vdpa.c` after `CONFIG_VIRTIO_NET=y`, then
+  failed because `hw/virtio/vhost-vdpa.h` had also been pruned. This optional host
+  vhost-vDPA path is unrelated to the intended userspace VirtIO Net guest device.
+
+Reverted `CONFIG_VIRTIO`, `CONFIG_VIRTIO_PCI`, `CONFIG_VIRTIO_BLK`, and
+`CONFIG_VIRTIO_NET` to disabled in commit `72165a8` to avoid leaving Linux builds
+broken. Updated T15, README and HANDOFF to mark VirtIO unavailable in current builds
+until the minimal QEMU 11.1.90 VirtIO core/PCI, Block and Net sources and exact build
+wiring are restored. Keep vhost-vDPA, SCSI, virtio-serial, ballooning and unrelated
+VirtIO devices out of scope.
+
+No local build or CI polling was performed after the rollback. The rollback removes
+this specific newly introduced configuration trigger; CI status still needs to be
+checked by the owner. The original Windows unknown-device failure remains expected
+until the source restoration task is completed.
