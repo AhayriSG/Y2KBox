@@ -712,3 +712,19 @@ Fixed two issues reported from Windows XP SP3 testing (`dxdiag` D3D7 -> D3D8 -> 
    - Guarded `sdl2_window_resize()` while `gui_fullscreen` is active and resynced the windowed size when exiting fullscreen in `toggle_full_screen()`.
 
 No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.
+
+## Session 32, 2026-11-21 - Fix same-mode D3D8 exit scanout freeze on legacy host mirror
+
+Fixed the intermittent screen freeze when exiting fullscreen D3D8 back to a same-resolution desktop (e.g., `dxdiag` D3D8 `640x480@32` finishing before the Yes/OK prompt, or exiting Hitman 2: Silent Assassin), where audio, input, and the hardware mouse cursor kept working over the frozen last D3D8 frame until a resolution change occurred:
+
+1. **Bounded legacy handoff exit when D3D8 tears down at the same resolution (`hw/display/vmware_vga.c`, `hw/display/vmware_vga_3d.c`):**
+   - Added `vmsvga_legacy_handoff_arm_timeout()` to arm the existing `VMSVGA_HANDOFF_MAX_FRAMES` (8-frame) BAR1 rebind countdown whenever `legacy_handoff_active` is held on host mirror `screen_base` without an armed timeout.
+   - Armed the handoff timeout in `vmsvga3d_surface_destroy_live()` (when destroying `state->legacy_present_sid`, after flushing/resetting pending legacy present state) and in `vmsvga3d_handle_context_destroy()` (when no active legacy 3D contexts remain via `vmsvga3d_has_active_legacy_context()`).
+   - Armed the handoff timeout in `vmsvga_legacy_handoff_present_rect()` on partial 2D updates and zeroed/black rectangle skips, and in `vmsvga_value_write()` when explicit mode/enable/config register writes (`SVGA_REG_ENABLE`, `SVGA_REG_WIDTH`, `SVGA_REG_HEIGHT`, `SVGA_REG_BITS_PER_PIXEL`, `SVGA_REG_CONFIG_DONE`, `SVGA_REG_PITCHLOCK`) commit a valid mode (including same-mode re-commits where `changed == false`).
+   - Disarmed `legacy_handoff_timeout_armed` and cleared `legacy_handoff_hold_frames` on the active 3D fast-path in `vmsvga3d_legacy_present_host_scanout_ensure()` so ongoing `SVGA_3D_CMD_PRESENT` streams keep `screen_base` without flickering.
+   - Added a `release_register_handoff` cleanup branch in `vmsvga_check_size()` so a pending rebind cannot linger if the frontend surface already points to BAR1.
+2. **Direct legacy register BAR1 dirty tracking (`hw/display/vmware_vga.c`):**
+   - Added `vmsvga_direct_legacy_vram_scanout()` (`!s->screen_defined && !s->legacy_handoff_active`) to `vmsvga_effective_traces()`, matching `vmsvga_direct_screen_vram_scanout()` so direct CPU writes to BAR1 on legacy register desktops refresh SDL even when `SVGA_REG_TRACES` is 0, while remaining off during active 3D `legacy_handoff_active` scanout.
+   - Guarded the stop-time `vmsvga_scan_vram_dirty()` flush in `vmsvga_set_dirty_log()` with `!s->legacy_handoff_active && !s->screen_handoff_active` so entering a 3D or transition host mirror clears stale dirty bits instead of overwriting `screen_base` with pre-transition BAR1 pages.
+
+No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.

@@ -4219,6 +4219,14 @@ static void vmsvga3d_surface_destroy_live(struct vmsvga_state_s *s,
      * surface. */
     vmsvga3d_surface_clear_legacy_bindings(state, sid);
 
+    if (sid == state->legacy_present_sid) {
+        if (state->legacy_present_pending) {
+            (void)vmsvga3d_legacy_present_flush_live(s);
+        }
+        vmsvga3d_legacy_present_reset_live(s);
+        vmsvga_legacy_handoff_arm_timeout(s);
+    }
+
     if (surface->dxvk_surface != NULL) {
         vmsvga3d_dxvk_d3d11_surface_visit_views(
             surface->dxvk_surface, vmsvga3d_surface_destroy_view_live, s);
@@ -4386,6 +4394,24 @@ static bool vmsvga3d_handle_context_define(struct vmsvga_state_s *s,
     return true;
 }
 
+static bool vmsvga3d_has_active_legacy_context(
+    const struct vmsvga3d_state_s *state)
+{
+    uint32_t cid;
+
+    if (state == NULL) {
+        return false;
+    }
+
+    for (cid = 0; cid < SVGA3D_MAX_CONTEXT_IDS; cid++) {
+        if (state->contexts[cid] != NULL) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool vmsvga3d_handle_context_destroy(struct vmsvga_state_s *s,
                                             uint32_t cmd, int32_t *len,
                                             uint32_t fifo_start)
@@ -4404,6 +4430,13 @@ static bool vmsvga3d_handle_context_destroy(struct vmsvga_state_s *s,
         if (vmsvga3d_state_context_destroy(s, body->cid)) {
             vmsvga3d_gb_query_cancel_context(s, body->cid, "context-destroy");
             vmsvga3d_dxvk_d3d9_query_context_destroy(s->dxvk, body->cid);
+            if (!vmsvga3d_has_active_legacy_context(s->svga3d)) {
+                if (s->svga3d != NULL && s->svga3d->legacy_present_pending) {
+                    (void)vmsvga3d_legacy_present_flush_live(s);
+                }
+                vmsvga3d_legacy_present_reset_live(s);
+                vmsvga_legacy_handoff_arm_timeout(s);
+            }
         }
     }
 
@@ -8531,6 +8564,8 @@ static bool vmsvga3d_legacy_present_host_scanout_ensure(
     if (s->legacy_handoff_active && !s->legacy_handoff_rebind &&
         s->screen_base != NULL && s->screen_stride == stride &&
         s->screen_base_size == (size_t)size) {
+        s->legacy_handoff_timeout_armed = false;
+        s->legacy_handoff_hold_frames = 0;
         return true;
     }
 

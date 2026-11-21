@@ -1386,6 +1386,16 @@ static inline void vmsvga_legacy_handoff_reset_state(
     s->legacy_handoff_hold_frames = 0;
 }
 
+static inline void vmsvga_legacy_handoff_arm_timeout(
+    struct vmsvga_state_s *s)
+{
+    if (s != NULL && !s->screen_defined && s->legacy_handoff_active &&
+        !s->legacy_handoff_rebind && !s->legacy_handoff_timeout_armed) {
+        s->legacy_handoff_timeout_armed = true;
+        s->legacy_handoff_hold_frames = VMSVGA_HANDOFF_MAX_FRAMES;
+    }
+}
+
 static inline bool vmsvga_legacy_vga_shadow_rendering(
     const struct vmsvga_state_s *s)
 {
@@ -1521,7 +1531,8 @@ static inline void vmsvga_set_dirty_log(struct vmsvga_state_s *s,
             memcpy(explicit_damage, s->damage,
                    explicit_count * sizeof(explicit_damage[0]));
         }
-        if (s->active_valid) {
+        if (s->active_valid && !s->legacy_handoff_active &&
+            !s->screen_handoff_active) {
             vmsvga_scan_vram_dirty(
                 s, explicit_count != 0 ? explicit_damage : NULL, explicit_count);
         } else {
@@ -1540,18 +1551,26 @@ vmsvga_direct_screen_vram_scanout(const struct vmsvga_state_s *s)
            s->screen_backing_gmr_id == SVGA_GMR_FRAMEBUFFER;
 }
 
+static inline bool
+vmsvga_direct_legacy_vram_scanout(const struct vmsvga_state_s *s)
+{
+    return !s->screen_defined && !s->legacy_handoff_active;
+}
+
 static inline bool vmsvga_effective_traces(const struct vmsvga_state_s *s)
 {
     /*
-     * Direct Screen Object scanout needs the VGA dirty client even when the
-     * guest has not enabled SVGA_REG_TRACES. CPU writes to BAR1 may become
-     * visible after the FIFO presentation notification, so the periodic dirty
-     * scan is the reliable fallback which refreshes the frontend afterwards.
-     * Keep it enabled during the VGA -> SVGA handoff as well: until a real
-     * SVGA scanout exists, the frontend still presents the VGA/GOP framebuffer.
+     * Direct BAR1 scanout (both Screen Object and legacy register modes) needs
+     * the VGA dirty client even when the guest has not enabled SVGA_REG_TRACES.
+     * CPU writes to BAR1 may occur without or after FIFO presentation
+     * notifications, so the periodic dirty scan is the reliable fallback which
+     * refreshes the frontend afterwards. Keep it enabled during the VGA -> SVGA
+     * handoff as well: until a real SVGA scanout exists, the frontend still
+     * presents the VGA/GOP framebuffer.
      */
     return !s->enable || !s->config || !s->active_valid || !!s->traces ||
-           vmsvga_direct_screen_vram_scanout(s);
+           vmsvga_direct_screen_vram_scanout(s) ||
+           vmsvga_direct_legacy_vram_scanout(s);
 }
 
 static inline void vmsvga_update_dirty_log(struct vmsvga_state_s *s)
@@ -9089,6 +9108,7 @@ static inline void vmsvga_legacy_handoff_present_rect(
      * rectangle can be transient framebuffer preparation, so keep the
      * preserved frontend pixels until the guest presents real image data. */
     if (vmsvga_legacy_handoff_rect_is_zero(s, x, y, width, height)) {
+        vmsvga_legacy_handoff_arm_timeout(s);
         VMVGA_TRACE_LOCAL(VMVGA_TRACE_STATE,
                            "REG_HANDOFF preserve-zero x=%u y=%u w=%u h=%u",
                            x, y, width, height);
@@ -9105,9 +9125,17 @@ static inline void vmsvga_legacy_handoff_present_rect(
          * framebuffer.  BAR1 is now a complete canonical scanout and the
          * transition mirror can be retired on the next size check. */
         s->legacy_handoff_rebind = true;
+        s->legacy_handoff_timeout_armed = false;
+        s->legacy_handoff_hold_frames = 0;
         VMVGA_TRACE_LOCAL(VMVGA_TRACE_STATE,
                            "REG_HANDOFF complete width=%u height=%u",
                            s->active_width, s->active_height);
+    } else {
+        /* Any partial 2D update on top of a 3D host mirror invalidates the
+         * private 3D snapshot; arm the bounded rebind window so exiting 3D
+         * apps cannot trap scanout on screen_base if no full-screen 2D update
+         * follows. Active 3D PRESENTs disarm the timeout on the next flush. */
+        vmsvga_legacy_handoff_arm_timeout(s);
     }
 }
 
@@ -9259,6 +9287,9 @@ static inline void vmsvga_check_size(struct vmsvga_state_s *s)
             s->screen_defined ? "screen" :
             register_handoff_scanout ? "reg-handoff" : "bar1",
             s->active_width, s->active_height, display_depth, stride);
+    } else if (release_register_handoff) {
+        vmsvga_legacy_handoff_reset_state(s);
+        vmsvga_screen_base_clear(s);
     }
 }
 
@@ -9905,8 +9936,8 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
           }
           s->enable = enabled;
           s->hidden = s->enable && !!(value & SVGA_REG_ENABLE_HIDE);
-          if (s->enable) {
-              vmsvga_try_commit_mode(s);
+          if (s->enable && vmsvga_try_commit_mode(s)) {
+              vmsvga_legacy_handoff_arm_timeout(s);
           }
           vmsvga_update_dirty_log(s);
           if (s->enable &&
@@ -9924,7 +9955,9 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
     case SVGA_REG_WIDTH:
         if (value >= 1 && value <= VMSVGA_LEGACY_MAX_WIDTH) {
             s->new_width = value;
-            vmsvga_try_commit_mode(s);
+            if (vmsvga_try_commit_mode(s)) {
+                vmsvga_legacy_handoff_arm_timeout(s);
+            }
         }
         VPRINT("SVGA_REG_WIDTH register %u with the value of %u\n", s->index,
                value);
@@ -9932,7 +9965,9 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
     case SVGA_REG_HEIGHT:
         if (value >= 1 && value <= VMSVGA_LEGACY_MAX_HEIGHT) {
             s->new_height = value;
-            vmsvga_try_commit_mode(s);
+            if (vmsvga_try_commit_mode(s)) {
+                vmsvga_legacy_handoff_arm_timeout(s);
+            }
         }
         VPRINT("SVGA_REG_HEIGHT register %u with the value of %u\n", s->index,
                value);
@@ -9945,7 +9980,9 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
         if (value == VMSVGA_HOST_BITS_PER_PIXEL) {
 #endif
           s->new_depth = value;
-          vmsvga_try_commit_mode(s);
+          if (vmsvga_try_commit_mode(s)) {
+              vmsvga_legacy_handoff_arm_timeout(s);
+          }
       }
       VPRINT("SVGA_REG_BITS_PER_PIXEL register %u with the value of %u\n",
              s->index, value);
@@ -9965,7 +10002,9 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
             if (!was_config) {
                 vmsvga_fifo_set_busy(s, false);
             }
-            vmsvga_try_commit_mode(s);
+            if (vmsvga_try_commit_mode(s)) {
+                vmsvga_legacy_handoff_arm_timeout(s);
+            }
         } else if (was_config) {
             if (s->fifo_bh != NULL) {
                 qemu_bh_cancel(s->fifo_bh);
@@ -10099,7 +10138,9 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
   case SVGA_REG_PITCHLOCK:
       if (value == 0 || value <= s->vga.vram_size) {
           s->pitchlock = value;
-          vmsvga_try_commit_mode(s);
+          if (vmsvga_try_commit_mode(s)) {
+              vmsvga_legacy_handoff_arm_timeout(s);
+          }
       }
       VPRINT("SVGA_REG_PITCHLOCK register %u with the value of %u\n", s->index,
              value);
