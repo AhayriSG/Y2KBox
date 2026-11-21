@@ -1063,8 +1063,10 @@ static size_t audio_pcm_hw_run_in(HWVoiceIn *hw, size_t samples)
 
 static void audio_run_out(AudioMixengBackend *s)
 {
-    uint64_t perf_start_ns =
-        qemu_perf_stats_begin(QEMU_PERF_AUDIO_MIX_OUT);
+    uint64_t perf_start_ns;
+
+    qemu_perf_stats_mark(QEMU_PERF_AUDIO_MIX_OUT_GAP);
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_AUDIO_MIX_OUT);
 
     audio_run_out_impl(s);
     qemu_perf_stats_end(QEMU_PERF_AUDIO_MIX_OUT, perf_start_ns);
