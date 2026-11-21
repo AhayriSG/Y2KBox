@@ -128,20 +128,23 @@ XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windo
 
 **Q3 NIC / storage drivers (owner proposed VirtIO as a possible faster path).** Keep
 **RTL8139 + PIIX IDE** as the working defaults: RTL8139 has an in-box XP driver and IDE
-requires no additional boot driver. T15 is paused for source restoration: earlier XP
-pruning removed the VirtIO core/PCI transport and the `virtio-net` / `virtio-blk`
-implementations, so merely enabling their config symbols did not register the devices.
-The temporary config enablement was reverted in `72165a8`; current builds do not
-provide `virtio-net-pci` or `virtio-blk-pci`. Restore the minimal upstream 11.1.90
-source/build set before re-enabling them. Keep vhost-vDPA, VirtIO SCSI,
-virtio-serial/vdagent, ballooning and other unrelated devices out of scope; do not
-compile the pruned vhost-vDPA backend as a side effect of userspace VirtIO Net. The two choices are
-independent: the future T12 wxWidgets launcher will offer separate network-adapter
-(RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block) selectors.
-Keep the CD-ROM on IDE/PIIX initially. For a new XP install, use the XP x86 `viostor`
-driver from `virtio-win-0.1.141_x86.vfd` via text-mode Setup's F6 storage-driver flow;
-install the XP x86 NetKVM driver after setup. Verify the exact floppy contents and XP
-driver compatibility rather than assuming every bundled driver supports XP. Existing
+requires no additional boot driver. The earlier config-only VirtIO enablement failed
+because XP pruning had removed the implementation sources; that attempt was reverted
+in `72165a8`. T15 has now restored the minimal VirtIO Block + Net source set from the
+upstream QEMU 11.1.90 baseline (`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`): shared
+VirtIO core, PCI transport, `virtio-blk-pci`, `virtio-net-pci`, their device implementations,
+and missing public headers. Meson wiring is restored and the two guest device selections
+are enabled again; Linux + Windows CI validation is pending. The Meson `vhost_net`
+feature defaults to disabled, preventing the optional host vhost-vDPA backend from being
+compiled merely because guest VirtIO Net is enabled. Keep vhost/vDPA, VirtIO SCSI,
+virtio-serial/vdagent, ballooning and other unrelated devices out of scope.
+
+The two choices are independent: the future T12 wxWidgets launcher will offer separate
+network-adapter (RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block)
+selectors. Keep the CD-ROM on IDE/PIIX initially. For a new XP install, use the XP x86
+`viostor` driver from `virtio-win-0.1.141_x86.vfd` via text-mode Setup's F6 storage-driver
+flow; install the XP x86 NetKVM driver after setup. Verify the exact floppy contents and
+XP driver compatibility rather than assuming every bundled driver supports XP. Existing
 IDE installations must have `viostor` installed before switching their boot disk to
 VirtIO Block. Owner will compare disk and network performance manually under Windows
 TCG; no recurring CI performance benchmark is planned. Do not change either default
