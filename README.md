@@ -86,8 +86,8 @@ When `debug=on` is set but capture is inactive, these diagnostic streams remain
 disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output, and no
 capture start/stop messages in the command prompt. The hotkey is unavailable
 unless `debug=on` is present. No separate `-trace "vdagent*"` option is needed;
-the hotkey enables the relevant VMVGA and vdagent trace events only for the
-selected interval.
+the hotkey enables the relevant VMVGA, VMPort, and vdagent trace events only
+for the selected interval.
 
 Do **not** use shell-level `2> vmvga_freeze.log` redirection with this feature:
 it redirects stderr before QEMU starts and defeats interval capture.
