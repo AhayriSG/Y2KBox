@@ -332,6 +332,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             saved_errno = errno;
             object_property_set_bool(vmvga, "debug-log", true, NULL);
             sdl_set_debug_trace(true);
+            qemu_perf_stats_start();
             error_report("Could not restore stderr after diagnostic capture: %s",
                          strerror(saved_errno));
             return;
