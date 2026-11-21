@@ -9,6 +9,7 @@
 typedef struct QemuPerfStatCounter {
     uint64_t count;
     uint64_t work_units;
+    uint64_t max_work_units;
     uint64_t total_ns;
     uint64_t max_ns;
     uint64_t over_1ms;
@@ -52,6 +53,10 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_TOPOLOGY_ROOTS] = "memory.topology_roots",
     [QEMU_PERF_FLATVIEW_INSERT] = "memory.flatview_insert",
     [QEMU_PERF_FLATVIEW_RANGE_REALLOC] = "memory.flatview_range_realloc",
+    [QEMU_PERF_FLATVIEW_SCAN] = "memory.flatview_scan",
+    [QEMU_PERF_FLATVIEW_MEMMOVE] = "memory.flatview_memmove",
+    [QEMU_PERF_FLATVIEW_REF] = "memory.flatview_ref",
+    [QEMU_PERF_FLATVIEW_SIZE] = "memory.flatview_size",
     [QEMU_PERF_VMVGA_DISPLAY_UPDATE] = "vmvga.display_update",
     [QEMU_PERF_DXVK_SHADER_CREATE] = "dxvk.d3d9_shader_create",
     [QEMU_PERF_AUDIO_MIX_OUT] = "audio.mix_out",
@@ -67,6 +72,7 @@ void qemu_perf_stats_start(void)
     for (i = 0; i < QEMU_PERF_STAT__MAX; i++) {
         qatomic_set(&perf_stats[i].count, 0);
         qatomic_set(&perf_stats[i].work_units, 0);
+        qatomic_set(&perf_stats[i].max_work_units, 0);
         qatomic_set(&perf_stats[i].total_ns, 0);
         qatomic_set(&perf_stats[i].max_ns, 0);
         qatomic_set(&perf_stats[i].over_1ms, 0);
@@ -164,6 +170,27 @@ void qemu_perf_stats_command_end(uint32_t command_id,
                              g_get_monotonic_time() * 1000 - start_ns);
 }
 
+void qemu_perf_stats_record_work(QemuPerfStat stat, uint64_t amount)
+{
+    uint64_t previous;
+
+    if (stat >= QEMU_PERF_STAT__MAX || !qatomic_read(&perf_stats_enabled)) {
+        return;
+    }
+
+    qatomic_inc(&perf_stats[stat].count);
+    qatomic_add(&perf_stats[stat].work_units, amount);
+    previous = qatomic_read(&perf_stats[stat].max_work_units);
+    while (amount > previous) {
+        uint64_t observed = qatomic_cmpxchg(&perf_stats[stat].max_work_units,
+                                             previous, amount);
+        if (observed == previous) {
+            break;
+        }
+        previous = observed;
+    }
+}
+
 void qemu_perf_stats_mark(QemuPerfStat stat)
 {
     uint64_t now_ns, previous;
@@ -207,11 +234,13 @@ void qemu_perf_stats_stop(void)
 
         fprintf(stderr,
                 "Y2KBOX-PERF stat=%s count=%" PRIu64
-                " work_units=%" PRIu64 " total_us=%" PRIu64 " max_us=%" PRIu64
+                " work_units=%" PRIu64 " max_work_units=%" PRIu64
+                " total_us=%" PRIu64 " max_us=%" PRIu64
                 " over_1ms=%" PRIu64 " over_10ms=%" PRIu64
                 " over_100ms=%" PRIu64 "\n",
                 perf_stat_names[i], count,
                 qatomic_read(&counter->work_units),
+                qatomic_read(&counter->max_work_units),
                 qatomic_read(&counter->total_ns) / 1000,
                 qatomic_read(&counter->max_ns) / 1000,
                 qatomic_read(&counter->over_1ms),
