@@ -126,13 +126,22 @@ implementation already exists for the same QEMU generation, GPL-2.0-or-later, XP
 supported, no 100k-line port of legacy VirtualBox/Chromium code. Still unverified until tested in an
 XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windows-host backend.
 
-**Q3 NIC / drivers (owner: rtl8139 is fine; considered virtio-win).** Decision: default
-**RTL8139** (in-box XP driver, zero setup). Owner suggested virtio-win 0.1.141 (XP-capable
-x86 floppy `virtio-win-0.1.141_x86.vfd`: VirtIO Ethernet, VirtIO SCSI/block, ...) as an
-optional faster path. We switched ALL virtio devices off in `default.mak`; re-enabling
-`virtio-net` / `virtio-blk` / `virtio-scsi` as an *opt-in* is task T15 (benchmark vs
-IDE + RTL8139 under TCG first; verify which drivers that floppy really contains for XP).
-The floppy-driver route (XP setup F6 + our floppy mount) already works with our design.
+**Q3 NIC / storage drivers (owner proposed VirtIO as a possible faster path).** Keep
+**RTL8139 + PIIX IDE** as the initial defaults: RTL8139 has an in-box XP driver and IDE
+requires no additional boot driver. T15 now enables only the shared VirtIO core, PCI
+transport, **VirtIO Block** (`virtio-blk-pci`) and **VirtIO Net** (`virtio-net-pci`) for
+optional owner testing. VirtIO SCSI, virtio-serial/vdagent, ballooning, vhost and other
+VirtIO devices remain disabled and are outside this first pass. The two choices are
+independent: the future T12 wxWidgets launcher will offer separate network-adapter
+(RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block) selectors.
+Keep the CD-ROM on IDE/PIIX initially. For a new XP install, use the XP x86 `viostor`
+driver from `virtio-win-0.1.141_x86.vfd` via text-mode Setup's F6 storage-driver flow;
+install the XP x86 NetKVM driver after setup. Verify the exact floppy contents and XP
+driver compatibility rather than assuming every bundled driver supports XP. Existing
+IDE installations must have `viostor` installed before switching their boot disk to
+VirtIO Block. Owner will compare disk and network performance manually under Windows
+TCG; no recurring CI performance benchmark is planned. Do not change either default
+until owner-reported compatibility, reliability and performance results justify it.
 
 **Q4 RAM.** Decision (owner): always 2048 MB, automatic, no user setting. Implemented as
 `mc->default_ram_size = 2 GiB` in `hw/i386/pc.c`; the above-4G/hole64 code is dead and is
