@@ -338,7 +338,6 @@ struct vmsvga_cursor_source_s {
 
 /* Keep debug capability and active capture separate.  Local diagnostics
  * are emitted only while at least one debug-enabled VMVGA is being captured. */
-static unsigned int vmvga_trace_debug_devices;
 static unsigned int vmvga_trace_debug_capture_devices;
 
 #define VMVGA_TRACE_LOCAL_MASTER_ENABLED() \
@@ -11940,10 +11939,6 @@ static void pci_vmsvga_realize(PCIDevice *dev, Error **errp)
         return;
     }
 
-    if (s->chip.debug) {
-        vmvga_trace_debug_devices++;
-    }
-
     memory_region_init_io(&s->io_bar, OBJECT(dev), &vmsvga_io_ops, &s->chip,
                           "vmsvga-io", 0x10);
     memory_region_set_flush_coalesced(&s->io_bar);
@@ -12028,10 +12023,6 @@ static void pci_vmsvga_uninit(PCIDevice *dev)
         assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
         qatomic_dec(&vmvga_trace_debug_capture_devices);
         s->chip.debug_log = false;
-    }
-    if (s->chip.debug) {
-        assert(vmvga_trace_debug_devices > 0);
-        vmvga_trace_debug_devices--;
     }
 }
 
