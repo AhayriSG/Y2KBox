@@ -1099,3 +1099,30 @@ Added a second-stage, opt-in per-command profiler:
 Source commits: header c05999c, counter implementation 8b86280, VMVGA dispatcher 6dd5d13. Documentation commits: TASKS 831c430, HANDOFF 2221632.
 
 No local build/test was run and CI was not polled, per project workflow. Windows/Linux CI must validate the new instrumentation before owner runtime testing. No performance optimization or command execution behavior was changed; T13e remains CLAIMED.
+
+## Session 53 (ChatGPT), 2026-11-22 - Narrow scene-stall hotspot to GART map/unmap
+
+Owner supplied the second per-command capture (16.452 s):
+- `vmvga.command_dispatch`: 66,190 commands, 14.971245 s total wall time.
+- `SVGA_3D_CMD_MAP_MOB_INTO_GART`: 132 calls, 10.450865 s total, 94.713 ms max, about 79.2 ms/call.
+- `SVGA_3D_CMD_UNMAP_GART_RANGE`: 153 calls, 1.856100 s total, 100.974 ms max, about 12.1 ms/call.
+- Combined map/unmap time is 12.306965 s, about 82.2% of command-dispatch total.
+- `SVGA_3D_CMD_UPDATE_GB_IMAGE`: 4,747 calls, 916.020 ms total, 4.397 ms max.
+- `SVGA_3D_CMD_DRAW_PRIMITIVES`: 10,275 calls, 1.543459 s total, 5.350 ms max; CLEAR totaled 110.110 ms.
+- D3D9 shader-object creation totaled 0.689 ms. TB flush and physical TB invalidation were never called; dirty-TLB reset totaled 0.716 ms.
+- `cpu.exec` max was 288.132 ms and audio mixer-service gap max was 289.251 ms, while mixer/SDL callback execution itself remained tiny. The audio symptom remains consistent with delayed service while work is in progress, not expensive audio callback code.
+
+Source inspection of `vmsvga3d_gart_map_mob_live()` shows per-MOB-page `memory_region_find()` resolution, temporary `MemoryRegionSection`/GPA arrays, per-page BAR1 alias removal/install, and a memory-region transaction commit. `vmsvga3d_gart_unmap_live()` removes aliases per page and commits. This is a concrete hotspot candidate, but the command timers are inclusive wall-clock measurements and can include host scheduling or lock waits; do not claim the page operations themselves account for all elapsed time.
+
+Added opt-in substage instrumentation in `hw/display/vmware_vga_3d.c`:
+- MAP GPA/page resolution (`vmvga.gart_map_resolve`).
+- MAP per-page alias installation/update loop (`vmvga.gart_map_alias`).
+- MAP memory-region transaction commit (`vmvga.gart_map_commit`).
+- UNMAP per-page alias removal loop (`vmvga.gart_unmap_alias`).
+- UNMAP memory-region transaction commit (`vmvga.gart_unmap_commit`).
+- Each stage reports `work_units` for the number of MOB/aperture pages processed, plus call count, total, max and slow-call thresholds.
+- The measurements are active only during Ctrl+Alt+L performance capture. No mapping, alias, transaction, or guest-visible behavior was changed.
+
+Updated TASKS.md and HANDOFF.md. Source changes: perf-stat API `e0793f9`, counter implementation `4011ba8`, GART substage instrumentation `a3c4523`; docs: TASKS `1d53e31`, HANDOFF `2ccead1`.
+
+No local build/test was run and CI was not polled, per project workflow. Windows/Linux CI must validate the instrumentation before another owner capture. T13e remains CLAIMED; no performance fix has been applied.
