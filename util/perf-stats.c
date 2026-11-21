@@ -8,6 +8,7 @@
 
 typedef struct QemuPerfStatCounter {
     uint64_t count;
+    uint64_t work_units;
     uint64_t total_ns;
     uint64_t max_ns;
     uint64_t over_1ms;
@@ -30,6 +31,11 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_TLB_RESET_DIRTY] = "tcg.tlb_reset_dirty",
     [QEMU_PERF_VMVGA_FIFO] = "vmvga.fifo_run",
     [QEMU_PERF_VMVGA_COMMAND_DISPATCH] = "vmvga.command_dispatch",
+    [QEMU_PERF_GART_MAP_RESOLVE] = "vmvga.gart_map_resolve",
+    [QEMU_PERF_GART_MAP_ALIAS] = "vmvga.gart_map_alias",
+    [QEMU_PERF_GART_MAP_COMMIT] = "vmvga.gart_map_commit",
+    [QEMU_PERF_GART_UNMAP_ALIAS] = "vmvga.gart_unmap_alias",
+    [QEMU_PERF_GART_UNMAP_COMMIT] = "vmvga.gart_unmap_commit",
     [QEMU_PERF_VMVGA_DISPLAY_UPDATE] = "vmvga.display_update",
     [QEMU_PERF_DXVK_SHADER_CREATE] = "dxvk.d3d9_shader_create",
     [QEMU_PERF_AUDIO_MIX_OUT] = "audio.mix_out",
@@ -44,6 +50,7 @@ void qemu_perf_stats_start(void)
 
     for (i = 0; i < QEMU_PERF_STAT__MAX; i++) {
         qatomic_set(&perf_stats[i].count, 0);
+        qatomic_set(&perf_stats[i].work_units, 0);
         qatomic_set(&perf_stats[i].total_ns, 0);
         qatomic_set(&perf_stats[i].max_ns, 0);
         qatomic_set(&perf_stats[i].over_1ms, 0);
@@ -99,6 +106,15 @@ static void qemu_perf_counter_record(QemuPerfStatCounter *counter,
         }
         previous = observed;
     }
+}
+
+void qemu_perf_stats_add_work(QemuPerfStat stat, uint64_t amount)
+{
+    if (stat >= QEMU_PERF_STAT__MAX || !qatomic_read(&perf_stats_enabled)) {
+        return;
+    }
+
+    qatomic_add(&perf_stats[stat].work_units, amount);
 }
 
 static void qemu_perf_stats_record(QemuPerfStat stat, uint64_t elapsed_ns)
@@ -175,10 +191,11 @@ void qemu_perf_stats_stop(void)
 
         fprintf(stderr,
                 "Y2KBOX-PERF stat=%s count=%" PRIu64
-                " total_us=%" PRIu64 " max_us=%" PRIu64
+                " work_units=%" PRIu64 " total_us=%" PRIu64 " max_us=%" PRIu64
                 " over_1ms=%" PRIu64 " over_10ms=%" PRIu64
                 " over_100ms=%" PRIu64 "\n",
                 perf_stat_names[i], count,
+                qatomic_read(&counter->work_units),
                 qatomic_read(&counter->total_ns) / 1000,
                 qatomic_read(&counter->max_ns) / 1000,
                 qatomic_read(&counter->over_1ms),
