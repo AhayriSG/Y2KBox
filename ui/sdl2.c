@@ -152,9 +152,33 @@ void sdl2_window_destroy(struct sdl2_console *scon)
     scon->real_window = NULL;
 }
 
+static void sdl_get_viewport(int scr_w, int scr_h, int surf_w, int surf_h,
+                             SDL_Rect *vp)
+{
+    if (scr_w <= 0 || scr_h <= 0 || surf_w <= 0 || surf_h <= 0) {
+        vp->x = 0;
+        vp->y = 0;
+        vp->w = MAX(scr_w, 1);
+        vp->h = MAX(scr_h, 1);
+        return;
+    }
+
+    if ((int64_t)scr_w * surf_h < (int64_t)scr_h * surf_w) {
+        vp->w = scr_w;
+        vp->h = MAX((int)((int64_t)scr_w * surf_h / surf_w), 1);
+        vp->x = 0;
+        vp->y = (scr_h - vp->h) / 2;
+    } else {
+        vp->h = scr_h;
+        vp->w = MAX((int)((int64_t)scr_h * surf_w / surf_h), 1);
+        vp->x = (scr_w - vp->w) / 2;
+        vp->y = 0;
+    }
+}
+
 void sdl2_window_resize(struct sdl2_console *scon)
 {
-    if (!scon->real_window) {
+    if (!scon->real_window || !scon->surface || gui_fullscreen) {
         return;
     }
 
@@ -240,12 +264,15 @@ static void sdl_warp_guest_cursor(struct sdl2_console *scon, int x, int y)
     }
 
     SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
-    if (scon->surface) {
+    if (scon->surface && scr_w > 0 && scr_h > 0) {
         surf_w = surface_width(scon->surface);
         surf_h = surface_height(scon->surface);
-        if (surf_w > 0 && surf_h > 0 && scr_w > 0 && scr_h > 0) {
-            wx = (int)((int64_t)x * scr_w / surf_w);
-            wy = (int)((int64_t)y * scr_h / surf_h);
+        if (surf_w > 0 && surf_h > 0) {
+            SDL_Rect vp;
+
+            sdl_get_viewport(scr_w, scr_h, surf_w, surf_h, &vp);
+            wx = vp.x + (int)(((int64_t)x * vp.w + vp.w / 2) / surf_w);
+            wy = vp.y + (int)(((int64_t)y * vp.h + vp.h / 2) / surf_h);
         }
     }
     if (scr_w > 0) {
@@ -317,6 +344,10 @@ static void absolute_mouse_grab(struct sdl2_console *scon)
 {
     int mouse_x, mouse_y;
     int scr_w, scr_h;
+
+    if (!scon || !scon->real_window) {
+        return;
+    }
     SDL_GetMouseState(&mouse_x, &mouse_y);
     SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
     if (mouse_x > 0 && mouse_x < scr_w - 1 &&
@@ -391,6 +422,7 @@ static void toggle_full_screen(struct sdl2_console *scon)
             sdl_grab_end(scon);
         }
         SDL_SetWindowFullscreen(scon->real_window, 0);
+        sdl2_window_resize(scon);
     }
     sdl2_redraw(scon);
 }
@@ -529,18 +561,29 @@ static void handle_mousemotion(SDL_Event *ev)
     int max_x, max_y;
     struct sdl2_console *scon = get_scon_from_window(ev->motion.windowID);
     int scr_w, scr_h, surf_w, surf_h, x, y, dx, dy;
+    bool logical_coords;
 
-    if (!scon || !qemu_console_is_graphic(scon->dcl.con)) {
+    if (!scon || !qemu_console_is_graphic(scon->dcl.con) || !scon->surface) {
         return;
     }
 
+    surf_w = surface_width(scon->surface);
+    surf_h = surface_height(scon->surface);
+    if (surf_w <= 0 || surf_h <= 0) {
+        return;
+    }
+
+    /* sdl2-2d configures SDL_RenderSetLogicalSize(surf_w, surf_h), so SDL2's
+     * event watcher already translates motion/button coordinates into surface
+     * space (including fullscreen letterboxing/pillarboxing). */
+    logical_coords = !scon->opengl && scon->real_renderer;
     SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
     if (qemu_input_is_absolute(scon->dcl.con) || absolute_enabled) {
-        max_x = scr_w - 1;
-        max_y = scr_h - 1;
+        max_x = (logical_coords ? surf_w : scr_w) - 1;
+        max_y = (logical_coords ? surf_h : scr_h) - 1;
         if (gui_grab && !gui_fullscreen
-            && (ev->motion.x == 0 || ev->motion.y == 0 ||
-                ev->motion.x == max_x || ev->motion.y == max_y)) {
+            && (ev->motion.x <= 0 || ev->motion.y <= 0 ||
+                ev->motion.x >= max_x || ev->motion.y >= max_y)) {
             sdl_grab_end(scon);
         }
         if (!gui_grab &&
@@ -549,12 +592,29 @@ static void handle_mousemotion(SDL_Event *ev)
             sdl_grab_start(scon);
         }
     }
-    surf_w = surface_width(scon->surface);
-    surf_h = surface_height(scon->surface);
-    x = (int64_t)ev->motion.x * surf_w / scr_w;
-    y = (int64_t)ev->motion.y * surf_h / scr_h;
-    dx = (int64_t)ev->motion.xrel * surf_w / scr_w;
-    dy = (int64_t)ev->motion.yrel * surf_h / scr_h;
+
+    if (logical_coords) {
+        x = MAX(0, MIN(ev->motion.x, surf_w - 1));
+        y = MAX(0, MIN(ev->motion.y, surf_h - 1));
+        dx = ev->motion.xrel;
+        dy = ev->motion.yrel;
+    } else {
+        SDL_Rect vp;
+
+        sdl_get_viewport(scr_w, scr_h, surf_w, surf_h, &vp);
+        x = (int)((int64_t)(ev->motion.x - vp.x) * surf_w / vp.w);
+        y = (int)((int64_t)(ev->motion.y - vp.y) * surf_h / vp.h);
+        x = MAX(0, MIN(x, surf_w - 1));
+        y = MAX(0, MIN(y, surf_h - 1));
+        if (SDL_GetRelativeMouseMode()) {
+            dx = ev->motion.xrel;
+            dy = ev->motion.yrel;
+        } else {
+            dx = (int)((int64_t)ev->motion.xrel * surf_w / vp.w);
+            dy = (int)((int64_t)ev->motion.yrel * surf_h / vp.h);
+        }
+    }
+
     if (gui_grab || qemu_input_is_absolute(scon->dcl.con) || absolute_enabled) {
         sdl_send_mouse_event(scon, dx, dy, x, y, ev->motion.state);
     }
@@ -565,16 +625,33 @@ static void handle_mousebutton(SDL_Event *ev)
     int buttonstate = SDL_GetMouseState(NULL, NULL);
     SDL_MouseButtonEvent *bev;
     struct sdl2_console *scon = get_scon_from_window(ev->button.windowID);
-    int scr_w, scr_h, x, y;
+    int surf_w, surf_h, x, y;
 
-    if (!scon || !qemu_console_is_graphic(scon->dcl.con)) {
+    if (!scon || !qemu_console_is_graphic(scon->dcl.con) || !scon->surface) {
+        return;
+    }
+
+    surf_w = surface_width(scon->surface);
+    surf_h = surface_height(scon->surface);
+    if (surf_w <= 0 || surf_h <= 0) {
         return;
     }
 
     bev = &ev->button;
-    SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
-    x = (int64_t)bev->x * surface_width(scon->surface) / scr_w;
-    y = (int64_t)bev->y * surface_height(scon->surface) / scr_h;
+    if (!scon->opengl && scon->real_renderer) {
+        x = MAX(0, MIN(bev->x, surf_w - 1));
+        y = MAX(0, MIN(bev->y, surf_h - 1));
+    } else {
+        int scr_w, scr_h;
+        SDL_Rect vp;
+
+        SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
+        sdl_get_viewport(scr_w, scr_h, surf_w, surf_h, &vp);
+        x = (int)((int64_t)(bev->x - vp.x) * surf_w / vp.w);
+        y = (int)((int64_t)(bev->y - vp.y) * surf_h / vp.h);
+        x = MAX(0, MIN(x, surf_w - 1));
+        y = MAX(0, MIN(y, surf_h - 1));
+    }
 
     if (!gui_grab && !qemu_input_is_absolute(scon->dcl.con)) {
         if (ev->type == SDL_MOUSEBUTTONUP && bev->button == SDL_BUTTON_LEFT) {

@@ -695,3 +695,20 @@ Fixed the screen freeze after guest video mode changes (e.g., entering/exiting f
    - Documented this guest driver limit in `README.md`.
 
 No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.
+
+## Session 31, 2026-11-21 - Fix DXVK legacy present FIFO deadlock on mode changes and SDL2 fullscreen cursor tracking
+
+Fixed two issues reported from Windows XP SP3 testing (`dxdiag` D3D7 -> D3D8 -> D3D9 transitions and `Ctrl+Alt+F` fullscreen cursor tracking):
+
+1. **Intermittent post-mode-change SVGA screen freeze during `dxdiag` D3D8 -> D3D9 (`hw/display/vmware_vga_3d.c`, `hw/display/vmware_vga.c`, `hw/display/vmware_vga_gmr.c`):**
+   - Fixed `vmsvga3d_legacy_present_flush_live()` so host scanout validation (`vmsvga3d_legacy_present_host_scanout_ensure()`) and mode geometry matching (`legacy_present_width/height == active_width/height`) happen before DXVK readback, and unflushable/superseded deferred snapshots call `vmsvga3d_legacy_present_reset_live(s)` and return `true`. Previously, returning `false` when a mode switch, 16-bpp transition, or Screen Object superseded a pending D3D8 present permanently rewound the SVGA FIFO on the next 2D/Screen barrier (`vmsvga3d_legacy_present_fifo_2d_barrier_live`), `BLIT_SURFACE_TO_SCREEN`, `PRESENT`, or `PRESENT_READBACK` while register-driven window resizing, cursor updates, keyboard input, and audio kept running until `ESC` reset the mode.
+   - Fixed `vmsvga3d_legacy_present_readback_to_guest_live()` so absent, rebound, or mode-mismatched host mirrors invalidate the stale snapshot (`vmsvga3d_legacy_present_snapshot_invalidate_live(s)`) and return `true` instead of rewinding `SVGA_3D_CMD_PRESENT_READBACK` indefinitely.
+   - Guarded `vmsvga_try_commit_mode()` against overwriting `s->active_*` while `s->screen_defined` is true, and committed any pending register mode at the end of `vmsvga_screen_destroy()` when `s->enable` is set.
+   - Fixed `vmsvga_check_size()` to compare `format != surface_format(surface)` instead of `display_depth != surface_bits_per_pixel(surface)`, avoiding recreating 15-bpp surfaces/textures (`PIXMAN_x1r5g5b5` has 16-bit storage bpp) on every refresh.
+
+2. **`Ctrl+Alt+F` fullscreen SDL2 mouse tracking (`ui/sdl2.c`):**
+   - Stopped double-scaling `SDL_MOUSEMOTION` and `SDL_MOUSEBUTTON*` coordinates in SDL2 2D mode (`!scon->opengl && scon->real_renderer`), where `sdl2_2d_switch()` already configures `SDL_RenderSetLogicalSize()` to translate window coordinates (and letterboxing/pillarboxing) into `[0, surf_w) x [0, surf_h)` surface space.
+   - Added `sdl_get_viewport()` for OpenGL/unscaled fallback input mapping, letterbox/pillarbox-aware `sdl_warp_guest_cursor()` warping, and null/bounds guards across `handle_mousemotion()`, `handle_mousebutton()`, and `absolute_mouse_grab()`.
+   - Guarded `sdl2_window_resize()` while `gui_fullscreen` is active and resynced the windowed size when exiting fullscreen in `toggle_full_screen()`.
+
+No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.

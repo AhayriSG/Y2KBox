@@ -2348,6 +2348,9 @@ static bool vmsvga_screen_destroy(struct vmsvga_state_s *s,
     s->damage_count = 0;
     s->svga_surface_bound = false;
     vmsvga_invalidate(s, "screen-destroy");
+    if (s->enable) {
+        vmsvga_try_commit_mode(s);
+    }
 
     if (vmsvga_trace_flight_enabled()) {
         s->trace_now.screen_destroys++;

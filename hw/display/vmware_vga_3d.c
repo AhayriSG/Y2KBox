@@ -8588,21 +8588,34 @@ static bool vmsvga3d_legacy_present_flush_live(struct vmsvga_state_s *s)
         desc->pitch_bytes_per_block != desc->bytes_per_block ||
         desc->bitDepth.blue == 0 || desc->bitDepth.green == 0 ||
         desc->bitDepth.red == 0) {
-        return false;
+        vmsvga3d_legacy_present_reset_live(s);
+        return true;
+    }
+
+    /* Validate the host mirror and active mode before readback; if a mode
+     * switch, depth change, or Screen Object already superseded this frame,
+     * discard the stale deferred snapshot instead of rewinding the FIFO. */
+    if (!vmsvga3d_legacy_present_host_scanout_ensure(s) ||
+        state->legacy_present_width != s->active_width ||
+        state->legacy_present_height != s->active_height) {
+        vmsvga3d_legacy_present_reset_live(s);
+        return true;
     }
 
     pitch = (uint64_t)state->legacy_present_width * desc->bytes_per_block;
     data_size = pitch * state->legacy_present_height;
     if (pitch == 0 || pitch > UINT32_MAX || data_size == 0 ||
         data_size > UINT32_MAX || data_size > SIZE_MAX) {
-        return false;
+        vmsvga3d_legacy_present_reset_live(s);
+        return true;
     }
 
     if (state->legacy_present_pixels_size < (size_t)data_size) {
         pixels = g_try_realloc(state->legacy_present_pixels,
                                (size_t)data_size);
         if (pixels == NULL) {
-            return false;
+            vmsvga3d_legacy_present_reset_live(s);
+            return true;
         }
         state->legacy_present_pixels = pixels;
         state->legacy_present_pixels_size = (size_t)data_size;
@@ -8613,9 +8626,9 @@ static bool vmsvga3d_legacy_present_flush_live(struct vmsvga_state_s *s)
      * writes to framebuffer memory. */
     if (!vmsvga3d_dxvk_d3d9_legacy_present_readback(
             s->dxvk, state->legacy_present_pixels, (uint32_t)pitch,
-            state->legacy_present_height) ||
-        !vmsvga3d_legacy_present_host_scanout_ensure(s)) {
-        return false;
+            state->legacy_present_height)) {
+        vmsvga3d_legacy_present_reset_live(s);
+        return true;
     }
 
     snapshot_image.size.width = state->legacy_present_width;
@@ -8635,7 +8648,8 @@ static bool vmsvga3d_legacy_present_flush_live(struct vmsvga_state_s *s)
                 &state->legacy_present_rects[i], s->screen_base,
                 s->screen_base_size, s->active_width, s->active_height, 32,
                 s->screen_stride, 0, false, false, false)) {
-            return false;
+            vmsvga3d_legacy_present_reset_live(s);
+            return true;
         }
     }
 
@@ -8647,7 +8661,8 @@ static bool vmsvga3d_legacy_present_flush_live(struct vmsvga_state_s *s)
                 &state->legacy_present_rects[i], s->screen_base,
                 s->screen_base_size, s->active_width, s->active_height, 32,
                 s->screen_stride, 0, false, false, true)) {
-            return false;
+            vmsvga3d_legacy_present_reset_live(s);
+            return true;
         }
 
         vmsvga3d_clip_present_rect(&state->legacy_present_rects[i],
@@ -8689,25 +8704,27 @@ static bool vmsvga3d_legacy_present_readback_to_guest_live(
 
     /* A later legacy 2D write can invalidate the private GPU snapshot while
      * leaving the host scanout mirror authoritative.  PRESENT_READBACK must
-     * still copy that displayed image back to BAR1.  If no host mirror exists
-     * and no snapshot is valid, BAR1 is already the authoritative image. */
+     * still copy that displayed image back to BAR1.  If no compatible host
+     * mirror exists, invalidate any stale snapshot instead of wedging the
+     * FIFO across mode changes. */
     if (!s->legacy_handoff_active || s->legacy_handoff_rebind ||
-        s->screen_base == NULL) {
-        return !state->legacy_present_snapshot_valid;
-    }
-
-    if (!s->active_valid || s->active_depth != 32 ||
-        state->legacy_present_width != s->active_width ||
-        state->legacy_present_height != s->active_height) {
-        return false;
+        s->screen_defined || s->screen_base == NULL ||
+        !s->active_valid || s->active_depth != 32 ||
+        (state->legacy_present_snapshot_valid &&
+         (state->legacy_present_width != s->active_width ||
+          state->legacy_present_height != s->active_height))) {
+        vmsvga3d_legacy_present_snapshot_invalidate_live(s);
+        return true;
     }
 
     row_bytes = (uint64_t)s->active_width * 4U;
     required = (uint64_t)s->active_stride * s->active_height;
     if (row_bytes == 0 || row_bytes > s->active_stride ||
+        row_bytes > s->screen_stride ||
         (uint64_t)s->screen_stride * s->active_height > s->screen_base_size ||
         required == 0 || required > s->vga.vram_size) {
-        return false;
+        vmsvga3d_legacy_present_snapshot_invalidate_live(s);
+        return true;
     }
 
     bar1 = vmsvga_svga_vram_ptr(s);

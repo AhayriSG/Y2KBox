@@ -8207,7 +8207,7 @@ static inline bool vmsvga_try_commit_mode(struct vmsvga_state_s *s)
     uint32_t stride;
     bool changed;
 
-    if (!vmsvga_pending_mode_valid(s)) {
+    if (s->screen_defined || !vmsvga_pending_mode_valid(s)) {
         return false;
     }
 
@@ -9119,6 +9119,7 @@ static inline void vmsvga_check_size(struct vmsvga_state_s *s)
     uint8_t *scanout;
     uint32_t stride;
     uint32_t display_depth;
+    pixman_format_code_t format;
     bool register_handoff_scanout = false;
     bool release_register_handoff = false;
 
@@ -9172,13 +9173,14 @@ static inline void vmsvga_check_size(struct vmsvga_state_s *s)
         }
     }
 
+    format = vmsvga_pixman_format(display_depth);
+
     if (!s->svga_surface_bound ||
         s->active_width != surface_width(surface) ||
         s->active_height != surface_height(surface) ||
         stride != surface_stride(surface) ||
-        display_depth != surface_bits_per_pixel(surface) ||
+        format != surface_format(surface) ||
         surface_data(surface) != scanout) {
-        pixman_format_code_t format = vmsvga_pixman_format(display_depth);
 #ifdef VERBOSE
         int old_width = surface_width(surface);
         int old_height = surface_height(surface);
