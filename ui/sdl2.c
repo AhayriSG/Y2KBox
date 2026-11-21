@@ -234,7 +234,7 @@ static bool sdl_vmvga_debug_enabled(Object **vmvga)
 
 static void sdl_set_debug_trace(bool enabled)
 {
-    static const char *patterns[] = { "vmware_*", "vdagent*" };
+    static const char *patterns[] = { "vmware_*", "vmport_*", "vdagent*" };
     TraceEventIter iter;
     TraceEvent *event;
     size_t i;
