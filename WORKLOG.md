@@ -1126,3 +1126,29 @@ Added opt-in substage instrumentation in `hw/display/vmware_vga_3d.c`:
 Updated TASKS.md and HANDOFF.md. Source changes: perf-stat API `e0793f9`, counter implementation `4011ba8`, GART substage instrumentation `a3c4523`; docs: TASKS `1d53e31`, HANDOFF `2ccead1`.
 
 No local build/test was run and CI was not polled, per project workflow. Windows/Linux CI must validate the instrumentation before another owner capture. T13e remains CLAIMED; no performance fix has been applied.
+
+## Session 54 (ChatGPT), 2026-11-22 - Break down memory-region transaction cost
+
+Owner's follow-up GART capture measured 10.992056 s in 138 map transaction commits
+(3,007 pages) and 1.768728 s in 159 unmap commits (3,595 pages). GPA resolution
+was 206 us total and per-page map alias changes were 7.816 ms; unmap alias changes
+were 63.184 ms. This points to the transaction commit machinery rather than the
+GART page translation or alias loop.
+
+Source inspection of system/memory.c shows that an outermost transaction with
+memory_region_update_pending calls flatviews_reset(), global MemoryListener
+begin callbacks, address_space_set_flatview() and
+address_space_update_ioeventfds() for every AddressSpace, then global listener
+commit callbacks. flatviews_reset() regenerates unique FlatViews for the registered
+AddressSpaces. The existing GART timers include this entire commit operation.
+
+Added opt-in aggregate timings inside memory_region_transaction_begin/commit:
+coalesced-MMIO flush, flatviews_reset, global listener begin/commit, per-address-space
+flatview publication, and per-address-space ioeventfd update. Per-address-space
+stages also report work_units. This is instrumentation only; transaction nesting,
+commit boundaries, aliases, and guest-visible mapping behavior are unchanged.
+
+No local build/test or CI polling performed. Windows/Linux CI must validate before
+the next owner capture. Do not attempt transaction batching or GART alias redesign
+until the new counters identify the dominant internal stage and ordering constraints
+are reviewed.
