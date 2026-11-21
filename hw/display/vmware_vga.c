@@ -340,9 +340,10 @@ struct vmsvga_cursor_source_s {
  * replaced.  A count keeps tracing active until the last debug-enabled VMVGA
  * device is unrealized. */
 static unsigned int vmvga_trace_debug_devices;
+static unsigned int vmvga_trace_debug_capture_devices;
 
 #define VMVGA_TRACE_LOCAL_MASTER_ENABLED() \
-  (vmvga_trace_debug_devices != 0)
+  (vmvga_trace_debug_capture_devices != 0)
 
 #define VMVGA_TRACE_LOCAL_ENABLED(category)                              \
   ((category) && VMVGA_TRACE_LOCAL_MASTER_ENABLED())
@@ -596,6 +597,7 @@ struct vmsvga_state_s {
     struct vmsvga3d_state_s *svga3d;
     struct vmsvga3d_dxvk_s *dxvk;
     bool debug;
+    bool debug_log;
     bool enable_3d;
     char *vgpu;
     enum vmsvga_vgpu_generation_e vgpu_generation;
@@ -12023,9 +12025,42 @@ static void pci_vmsvga_uninit(PCIDevice *dev)
     s->chip.d3d_payload_scratch_in_use = false;
     g_clear_pointer(&s->chip.legacy_vga_ptr, g_free);
 
+    if (s->chip.debug_log) {
+        assert(vmvga_trace_debug_capture_devices > 0);
+        vmvga_trace_debug_capture_devices--;
+        s->chip.debug_log = false;
+    }
     if (s->chip.debug) {
         assert(vmvga_trace_debug_devices > 0);
         vmvga_trace_debug_devices--;
+    }
+}
+
+static bool vmsvga_get_debug_log(Object *obj, Error **errp)
+{
+    struct pci_vmsvga_state_s *s = VMVGA(PCI_DEVICE(obj));
+
+    return s->chip.debug_log;
+}
+
+static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
+{
+    struct pci_vmsvga_state_s *s = VMVGA(PCI_DEVICE(obj));
+
+    if (enabled && !s->chip.debug) {
+        error_setg(errp, "VMVGA diagnostic capture requires debug=on");
+        return;
+    }
+    if (s->chip.debug_log == enabled) {
+        return;
+    }
+
+    s->chip.debug_log = enabled;
+    if (enabled) {
+        vmvga_trace_debug_capture_devices++;
+    } else {
+        assert(vmvga_trace_debug_capture_devices > 0);
+        vmvga_trace_debug_capture_devices--;
     }
 }
 
@@ -12048,6 +12083,10 @@ static void vmsvga_class_init(ObjectClass *klass, VMVGA_CLASS_INIT_DATA data)
 
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+
+    object_class_property_add_bool(klass, "debug-log",
+                                   vmsvga_get_debug_log,
+                                   vmsvga_set_debug_log);
 
     k->realize = pci_vmsvga_realize;
     k->exit = pci_vmsvga_uninit;
