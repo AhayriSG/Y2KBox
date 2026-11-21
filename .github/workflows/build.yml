@@ -44,6 +44,8 @@ jobs:
           ! grep -Eq '^(cirrus|std)[[:space:]]' vga.txt
           ./qemu-system-i386 -device help | tee dev.txt
           grep -qw 'vmvga' dev.txt
+          grep -qw 'virtio-net-pci' dev.txt
+          grep -qw 'virtio-blk-pci' dev.txt
           nasm -fbin ../xp/bench/vmport_ring3_test.asm -o vmport_ring3.img
           ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none -no-reboot \
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive file=vmport_ring3.img,format=raw,if=ide \
