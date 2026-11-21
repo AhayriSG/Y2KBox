@@ -280,6 +280,9 @@ static FlatView *flatview_new(MemoryRegion *mr_root)
 static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
 {
     uint64_t insert_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_INSERT);
+    uint64_t memmove_start_ns;
+    uint64_t ref_start_ns;
+    uint64_t shifted_ranges = view->nr - pos;
 
     if (view->nr == view->nr_allocated) {
         size_t old_capacity = view->nr_allocated;
@@ -294,10 +297,16 @@ static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
         qemu_perf_stats_end(QEMU_PERF_FLATVIEW_RANGE_REALLOC,
                             realloc_start_ns);
     }
+    memmove_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_MEMMOVE);
     memmove(view->ranges + pos + 1, view->ranges + pos,
-            (view->nr - pos) * sizeof(FlatRange));
+            shifted_ranges * sizeof(FlatRange));
+    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_MEMMOVE, memmove_start_ns);
+    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_MEMMOVE, shifted_ranges);
     view->ranges[pos] = *range;
+    ref_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_REF);
     memory_region_ref(range->mr);
+    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_REF, ref_start_ns);
+    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_REF, 1);
     ++view->nr;
     qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_INSERT, 1);
     qemu_perf_stats_end(QEMU_PERF_FLATVIEW_INSERT, insert_start_ns);
@@ -622,6 +631,8 @@ static void render_memory_region(FlatView *view,
     Int128 now;
     FlatRange fr;
     AddrRange tmp;
+    uint64_t scan_start_ns;
+    uint64_t scanned_ranges = 0;
 
     qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, 1);
 
@@ -672,7 +683,9 @@ static void render_memory_region(FlatView *view,
     fr.unmergeable = unmergeable;
 
     /* Render the region itself into any gaps left by the current view. */
+    scan_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_SCAN);
     for (i = 0; i < view->nr && int128_nz(remain); ++i) {
+        ++scanned_ranges;
         if (int128_ge(base, addrrange_end(view->ranges[i].addr))) {
             continue;
         }
@@ -694,6 +707,8 @@ static void render_memory_region(FlatView *view,
         offset_in_region += int128_get64(now);
         int128_subfrom(&remain, now);
     }
+    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_SCAN, scanned_ranges);
+    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_SCAN, scan_start_ns);
     if (int128_nz(remain)) {
         fr.offset_in_region = offset_in_region;
         fr.addr = addrrange_make(base, remain);
@@ -778,11 +793,13 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
         qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_RENDER, perf_start_ns);
     }
     qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_FLAT_RANGES, view->nr);
+    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_SIZE, view->nr);
 
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_SIMPLIFY);
     flatview_simplify(view);
     qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_SIMPLIFY, perf_start_ns);
     qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_SIMPLIFIED_RANGES, view->nr);
+    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_SIMPLIFIED_SIZE, view->nr);
 
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_DISPATCH_BUILD);
     view->dispatch = address_space_dispatch_new(view);
