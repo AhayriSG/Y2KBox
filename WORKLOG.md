@@ -935,3 +935,15 @@ sources are outside this XP product's scope. Set `vhost_kernel`, `vhost_user`, a
 host vhost acceleration and its backend. Updated T15 and HANDOFF Q3 to record the cause
 and fix. Owner reports Windows CI passed and XP boots with VirtIO; Linux CI still needs
 confirmation on the new commit. No local build/test or CI polling performed.
+
+
+## Session 42 (ChatGPT), 2026-11-21 - Correct Meson option-file comment syntax
+
+Owner reported both Linux and Windows configure stages failing at `meson_options.txt:299`
+after the host-vhost feature change. The cause was my use of C/C++ `//` comments in a
+Meson options file; Meson requires `#` comments. Replaced both comment prefixes with `#`
+in `meson_options.txt` (`0e04725cefa5813f9eefd6d4767f7e4c6456fa1f`) and documented the
+correction in T15. The earlier missing `tests/docker/docker.py` message is emitted during
+configure but is not the fatal error shown here; Meson stops on the invalid comment.
+No local configure/build or CI polling performed. Both platforms must rerun against the
+latest main commit to validate the host-vhost feature settings and VirtIO link.
