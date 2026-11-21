@@ -33,6 +33,7 @@
 #include "system/runstate-action.h"
 #include "system/system.h"
 #include "qemu/log.h"
+#include "qemu/error-report.h"
 #include "qemu-main.h"
 
 #include <fcntl.h>
