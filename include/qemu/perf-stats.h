@@ -18,6 +18,7 @@ typedef enum QemuPerfStat {
     QEMU_PERF_DXVK_SHADER_CREATE,
     QEMU_PERF_AUDIO_MIX_OUT,
     QEMU_PERF_AUDIO_SDL_CALLBACK_OUT,
+    QEMU_PERF_AUDIO_SDL_CALLBACK_GAP,
     QEMU_PERF_STAT__MAX
 } QemuPerfStat;
 
@@ -25,5 +26,6 @@ void qemu_perf_stats_start(void);
 void qemu_perf_stats_stop(void);
 uint64_t qemu_perf_stats_begin(QemuPerfStat stat);
 void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns);
+void qemu_perf_stats_mark(QemuPerfStat stat);
 
 #endif
