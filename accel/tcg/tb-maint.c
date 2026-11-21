@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qemu/interval-tree.h"
 #include "qemu/qtree.h"
 #include "exec/cputlb.h"
@@ -771,6 +772,8 @@ static void tb_remove(TranslationBlock *tb)
 void tb_flush__exclusive_or_serial(void)
 {
     CPUState *cpu;
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_TB_FLUSH);
 
     trace_tb_flush();
     assert(tcg_enabled());
@@ -789,6 +792,7 @@ void tb_flush__exclusive_or_serial(void)
     /* XXX: flush processor icache at this point if cache flush is expensive */
     qatomic_inc(&tb_ctx.tb_flush_count);
     qemu_plugin_flush_cb();
+    qemu_perf_stats_end(QEMU_PERF_TB_FLUSH, perf_start_ns);
 }
 
 static void do_tb_flush(CPUState *cpu, run_on_cpu_data tb_flush_count)
@@ -1181,6 +1185,8 @@ void tb_invalidate_phys_range(CPUState *cpu, tb_page_addr_t start,
 {
     struct page_collection *pages;
     tb_page_addr_t index, index_last;
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_TB_INVALIDATE_RANGE);
 
     pages = page_collection_lock(start, last);
 
@@ -1200,6 +1206,7 @@ void tb_invalidate_phys_range(CPUState *cpu, tb_page_addr_t start,
                                               page_start, page_last, 0);
     }
     page_collection_unlock(pages);
+    qemu_perf_stats_end(QEMU_PERF_TB_INVALIDATE_RANGE, perf_start_ns);
 }
 
 /*
