@@ -128,7 +128,7 @@ boot + `xp/bench/vectest.asm` (prints OK on both). Windows needed `pc-bios/qemu-
 92dbf22). Keep CI green: the `UserPromptSubmit` hook (`scripts/session_status.sh`) reports the HEAD run - never poll; fix failures first. CI also uploads binaries as Artifacts and runs `xp/bench/x87cmp.sh`.
 Follow-ups (not blocking): upload build artifacts; cache MSYS2 packages; add a Windows `vectest` timing run.
 
-## T08 (P1) Boot Windows XP SP3 end to end  -  Status: TODO (needs an XP ISO from the owner)
+## T08 Boot Windows XP SP3 end to end  -  Status: TODO (needs an XP ISO from the owner)
 Install to a qcow2 disk (`qemu-img create -f qcow2`), IDE CD-ROM, floppy; measure install time;
 fix whatever breaks (ACPI HAL choice, SMP/APIC, TPR patching via kvmvapic option ROM,
 RTC/PIT timing). Record the working command line in HANDOFF.
@@ -173,7 +173,7 @@ qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-nativ
   builds from this push; validate live in-guest SVGA3D rendering on both hosts in T11; render-thread
   pinning remains T14.
 
-## T11 (P2) XP guest driver validation and D3D coverage  -  Status: TODO (needs T08 + T09)
+## T11 XP guest driver validation and D3D coverage  -  Status: TODO (needs T08 + T09)
 Install VMware Tools 10.0.12 (`winPreVista.iso`) in XP; verify SVGA3D D3D9 apps (e.g. DX9 sample/game);
 find the gaps: Direct3D 8 and DirectDraw/Direct3D 7 apps (try `d3d8to9` and a ddraw wrapper in the guest),
 shader model limits, resolution/mouse integration (vmmouse), performance on TCG. Record results.
@@ -185,8 +185,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI (until then the dev display is `-display sdl`; VNC is disabled and `-display none` is kept for headless CI checks): pick a qcow2 disk (made with qemu-img), floppy image,
-CD/ISO. **No RAM setting** (owner decision: always 2048 MB, automatic). Needs a display/input embedding path (DisplayChangeListener).
+Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Needs a display/input embedding path (DisplayChangeListener).
 
 ## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
 Primary performance target: Windows TCG. Linux product runtime is KVM-only, with no TCG fallback. TCG optimization and performance A/B benchmarks are Windows-only; Linux CI performs KVM build and functional validation. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
@@ -240,7 +239,7 @@ Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin
 APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
 Measure with and without (1 vCPU default; 2-vCPU experimental mode if added).
 
-## T15 (P2) Evaluate virtio for XP (opt-in)  -  Status: TODO
+## T15 (P3) Evaluate virtio for XP (opt-in)  -  Status: TODO
 Owner idea: virtio-win 0.1.141 x86 floppy drivers for XP (VirtIO Ethernet, SCSI/block).
 Re-enable `virtio-net`/`virtio-blk`/`virtio-scsi` (all virtio is OFF in `default.mak`; selects
 may need restoring), install the drivers in an XP guest (needs T08) and benchmark disk/network vs
@@ -334,3 +333,40 @@ selected by the tester, without continuously generating diagnostic output.
   diagnostic sources are quiet while inactive and stderr is restored on stop;
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
+
+## T20 (P2) Full BIN/CUE CD-image parsing  -  Status: TODO
+Implement full BIN/CUE parsing for Y2KBox's emulated CD-ROM, not merely a limited
+or strict-subset parser. Support the complete CUE-sheet syntax and all defined
+CUE flags (including flags such as `DCP`), with correct track/index and sector
+layout handling. Use the CD-ROM references in HANDOFF.md section 9 (libcdio,
+86Box, DuckStation, and the CUE-sheet format references) when designing and
+validating the parser. Keep this distinct from frontend disc swapping: guest-
+visible insert/eject of images in the emulated CD-ROM is tracked under T12.
+
+## T21 (P2) Verify ReShade injection compatibility  -  Status: TODO
+Investigate and verify that ReShade injection is compatible with Y2KBox's
+Windows/SDL2 display path and the planned wxWidgets frontend. Identify any
+limitations or conflicts in the current host-window/display lifecycle and
+implement only the compatibility work actually needed. This compatibility
+investigation takes priority over integrating librashader.
+
+## T22 (P3) Consider librashader integration  -  Status: TODO (after T12)
+After the wxWidgets frontend is implemented, consider integrating librashader
+as an optional shader/post-processing path. This is deliberately very low
+priority; first establish ReShade injection compatibility (T21). Do not let
+librashader integration delay the frontend or higher-priority compatibility
+work. See HANDOFF.md section 9 for librashader and emulator integration
+references.
+
+## T23 (P3) Revisit configurable RAM / VRAM presets  -  Status: TODO (after T12)
+After the wxWidgets frontend is implemented, consider a simple user-facing
+toggle for era-appropriate RAM presets: 512, 1024, and 2048 MB. The current
+machine remains fixed at 2048 MB until this is explicitly designed and
+implemented.
+
+Also reconsider whether configurable VRAM presets are appropriate, with
+128, 256, 512, and 768 MB as provisional candidates only. **Do not treat
+these VRAM sizes or the option itself as approved:** revisit the owner's
+earlier Gemini 4 discussion/note and check the device/guest-driver constraints
+before deciding. The current VRAM configuration remains unchanged until that
+review and a separate implementation decision.
