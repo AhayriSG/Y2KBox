@@ -22,14 +22,14 @@ CONFIG_X86_FW_OVMF=n
 # optional owner-tested devices; unrelated VirtIO devices remain off.
 
 # Optional paravirtual devices for owner-tested XP drivers (T15).
-# Keep the initial VirtIO surface deliberately narrow: PCI + block + network.
-# PIIX IDE and RTL8139 remain enabled as independent legacy alternatives.
-CONFIG_VIRTIO=y
-CONFIG_VIRTIO_PCI=y
+# VirtIO implementation sources are currently pruned from this fork; keep off
+# until T15 restores the required core, PCI, block, and network source files.
+CONFIG_VIRTIO=n
+CONFIG_VIRTIO_PCI=n
 CONFIG_VIRTIO_9P=n
 CONFIG_VIRTIO_BALLOON=n
-CONFIG_VIRTIO_BLK=y
-CONFIG_VIRTIO_NET=y
+CONFIG_VIRTIO_BLK=n
+CONFIG_VIRTIO_NET=n
 CONFIG_VIRTIO_CRYPTO=n
 CONFIG_VIRTIO_GPU=n
 CONFIG_VIRTIO_INPUT=n
