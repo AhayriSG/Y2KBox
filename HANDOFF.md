@@ -569,3 +569,20 @@ controls the relevant trace events for the capture interval. Exceptional file or
 descriptor errors are still reported. The feature has not been locally built or
 runtime-tested; keep T19 PAUSED until Linux/Windows CI and owner XP guest
 verification are reported.
+
+
+### T13e: GART transaction commit breakdown (2026-11-22)
+
+The latest owner capture attributes 10.99 s to GART map transaction commits and
+1.77 s to GART unmap commits. Source inspection shows that the commit path may
+rebuild shared FlatViews and publish topology to every AddressSpace, including
+global MemoryListener callbacks and ioeventfd updates. The per-page alias loops
+are separately timed and comparatively cheap in the capture.
+
+The next diagnostic pass instruments the internals of
+`memory_region_transaction_begin/commit`: coalesced-MMIO flush, flatviews_reset,
+global listener begin/commit, per-AddressSpace flatview publication, and
+ioeventfd updates. All metrics are opt-in and aggregate-only under Ctrl+Alt+L.
+Do not batch transactions, defer guest-visible mappings, or redesign aliases until
+the internal stage breakdown identifies the actual expensive work and the
+guest-visible ordering requirements are verified.
