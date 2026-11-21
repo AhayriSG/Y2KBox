@@ -69,26 +69,28 @@ qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
   -drive id=fld01,if=floppy,format=raw,file="virtio-win-0.1.141_x86.vfd" ^
   -drive file=xp.qcow2,format=qcow2 ^
   -drive media=cdrom,readonly=on ^
-  -boot menu=on -trace "vdagent*"
+  -boot menu=on
 ```
 
 ### On-demand diagnostic logging
 
-For a focused VMware SVGA / GuestRPC investigation, use `-device vmvga,debug=on`
-and keep the relevant trace events enabled (for example, `-trace "vdagent*"`).
-The SDL window title advertises **Ctrl+Alt+L**: press it once to start capturing
-QEMU standard-error diagnostics to `vmvga_freeze.log` in the launch working
-directory, then press it again to stop. The VM keeps running; the title indicates
-whether capture is active. The first activation truncates the file, and later
-capture intervals in the same QEMU run append to it.
+Diagnostic capture is available only when VMVGA is explicitly enabled with
+`-device vmvga,debug=on`. This option is intended for testers; leave it off in
+normal use. With it enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
+to capture VMVGA, VMPort GuestRPC, and vdagent diagnostics to
+`vmvga_freeze.log` in the launch working directory; press again to stop.
+The VM continues running. The first capture truncates the file; later capture
+intervals in the same QEMU run append.
+
+When `debug=on` is set but capture is inactive, these diagnostic streams remain
+disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output, and no
+capture start/stop messages in the command prompt. The hotkey is unavailable
+unless `debug=on` is present. No separate `-trace "vdagent*"` option is needed;
+the hotkey enables the relevant VMVGA and vdagent trace events only for the
+selected interval.
 
 Do **not** use shell-level `2> vmvga_freeze.log` redirection with this feature:
-it redirects stderr before QEMU starts and defeats interval capture. When capture
-is inactive, stderr remains connected to its original destination (normally the
-command prompt). The capture includes all stderr-based diagnostics during the
-selected interval, including VMVGA messages and trace-log output routed to stderr;
-it does not change which trace events are enabled. HMP `trace-event` commands
-remain available for independently enabling or disabling event groups.
+it redirects stderr before QEMU starts and defeats interval capture.
 
 The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
 or remove that floppy drive if you do not need it. To boot an installer ISO, attach
