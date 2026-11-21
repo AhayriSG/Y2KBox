@@ -72,6 +72,24 @@ qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
   -boot menu=on -trace "vdagent*"
 ```
 
+### On-demand diagnostic logging
+
+For a focused VMware SVGA / GuestRPC investigation, use `-device vmvga,debug=on`
+and keep the relevant trace events enabled (for example, `-trace "vdagent*"`).
+The SDL window title advertises **Ctrl+Alt+L**: press it once to start capturing
+QEMU standard-error diagnostics to `vmvga_freeze.log` in the launch working
+directory, then press it again to stop. The VM keeps running; the title indicates
+whether capture is active. The first activation truncates the file, and later
+capture intervals in the same QEMU run append to it.
+
+Do **not** use shell-level `2> vmvga_freeze.log` redirection with this feature:
+it redirects stderr before QEMU starts and defeats interval capture. When capture
+is inactive, stderr remains connected to its original destination (normally the
+command prompt). The capture includes all stderr-based diagnostics during the
+selected interval, including VMVGA messages and trace-log output routed to stderr;
+it does not change which trace events are enabled. HMP `trace-event` commands
+remain available for independently enabling or disabling event groups.
+
 The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
 or remove that floppy drive if you do not need it. To boot an installer ISO, attach
 it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
