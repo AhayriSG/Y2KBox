@@ -34,6 +34,7 @@
 #include "system/system.h"
 #include "qemu/log.h"
 #include "qemu/error-report.h"
+#include "qom/object.h"
 #include "trace/control.h"
 #include "qemu-main.h"
 
