@@ -971,3 +971,22 @@ performance. Completed T15 and updated the standard launch profile:
 
 No source behavior changed in this documentation/default-profile pass beyond the
 target configuration comments; no local build/test or CI polling was performed.
+
+## Session 44 (ChatGPT), 2026-11-21 - Keep PS/2 IntelliMouse as the only supported pointing device
+
+Owner confirmed that the existing default PS/2 IntelliMouse behavior is preferred for
+Windows XP-era games. USB mouse and tablet devices have produced tracking, camera
+recentering, and legacy DirectInput compatibility problems in some older games, including
+similar issues observed with other virtualization products. Recorded the product policy:
+
+- Keep the PC machine's default PS/2 IntelliMouse; do not add a pointing-device selector.
+- Do not recommend or expose USB mouse/tablet choices in the README or future wxWidgets UI.
+- Keep the shared USB HID implementation for keyboard support. Do not remove upstream
+  USB mouse/tablet implementation code solely to hide unsupported product choices.
+- Clarify that USB mouse/tablet models are not part of the supported product profile and
+  must not be instantiated by product presets.
+
+Updated the XP device configuration comments, README mouse guidance, T12 launcher scope,
+and HANDOFF Q3 device policy. No device implementation or runtime behavior changed; no
+USB mouse/tablet launch flags were added to documentation. No local build/test or CI polling
+was performed.
