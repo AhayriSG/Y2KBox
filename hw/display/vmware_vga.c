@@ -10428,7 +10428,7 @@ static inline void vmsvga_trace_display_path(
         name, s->enable, s->config, s->hidden, mode_valid);
 }
 
-static VMVGA_GFX_UPDATE_RET vmsvga_update_display(void *opaque)
+static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
 {
     /* VPRINT("vmsvga_update_display was just executed\n"); */
     struct vmsvga_state_s *s = opaque;
@@ -11684,6 +11684,16 @@ static VMStateDescription vmstate_vmvga = {
             VMSTATE_STRUCT(chip, struct pci_vmsvga_state_s, 0,
                            vmstate_vmvga_internal, struct vmsvga_state_s),
             VMSTATE_END_OF_LIST()}};
+
+static VMVGA_GFX_UPDATE_RET vmsvga_update_display(void *opaque)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_UPDATE);
+    VMVGA_GFX_UPDATE_RET result = vmsvga_update_display_impl(opaque);
+
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_UPDATE, perf_start_ns);
+    return result;
+}
 
 static GraphicHwOps vmsvga_ops = {
       .invalidate = vmsvga_invalidate_display,
