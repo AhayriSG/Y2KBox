@@ -246,7 +246,10 @@ static void sdl_callback_out_impl(void *opaque, Uint8 *buf, int len)
 
 static void sdl_callback_out(void *opaque, Uint8 *buf, int len)
 {
-    uint64_t perf_start_ns =
+    uint64_t perf_start_ns;
+
+    qemu_perf_stats_mark(QEMU_PERF_AUDIO_SDL_CALLBACK_GAP);
+    perf_start_ns =
         qemu_perf_stats_begin(QEMU_PERF_AUDIO_SDL_CALLBACK_OUT);
 
     sdl_callback_out_impl(opaque, buf, len);
