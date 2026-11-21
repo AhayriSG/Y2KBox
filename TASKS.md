@@ -191,6 +191,7 @@ Add three independent device selectors:
 * Network adapter: **VirtIO Net** as the default, with **RTL8139** as the fallback.
 * System-disk controller: **VirtIO Block** as the default, with **PIIX IDE** as the fallback.
 * CD-ROM controller: **PIIX IDE** as the default, with an optional **VirtIO SCSI CD-ROM** choice once the VirtIO SCSI device and XP driver path have been restored and validated. This is a separate optical-drive choice; do not couple it to the system-disk controller. Preserve the existing PIIX IDE CD-ROM behavior as the default.
+* Pointing device: no selector; retain the PC machine's default **PS/2 IntelliMouse** as the only supported pointing device. Do not expose USB mouse or USB tablet choices in the launcher.
 
 The launcher must make the `virtio-win-0.1.141_x86.vfd` driver floppy attachable during XP setup and warn that an existing XP installation cannot boot from VirtIO Block until its `viostor` driver is installed. It should also expose the appropriate guest driver guidance for VirtIO Net and, if the optional VirtIO SCSI CD-ROM path is implemented, its XP storage driver. Needs a display/input embedding path (DisplayChangeListener).
 ## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
