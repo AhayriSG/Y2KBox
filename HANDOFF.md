@@ -233,9 +233,9 @@ Code: `target/i386/tcg/fpu_helper.c` (block "XP fork (T13a)"). Kill switch: env 
 
 ### 5a4. P0: Windows TCG scene-transition stalls (T13e)
 
-Owner reports repeatable 1-3 second pauses in FIFA 2003 around match-intro camera cuts / newly visible stadium or LOD views, followed by normal operation. Treat this as a top-priority responsiveness defect, but **the root cause is not established**. A scene transition can exercise several subsystems at once; do not label it a TCG, DXVK, SVGA3D, shader-cache, TB-invalidation, or scheduling problem until a capture correlates the pause with one of them.
+Owner reports a general Windows TCG responsiveness problem across multiple Windows XP games: scene transitions, camera changes, newly visible LOD/geometry, and other content changes can produce pauses of roughly 1-3 seconds before execution resumes. Reproduced in FIFA 2003, Joint Operations: Typhoon Rising, and F1 Challenge '99-'02; these titles are representative examples, not the scope of the issue or evidence of a game-specific defect. Treat this as a cross-game guest/host performance problem. **The root cause is not established.** A scene/content transition can exercise several subsystems at once; do not label it a TCG, DXVK, SVGA3D, shader-cache, TB-invalidation, or scheduling problem until a capture correlates the pause with one of them.
 
-Candidate layers to measure on the Windows product path:
+Candidate layers to measure across affected Windows XP games on the Windows product path:
 - VMVGA FIFO and SVGA3D command processing; GMR-backed texture/vertex uploads and resource creation.
 - DXVK shader and graphics-pipeline creation, cache lookup/hit/miss behavior, and any synchronous waits on the render/device path. Verify the actual qemu-vmvga/DXVK integration before assuming a particular cache environment variable or async compilation facility exists.
 - TCG code-generation buffer exhaustion and full TB flushes; physical TB invalidation / SMC dirty-page handling; SoftMMU TLB flush and lookup paths.
