@@ -919,3 +919,19 @@ Net device or its guest driver networking path; UEFI/PXE network boot is not in 
 No local build or CI polling performed. Await owner confirmation of fresh Linux and
 Windows CI results. Keep T15 claimed and README availability wording unchanged until
 both platforms pass.
+
+
+## Session 41 (ChatGPT), 2026-11-21 - Disable all host vhost backends for userspace VirtIO
+
+Owner reported a second Linux CI failure at final link. Unlike the earlier missing
+vhost-vDPA source, this one showed unresolved generic vhost symbols referenced by
+`virtio.c`, `virtio-net.c`, and `backends/vhost-user.c`. Root cause: `vhost_net` and
+`vhost_vdpa` being disabled did not disable the independent `vhost_kernel` and
+`vhost_user` Meson features; both default to `auto` and can be enabled on Linux. That
+caused `CONFIG_VHOST` to be enabled and pulled in host-vhost call paths whose implementation
+sources are outside this XP product's scope. Set `vhost_kernel`, `vhost_user`, and
+`vhost_crypto` defaults to `disabled` as well, alongside the already-disabled
+`vhost_net` and `vhost_vdpa`. This leaves guest VirtIO Block/Net enabled while excluding
+host vhost acceleration and its backend. Updated T15 and HANDOFF Q3 to record the cause
+and fix. Owner reports Windows CI passed and XP boots with VirtIO; Linux CI still needs
+confirmation on the new commit. No local build/test or CI polling performed.
