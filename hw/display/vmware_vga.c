@@ -92,7 +92,7 @@
 #define VMSVGA_FIFO_SIZE (2 * 1024 * 1024)
 #define VMSVGA_VGA_FB_BACKUP_SIZE (512 * 1024)
 #define VMSVGA_SCRATCH_SIZE 256
-#define VMSVGA_DEFAULT_VRAM_SIZE 512
+#define VMSVGA_DEFAULT_VRAM_SIZE 128
 #define VMSVGA_SURFACE_MEMORY_SIZE (512U * 1024U * 1024U)
 #define VMSVGA_MAX_PRIMARY_MEM_SIZE (256U * 1024U * 1024U)
 #define VMSVGA_GBOBJECT_MEM_SIZE_KB (1024U * 1024U)
@@ -3563,7 +3563,7 @@ static void vmsvga_objects_clear(struct vmsvga_state_s *s)
 /*
  * SVGA_REG_MEMORY_SIZE is total dedicated device memory excluding FIFO memory.
  * Guests derive the non-VRAM surface budget by subtracting SVGA_REG_VRAM_SIZE.
- * Keep that surface budget independent of vgamem_mb: 512 MiB plus default 512 MiB VRAM total.
+ * Keep that surface budget independent of vgamem_mb: the default is 128 MiB framebuffer plus 512 MiB surface memory (640 MiB total).
  */
 static inline size_t
 vmsvga_surface_memory_size(const struct vmsvga_state_s *s)
