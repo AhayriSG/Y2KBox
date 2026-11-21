@@ -336,9 +336,8 @@ struct vmsvga_cursor_source_s {
 #define VMVGA_TRACE_GMR2_MAX_PAGES 16384U
 #define VMVGA_TRACE_GMR2_SAMPLE_INTERVAL_US 1000000
 
-/* Keep the local trace gate process-wide, matching the QEMU trace event it
- * replaced.  A count keeps tracing active until the last debug-enabled VMVGA
- * device is unrealized. */
+/* Keep debug capability and active capture separate.  Local diagnostics
+ * are emitted only while at least one debug-enabled VMVGA is being captured. */
 static unsigned int vmvga_trace_debug_devices;
 static unsigned int vmvga_trace_debug_capture_devices;
 
