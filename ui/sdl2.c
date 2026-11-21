@@ -231,14 +231,18 @@ static bool sdl_vmvga_debug_enabled(Object **vmvga)
     return *vmvga && object_property_get_bool(*vmvga, "debug", NULL);
 }
 
-static void sdl_set_vdagent_trace(bool enabled)
+static void sdl_set_debug_trace(bool enabled)
 {
+    static const char *patterns[] = { "vmware_*", "vdagent*" };
     TraceEventIter iter;
     TraceEvent *event;
+    size_t i;
 
-    trace_event_iter_init_pattern(&iter, "vdagent*");
-    while ((event = trace_event_iter_next(&iter)) != NULL) {
-        trace_event_set_state_dynamic(event, enabled);
+    for (i = 0; i < ARRAY_SIZE(patterns); i++) {
+        trace_event_iter_init_pattern(&iter, patterns[i]);
+        while ((event = trace_event_iter_next(&iter)) != NULL) {
+            trace_event_set_state_dynamic(event, enabled);
+        }
     }
 }
 
@@ -291,7 +295,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             error_report_err(err);
             return;
         }
-        sdl_set_vdagent_trace(true);
+        sdl_set_debug_trace(true);
         sdl_log_capture_enabled = true;
         sdl_log_capture_created = true;
     } else {
@@ -300,11 +304,11 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             error_report_err(err);
             return;
         }
-        sdl_set_vdagent_trace(false);
+        sdl_set_debug_trace(false);
         if (dup2(sdl_log_capture_saved_stderr, STDERR_FILENO) < 0) {
             saved_errno = errno;
             object_property_set_bool(vmvga, "debug-log", true, NULL);
-            sdl_set_vdagent_trace(true);
+            sdl_set_debug_trace(true);
             error_report("Could not restore stderr after diagnostic capture: %s",
                          strerror(saved_errno));
             return;
