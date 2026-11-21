@@ -24,6 +24,7 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_TB_INVALIDATE_RANGE] = "tcg.tb_invalidate_range",
     [QEMU_PERF_TLB_RESET_DIRTY] = "tcg.tlb_reset_dirty",
     [QEMU_PERF_VMVGA_FIFO] = "vmvga.fifo_run",
+    [QEMU_PERF_VMVGA_DISPLAY_UPDATE] = "vmvga.display_update",
     [QEMU_PERF_DXVK_SHADER_CREATE] = "dxvk.d3d9_shader_create",
     [QEMU_PERF_AUDIO_MIX_OUT] = "audio.mix_out",
     [QEMU_PERF_AUDIO_MIX_OUT_GAP] = "audio.mix_out_gap",
