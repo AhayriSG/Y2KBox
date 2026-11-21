@@ -19,12 +19,15 @@ CONFIG_X86_FW_OVMF=n
 # Cirrus (in-box XP driver), RTL8139/PCnet/e1000 NICs, AC97/ES1370/SB16 audio,
 # USB UHCI/OHCI/EHCI + HID + mass storage. Everything below is off.
 
-# paravirtual / virtio / vhost: no in-box XP drivers
-CONFIG_VIRTIO=n
-CONFIG_VIRTIO_PCI=n
+# Optional paravirtual devices for owner-tested XP drivers (T15).
+# Keep the initial VirtIO surface deliberately narrow: PCI + block + network.
+# PIIX IDE and RTL8139 remain enabled as independent legacy alternatives.
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
 CONFIG_VIRTIO_9P=n
 CONFIG_VIRTIO_BALLOON=n
-CONFIG_VIRTIO_BLK=n
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
 CONFIG_VIRTIO_CRYPTO=n
 CONFIG_VIRTIO_GPU=n
 CONFIG_VIRTIO_INPUT=n
