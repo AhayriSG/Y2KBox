@@ -947,3 +947,27 @@ correction in T15. The earlier missing `tests/docker/docker.py` message is emitt
 configure but is not the fatal error shown here; Meson stops on the invalid comment.
 No local configure/build or CI polling performed. Both platforms must rerun against the
 latest main commit to validate the host-vhost feature settings and VirtIO link.
+
+## Session 43 (ChatGPT), 2026-11-21 - Enable VirtIO Block + Net as standard launch devices
+
+Owner confirmed both Linux and Windows CI pass on the corrected source state at
+`d95d75703577a65e913d2451d0f01bfbb915a477`, and reported that QEMU launches and boots
+Windows XP with VirtIO enabled, with substantially improved initial interactive
+performance. Completed T15 and updated the standard launch profile:
+
+- Made `virtio-blk-pci` the standard system-disk device and `virtio-net-pci` the
+  standard network adapter in the README launch command.
+- Kept PIIX IDE and RTL8139 enabled as independent fallback choices; updated guest
+  driver guidance for `viostor` (F6 during fresh XP Setup) and NetKVM.
+- Kept the CD-ROM explicitly attached to the existing PIIX IDE controller. This
+  preserves the optical-drive emulation path independently of the system disk.
+- Updated T12 to specify three independent future GUI selectors: VirtIO Net default
+  / RTL8139 fallback, VirtIO Block default / PIIX IDE fallback, and PIIX IDE CD-ROM
+  default / optional VirtIO SCSI CD-ROM only after its device and XP driver path are
+  restored and validated. CD-ROM insert/eject remains part of T12.
+- Left VirtIO SCSI, vhost acceleration, UEFI/PXE ROM support, and recurring CI
+  performance benchmarks out of the current implementation. Owner-led workload
+  performance comparisons remain manual.
+
+No source behavior changed in this documentation/default-profile pass beyond the
+target configuration comments; no local build/test or CI polling was performed.
