@@ -353,22 +353,14 @@ static VMPortGuestRPCChannel *vmport_guestrpc_channel(VMPortState *s,
 
 static bool vmport_guestrpc_debug_enabled(VMPortState *s)
 {
-    Object *vmvga;
+    Object *vmvga = object_resolve_path_type("", "vmvga", NULL);
 
-    if (s->guestrpc_runtime.debug_resolved) {
-        return s->guestrpc_runtime.debug_enabled;
-    }
-
-    vmvga = object_resolve_path_type("", "vmvga", NULL);
-    if (!vmvga) {
+    if (!vmvga ||
+        !object_property_get_bool(vmvga, "debug", NULL)) {
         return false;
     }
 
-    s->guestrpc_runtime.debug_enabled =
-        object_property_get_bool(vmvga, "debug", NULL);
-    s->guestrpc_runtime.debug_resolved = true;
-
-    return s->guestrpc_runtime.debug_enabled;
+    return object_property_get_bool(vmvga, "debug-log", NULL);
 }
 
 static const bool vmport_guestrpc_trace_rpc = true;
