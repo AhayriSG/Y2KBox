@@ -1152,3 +1152,43 @@ No local build/test or CI polling performed. Windows/Linux CI must validate befo
 the next owner capture. Do not attempt transaction batching or GART alias redesign
 until the new counters identify the dominant internal stage and ordering constraints
 are reviewed.
+
+
+## Session 55 (ChatGPT), 2026-11-22 - Instrument FlatView topology generation
+
+Owner's 17.271 s capture measured:
+- GART map transaction commit: 11.449444 s (138 calls).
+- `memory.txn_flatviews_reset`: 13.276462 s (159 calls).
+- Address-space FlatView publication: 30.525 ms (2,226 calls).
+- Ioeventfd updates: 38 us; global listener begin/commit: 281 us combined.
+- Coalesced-MMIO flush: 139 us.
+
+This isolates the expensive work to FlatView cache reset/regeneration rather than
+publishing the generated views to address spaces or notifying listeners. Source
+inspection confirms `flatviews_reset()` discards the shared cache and regenerates
+one FlatView per unique root using `generate_memory_topology()`. That function
+recursively renders memory regions into FlatRanges, simplifies adjacent ranges,
+builds the address-space dispatch, compacts it, and inserts the view into the cache.
+
+Added opt-in aggregate profiling in system/memory.c:
+- `memory.topology_total`: complete generate_memory_topology duration.
+- `memory.topology_render`: recursive render duration; its work_units count
+  recursive region visits, including alias recursion.
+- `memory.topology_flat_ranges` and `memory.topology_simplified_ranges`:
+  FlatRange counts before and after simplification.
+- `memory.topology_simplify`: FlatView simplification duration.
+- `memory.topology_dispatch_build` and `memory.topology_dispatch_compact`:
+  dispatch population and compaction durations.
+- `memory.topology_roots`: unique roots regenerated during flatviews_reset.
+- `memory.flatview_insert`: insertion count/duration.
+- `memory.flatview_range_realloc`: reallocation duration and capacity growth
+  in FlatRange slots (work_units are slots, not bytes).
+
+The instrumentation does not alter the traversal, ordering, allocations, cache,
+transaction boundaries, or mapping behavior. Timing remains opt-in and aggregate
+only under Ctrl+Alt+L. Corrected independent timer start variables so nested
+reallocation and topology-stage measurements do not contaminate their parent
+stage durations.
+
+No local build/test or CI polling performed. Windows/Linux CI must validate before
+the next owner capture. No optimization applied; T13e remains CLAIMED.
