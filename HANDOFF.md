@@ -612,3 +612,28 @@ until the stage breakdown and correctness constraints are reviewed.
 
 No local build/test or CI polling was performed. Windows/Linux CI must validate
 before the next owner runtime capture.
+
+
+### T13e: FlatView range insertion substage profiling (2026-11-22)
+
+The latest owner capture measured 12.962 s in topology generation: 12.799 s in
+recursive rendering, 3.890 million FlatRange insertions, and 7.772 million
+recursive region visits. Simplification (8.3 ms), dispatch construction (152 ms),
+and range-array reallocations (59 ms) were secondary. The FlatRange insertion
+timer is nested inside render time. GART map/unmap commit totals closely match
+the FlatView reset total, while address-space publication is negligible.
+
+The next opt-in pass records:
+- Range-search loop duration and number of existing ranges examined.
+- memmove duration and number of FlatRange entries shifted.
+- memory_region_ref duration and call count.
+- Maximum FlatView range count before and after simplification (along with
+  aggregate range counts).
+
+The range-search timer includes nested insertion calls. The insertion, memmove,
+and reference timings are nested/overlapping; do not sum them. Instrumentation is
+active only during Ctrl+Alt+L and does not change range ordering, transaction
+boundaries, cache behavior, or memory semantics. Linux/Windows CI and another
+owner capture are required before selecting an optimization. Do not batch GART
+transactions or replace the FlatView construction algorithm until these results
+and QEMU's overlap/alias invariants have been reviewed.
