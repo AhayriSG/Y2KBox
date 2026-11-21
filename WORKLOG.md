@@ -818,3 +818,30 @@ verification remain pending; T19 stays PAUSED.
 - No local build/test was run and no CI was polled. The source/workflow/doc edits are
   committed directly to main; compile/runtime validation remains the normal CI and
   owner verification path.
+
+
+## Session 37 (ChatGPT), 2026-11-21 - Start VirtIO Block / Net evaluation (T15)
+
+Started T15 as an owner-tested optional device path; no recurring CI performance
+benchmark work is planned:
+
+- Enabled only the shared VirtIO core, PCI transport, VirtIO Block, and VirtIO Net
+  in `configs/devices/i386-softmmu/default.mak`. PIIX IDE and RTL8139 remain
+  enabled. VirtIO SCSI, virtio-serial/vdagent, ballooning, vhost, and unrelated
+  VirtIO devices remain disabled.
+- Kept the normal README launch configuration on IDE + RTL8139. Added optional
+  `virtio-blk-pci` and `virtio-net-pci` command-line guidance, including the XP
+  x86 `viostor` F6 installation path and NetKVM installation note from
+  `virtio-win-0.1.141_x86.vfd`. The exact floppy contents and driver compatibility
+  still need guest verification.
+- Updated T12 for independent wxWidgets selectors for network adapter
+  (RTL8139 / VirtIO Net) and system-disk controller (PIIX IDE / VirtIO Block).
+  The CD-ROM remains on IDE/PIIX for the initial implementation. Keep both legacy
+  defaults until the owner reports manual compatibility and performance results.
+- Updated HANDOFF Q3 to match the limited device scope and the manual-test decision.
+  No VFIO work is involved; it remains disabled and out of scope.
+- Corrected the README's stale SVGA memory description to distinguish the 128 MiB
+  framebuffer from the separate 512 MiB 3D surface-memory budget.
+
+No local build, guest test, or CI polling was performed. T15 remains CLAIMED;
+source compilation and owner-run XP boot/network/performance checks are pending.
