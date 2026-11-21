@@ -127,11 +127,15 @@ supported, no 100k-line port of legacy VirtualBox/Chromium code. Still unverifie
 XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windows-host backend.
 
 **Q3 NIC / storage drivers (owner proposed VirtIO as a possible faster path).** Keep
-**RTL8139 + PIIX IDE** as the initial defaults: RTL8139 has an in-box XP driver and IDE
-requires no additional boot driver. T15 now enables only the shared VirtIO core, PCI
-transport, **VirtIO Block** (`virtio-blk-pci`) and **VirtIO Net** (`virtio-net-pci`) for
-optional owner testing. VirtIO SCSI, virtio-serial/vdagent, ballooning, vhost and other
-VirtIO devices remain disabled and are outside this first pass. The two choices are
+**RTL8139 + PIIX IDE** as the working defaults: RTL8139 has an in-box XP driver and IDE
+requires no additional boot driver. T15 is paused for source restoration: earlier XP
+pruning removed the VirtIO core/PCI transport and the `virtio-net` / `virtio-blk`
+implementations, so merely enabling their config symbols did not register the devices.
+The temporary config enablement was reverted in `72165a8`; current builds do not
+provide `virtio-net-pci` or `virtio-blk-pci`. Restore the minimal upstream 11.1.90
+source/build set before re-enabling them. Keep vhost-vDPA, VirtIO SCSI,
+virtio-serial/vdagent, ballooning and other unrelated devices out of scope; do not
+compile the pruned vhost-vDPA backend as a side effect of userspace VirtIO Net. The two choices are
 independent: the future T12 wxWidgets launcher will offer separate network-adapter
 (RTL8139 / VirtIO Net) and system-disk-controller (PIIX IDE / VirtIO Block) selectors.
 Keep the CD-ROM on IDE/PIIX initially. For a new XP install, use the XP x86 `viostor`
