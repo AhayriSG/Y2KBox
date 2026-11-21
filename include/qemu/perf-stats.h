@@ -16,6 +16,7 @@ typedef enum QemuPerfStat {
     QEMU_PERF_TB_INVALIDATE_RANGE,
     QEMU_PERF_TLB_RESET_DIRTY,
     QEMU_PERF_VMVGA_FIFO,
+    QEMU_PERF_VMVGA_COMMAND_DISPATCH,
     QEMU_PERF_VMVGA_DISPLAY_UPDATE,
     QEMU_PERF_DXVK_SHADER_CREATE,
     QEMU_PERF_AUDIO_MIX_OUT,
@@ -30,5 +31,8 @@ void qemu_perf_stats_stop(void);
 uint64_t qemu_perf_stats_begin(QemuPerfStat stat);
 void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns);
 void qemu_perf_stats_mark(QemuPerfStat stat);
+void qemu_perf_stats_command_end(uint32_t command_id,
+                                 const char *command_name,
+                                 uint64_t start_ns);
 
 #endif
