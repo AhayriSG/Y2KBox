@@ -342,7 +342,7 @@ static unsigned int vmvga_trace_debug_devices;
 static unsigned int vmvga_trace_debug_capture_devices;
 
 #define VMVGA_TRACE_LOCAL_MASTER_ENABLED() \
-  (vmvga_trace_debug_capture_devices != 0)
+  (qatomic_read(&vmvga_trace_debug_capture_devices) != 0)
 
 #define VMVGA_TRACE_LOCAL_ENABLED(category)                              \
   ((category) && VMVGA_TRACE_LOCAL_MASTER_ENABLED())
@@ -12025,8 +12025,8 @@ static void pci_vmsvga_uninit(PCIDevice *dev)
     g_clear_pointer(&s->chip.legacy_vga_ptr, g_free);
 
     if (s->chip.debug_log) {
-        assert(vmvga_trace_debug_capture_devices > 0);
-        vmvga_trace_debug_capture_devices--;
+        assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
+        qatomic_dec(&vmvga_trace_debug_capture_devices);
         s->chip.debug_log = false;
     }
     if (s->chip.debug) {
@@ -12056,7 +12056,7 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
 
     s->chip.debug_log = enabled;
     if (enabled) {
-        vmvga_trace_debug_capture_devices++;
+        qatomic_inc(&vmvga_trace_debug_capture_devices);
     } else {
         assert(vmvga_trace_debug_capture_devices > 0);
         vmvga_trace_debug_capture_devices--;
