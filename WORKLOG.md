@@ -752,3 +752,27 @@ Implemented T19 on `main`:
 Commits: implementation `be80ee0`; README `7b817c8`; HANDOFF `de380e8`.
 No local build or runtime test was performed. CI compilation and owner XP guest
 verification remain pending; do not mark T19 DONE until those checks are reported.
+
+
+## Session 34 (ChatGPT), 2026-11-21 - Gate diagnostic output behind on-demand capture
+
+Changed T19 so `debug=on` is an opt-in capability for testers, while actual
+diagnostic generation is enabled only during the Ctrl+Alt+L capture interval:
+
+- Added the internal VMVGA `debug-log` runtime property. VMVGA local diagnostic
+  macros now require active capture rather than merely `debug=on`.
+- VMPort GuestRPC logging now checks both VMVGA `debug` and `debug-log`, so
+  enabling the tester option alone does not continuously print GuestRPC data.
+- SDL checks for a VMVGA device with `debug=on` before advertising or handling
+  the shortcut. Capture redirects stderr without routine start/stop markers,
+  enables the `vmware_*` and `vdagent*` trace events dynamically, and disables
+  them again when capture stops. No separate `-trace "vdagent*"` option is needed.
+- Updated README, TASKS, and this handoff. Shell-level `2>` redirection remains
+  incompatible with interval capture.
+
+Commits: `5db3304` (VMVGA capture gate), `f5f3309` (GuestRPC gate),
+`2168a69` / `749c2b6` (SDL capture and trace control),
+`110afd1` (unused parameter), `a398c44` (gate comment), plus documentation.
+
+No local build or runtime test was performed. Linux/Windows CI and owner XP guest
+verification remain pending; T19 stays PAUSED.
