@@ -728,3 +728,27 @@ Fixed the intermittent screen freeze when exiting fullscreen D3D8 back to a same
    - Guarded the stop-time `vmsvga_scan_vram_dirty()` flush in `vmsvga_set_dirty_log()` with `!s->legacy_handoff_active && !s->screen_handoff_active` so entering a 3D or transition host mirror clears stale dirty bits instead of overwriting `screen_base` with pre-transition BAR1 pages.
 
 No local QEMU compile or XP runtime execution was performed in this environment; static diff review was completed and GitHub Actions CI plus XP guest testing must validate the builds and runtime behavior.
+
+
+## Session 33 (ChatGPT), 2026-11-21 - Add SDL on-demand diagnostic capture hotkey
+
+Implemented T19 on `main`:
+
+- Added **Ctrl+Alt+L** to the SDL host-hotkey handler. The key is consumed by QEMU
+  and is not forwarded to the XP guest. The existing configured host modifier
+  variants are reflected in the SDL title-bar hint.
+- On the first activation, save the original stderr descriptor and redirect stderr
+  to `vmvga_freeze.log` in the process working directory. The first successful
+  capture truncates the file; subsequent capture intervals in the same run append.
+  On stop, flush and restore the original stderr descriptor. The VM continues running.
+- The title bar indicates the start/stop action and whether capture is active.
+  File-open and descriptor-switch errors are reported; capture state changes only
+  after a successful redirect/restore.
+- Updated README and HANDOFF documentation. The shell-level `2>` redirect must be
+  removed when using the shortcut. The capture includes all stderr-based output in
+  the selected interval (VMVGA diagnostics plus trace-log output routed to stderr),
+  while HMP `trace-event` enablement remains independent.
+
+Commits: implementation `be80ee0`; README `7b817c8`; HANDOFF `de380e8`.
+No local build or runtime test was performed. CI compilation and owner XP guest
+verification remain pending; do not mark T19 DONE until those checks are reported.
