@@ -1232,3 +1232,33 @@ Runtime selection:
 New metrics: memory.flatview_search, memory.flatview_merge, memory.flatview_batch_ranges. Existing legacy metrics remain. No GART transaction boundaries, memory topology, or guest-visible mapping semantics were intentionally changed.
 
 No local build/test or CI polling performed. The prototype is not validated yet. Required next steps: Linux and Windows CI; run guest once with builder=batched and verify=1 but without Ctrl+Alt+L; then run a separate capture with builder=batched and verification unset; test XP boot, desktop, representative 3D scene/map transition, and guest memory/device behavior. If equivalence aborts, revert to default legacy and inspect mismatch before any optimization is enabled.
+
+
+## Session 58 (ChatGPT), 2026-11-22 - Prototype ordered-tree FlatView construction
+
+Owner's batched-builder capture (22.072 s) showed 17.964536 s in topology
+generation and 17.813955 s in recursive rendering. The batch builder recorded
+16.994592 s in merging and approximately 23.68 billion merged range entries.
+There were 3,883,514 batches for 3,890,387 inserted ranges, so average batch
+size was effectively one. The batched-array strategy therefore did not solve
+the repeated-copy cost and remains opt-in.
+
+Implemented a second experimental renderer in system/memory.c, selected with
+Y2KBOX_FLATVIEW_BUILDER=tree. It uses GLib GSequence as a balanced ordered
+sequence during the existing recursive priority traversal. It searches by
+range start, checks the predecessor for an overlap, inserts only uncovered
+gaps before the next existing range, and flattens the sequence into the
+standard FlatView array once rendering is complete. MemoryRegion references
+are acquired for each inserted range. Existing simplification and dispatch
+construction remain unchanged. Legacy remains the default/reference builder.
+
+Added opt-in counters memory.flatview_tree_insert and
+memory.flatview_tree_flatten; search uses memory.flatview_search. Verification
+mode compares tree output with legacy before and after simplification.
+Temporary GSequence nodes and individually allocated FlatRange payloads add
+memory/allocation overhead; this prototype must be measured for both speed and
+peak memory. No local build/test was run and CI was not polled. Required next
+steps: Linux and Windows CI; owner equivalence verification with
+Y2KBOX_FLATVIEW_BUILDER=tree and Y2KBOX_FLATVIEW_VERIFY=1 (without Ctrl+Alt+L);
+then a separate performance capture with verification unset. No default
+switch or GART transaction changes.
