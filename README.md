@@ -65,16 +65,22 @@ qemu-system-i386 -nodefaults -rtc base=localtime -monitor stdio -display sdl ^
   -device vmvga ^
   -audiodev sdl,id=audio0,in.voices=0 ^
   -device AC97,audiodev=audio0 ^
-  -nic user,model=rtl8139 ^
+  -netdev user,id=net0 ^
+  -device virtio-net-pci,netdev=net0 ^
   -drive id=fld01,if=floppy,format=raw,file="virtio-win-0.1.141_x86.vfd" ^
-  -drive file=xp.qcow2,format=qcow2 ^
-  -drive media=cdrom,readonly=on ^
+  -drive id=system,if=none,file=xp.qcow2,format=qcow2 ^
+  -device virtio-blk-pci,drive=system ^
+  -drive id=cdrom,if=ide,media=cdrom,readonly=on ^
   -boot menu=on
 ```
-The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. Replace
-or remove that floppy drive if you do not need it. To boot an installer ISO, attach
-it to the CD-ROM drive with `-drive file="xpinstalldisc.iso",media=cdrom,readonly=on` and
-select the CD-ROM from the boot menu.
+The example expects `virtio-win-0.1.141_x86.vfd` in the current directory. It uses
+VirtIO Block for the system disk and VirtIO Net for networking; the floppy provides
+the XP `viostor` and NetKVM drivers during setup. Keep the floppy attached until
+both drivers are installed, then remove that drive if desired. The CD-ROM is
+explicitly attached to the PIIX IDE controller. To boot an installer ISO, replace
+the blank CD-ROM line with
+`-drive id=cdrom,if=ide,media=cdrom,readonly=on,file="xpinstalldisc.iso"`
+and select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
 <br/>- `vmvga` (VMware SVGA II + SVGA3D, with `vgabios-vmware.bin`) is the default display device with **128 MiB framebuffer VRAM** plus a separate **512 MiB 3D surface-memory budget**, and hardware cursor support at full Windows XP hardware acceleration. The framebuffer size is the local VRAM exposed through BAR1; the surface-memory budget is separate and is not additional `dxdiag` dedicated/display memory. The 32-bit Windows XP VMware XPDM driver (`vmx_svga.sys` 12.01.08) reports at most **128 MiB** of adapter VRAM (`SVGA_VRAM_MAX_SIZE`).
@@ -102,6 +108,6 @@ redirection with this feature: it redirects stderr before QEMU starts and defeat
 
 - **Display refresh rate:** Set the guest display to **maximum** for the selected resolution and VMware SVGA display mode. In XP, open Display Properties > Settings > Advanced > Monitor.
 - **Mouse:** Open Control Panel > Mouse > Pointer Options and clear **Enhance pointer precision** to disable mouse acceleration.
-- **Networking and retro web browsing:** The default `-nic user,model=rtl8139` configuration emulates an RTL8139 network adapter, for which Windows XP has an in-box driver. VirtIO Net is a planned optional test path, but **is not present in current Y2KBox builds** while its pruned implementation sources are being restored (T15). Once re-enabled, it will use `-netdev user,id=net0 -device virtio-net-pci,netdev=net0` and require the XP x86 **NetKVM** driver from `virtio-win-0.1.141_x86.vfd`. RTL8139 remains the working default. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
-- **VirtIO system disk (optional):** Once T15 restores and validates VirtIO Block, for a new XP installation attach `virtio-win-0.1.141_x86.vfd` as the floppy, press **F6** during text-mode Windows XP Setup to load an additional storage driver, and select the XP x86 **VirtIO Block (`viostor`)** driver from the floppy. The intended system-disk configuration is `-drive id=system,if=none,file=xp.qcow2,format=qcow2 -device virtio-blk-pci,drive=system` instead of the default IDE `-drive file=xp.qcow2,format=qcow2`; this device model is not available in current builds. An existing XP installation must have `viostor` installed while it is still booting from IDE before you switch its boot disk to VirtIO; otherwise it will not have the boot-start storage driver needed to start. Keep the CD-ROM on the default IDE/PIIX controller for now. The `viostor` and NetKVM drivers are optional; PIIX IDE and RTL8139 remain independent fallbacks.
-- **CD images (BIN/CUE):** Until Y2KBox's emulated CD-ROM supports the full BIN/CUE format—including the complete set of CUE flags (such as `DCP`)—and supports inserting/ejecting disc images in the emulated drive for multi-disc swapping, we recommend using **Daemon Tools 3.47** inside the Windows XP guest. First transfer the BIN/CUE image files from the host into the XP guest, then mount the image with Daemon Tools.
+- **Networking and retro web browsing:** The standard launch profile uses `-netdev user,id=net0 -device virtio-net-pci,netdev=net0`. Windows XP needs the XP x86 **NetKVM** driver from `virtio-win-0.1.141_x86.vfd`; install it in the guest before relying on VirtIO networking. RTL8139 remains available as an independent fallback with `-nic user,model=rtl8139` and uses XP's in-box driver. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
+- **System disk:** The standard launch profile uses VirtIO Block: `-drive id=system,if=none,file=xp.qcow2,format=qcow2 -device virtio-blk-pci,drive=system`. For a fresh XP installation, attach `virtio-win-0.1.141_x86.vfd` as the floppy, press **F6** during text-mode Windows XP Setup to load an additional storage driver, and select the XP x86 **VirtIO Block (`viostor`)** driver. An existing IDE installation must have `viostor` installed while it is still booting from IDE before switching its boot disk to VirtIO; otherwise XP will lack the boot-start storage driver and fail to start. PIIX IDE remains an independent fallback: replace the VirtIO drive/device pair with `-drive file=xp.qcow2,format=qcow2`.
+- **CD-ROM and CD images (BIN/CUE):** The emulated CD-ROM stays on the PIIX IDE controller by default (`-drive id=cdrom,if=ide,media=cdrom,readonly=on`), independently of the system-disk controller. Its slower optical-drive behavior and direct control of the emulated CD device are intentional; VirtIO Block does not replace this CD-ROM path. A future wxWidgets option (T12) may offer a VirtIO SCSI CD-ROM as an alternative, but that requires restoring and validating the VirtIO SCSI device and XP driver path first; it is not enabled in current builds. Until Y2KBox's emulated CD-ROM supports the full BIN/CUE format—including the complete set of CUE flags (such as `DCP`)—and supports inserting/ejecting disc images in the emulated drive for multi-disc swapping, we recommend using **Daemon Tools 3.47** inside the Windows XP guest. First transfer the BIN/CUE image files from the host into the XP guest, then mount the image with Daemon Tools.
