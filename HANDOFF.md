@@ -37,8 +37,8 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   TCG/MTTCG-only; WHPX and every other Windows hardware-accelerator path remain out of scope.
   TCG performance development is exclusively for Windows. The XP guest/device target is unchanged.
   * **Current restoration status:** the Linux x86 KVM implementation and build wiring
-    have been restored on main. T17 remains in progress while Linux CI compile issues are
-    resolved and KVM runtime validation on a KVM-capable host is still pending. Do not claim
+    have been restored on main. T17 remains in progress until KVM runtime validation on a KVM-capable host is
+    completed. Do not claim
     Linux runtime success from compile-only CI.
   * TCG optimization work is exclusively Windows-focused. Internal TCG-only Linux CI/
     development builds may be used when useful, but they are not supported Linux product
@@ -50,6 +50,12 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     config; removing its dead machine compatibility hook must not remove generic KVM support.
     Optional KVM RAPL guest energy-MSR emulation is unsupported; its vmsr_energy backend was
     removed during XP pruning.
+* **KVM trace-generation checkpoint (2026-11-19):** the restored KVM trace-event
+  directories are registered in root `meson.build`. Their directory-local `trace.h`
+  wrappers were initially missing, causing undeclared trace calls and linker failures;
+  the three wrappers have since been restored from the exact upstream baseline. Linux
+  KVM build/CI validation is restored; KVM runtime validation on a KVM-capable host
+  remains a separate requirement before T17 can be closed.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
@@ -61,13 +67,15 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   **VBoxVGA 5.2.x remains the documented fallback/alternative** (task T16, notes in 8b).
   Rejected by owner: qemu-3dfx (per-game guest wrappers); virglrenderer / viogpu3d /
   SoftGPU / Wine9x are "not mature enough" for XP (they remain useful references).
-* Delete unrelated QEMU code freely as long as XP-32 + TCG keep working.
+* Delete unrelated QEMU code freely as long as the Windows XP-32 guest continues to work
+  under Windows TCG and Linux KVM product builds/runtime remain functional. Linux KVM is
+  mandatory for the Linux product; Linux TCG is not a supported fallback.
 * Later (not now): own executable + wxWidgets GUI (T12).
 
 ## 2. Current state snapshot (update when it changes)
 
 * Builds and passes the checks on Linux AND Windows (GitHub Actions, MSYS2 UCRT64) - keep CI green. macOS/BSD code removed (T03 pass 1).
-* `qemu-system-i386 -accel help` -> only `tcg`. Only i440FX `pc` machines (19 versioned
+* Accelerator policy: Linux product builds expose/use KVM only; Windows builds expose/use TCG only. Only i440FX `pc` machines (19 versioned
   variants still present). Default CPU `xp-p4` (verified in-guest: family 15, SSE2 yes,
   SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified); 1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. **XP has not been
   booted yet** (T08, needs an XP ISO).
@@ -263,11 +271,11 @@ idempotent (`git checkout` touched files first).
   binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
 - **CI pipeline (`.github/workflows/build.yml`):** Linux CI builds the Linux KVM product and runs accelerator-policy,
   functional, x87 differential, packaging, and smoke checks; it does not run TCG performance benchmarks.
-  Windows CI builds the TCG product, runs functional and x87 differential checks, and hosts TCG performance A/B
-  measurements. The Windows T13d SSE2 A/B uses the same 300M-iteration image and three-run medians:
-  3.166927 s before vs 3.132343 s after (+1.09%, 1.011x), effectively near-neutral on a shared runner.
-  The T13a x87 store A/B compares the same current Windows executable with `XPQEMU_NO_HX87=1` against the
-  host-x87 path for isolated 100M-iteration FST m32 and FST m64 images (three-run medians); results are pending.
+  Windows CI builds the TCG product and runs functional checks plus the x87 differential test
+  (`xp/bench/x87cmp.sh`), then packages and smoke-tests the artifact. The completed T13d SSE2
+  and T13a FST A/B measurements are historical results; they are no longer repeated on every
+  artifact build. Keep their benchmark sources/scripts for deliberate manual A/B runs when
+  evaluating future performance changes.
   `xp/bench/run.sh` reports raw median wall time without subtracting an empty-loop control. It rejects unexpected
   QEMU exit statuses, timeouts, and stderr output. Both jobs upload compiled binaries as GitHub Actions artifacts
   (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`; run with `-L pc-bios`).
@@ -469,25 +477,15 @@ Shader and post-processing integration
   documented for context but are not repeated.
 
 
-### KVM trace-generation checkpoint (2026-11-19)
-
-The restored KVM trace-event directories are registered in root `meson.build`.
-Their directory-local `trace.h` wrappers were initially missing, so KVM sources
-resolved the wrong/no group header and produced undeclared trace calls followed
-by linker failures. The three wrappers have now been restored from the exact
-upstream baseline. Re-run Linux CI on the resulting commit; do not mark T17 done
-until Linux KVM build and host runtime validation are complete. Windows CI had
-passed the preceding changes.
-
-
 ### SDL on-demand diagnostic capture (2026-11-21; updated)
 
 The SDL **Ctrl+Alt+L** shortcut is an opt-in tester feature, available only when
 the VM is launched with `-device vmvga,debug=on`. With debug off, the shortcut
 is unavailable and the title bar does not advertise it.
 
-The `debug` property enables the capability, not continuous output. The shortcut
-redirects stderr to `vmvga_freeze.log`, then activates VMVGA local diagnostics,
+The `debug` property enables the capability, not continuous output. The SDL title
+also advertises the fullscreen toggle (Ctrl+Alt+F) and the grab-release chord when
+applicable. The shortcut redirects stderr to `vmvga_freeze.log`, then activates VMVGA local diagnostics,
 VMPort GuestRPC diagnostics, and the existing `vmware_*`, `vmport_*`, and
 `vdagent*` trace events. Pressing it again disables those sources and restores the original stderr
 descriptor. There are no routine start/stop markers or continuous diagnostic
