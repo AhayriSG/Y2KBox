@@ -456,3 +456,29 @@ GART transaction boundaries, FlatView ordering, cache behavior, or memory
 semantics are changed. Await Linux/Windows CI and owner capture before deciding
 whether the measured cost is repeated range scanning, array shifting, or another
 part of insertion. No optimization has been applied.
+
+
+T13e implementation prototype (2026-11-22): added an opt-in alternative
+FlatView renderer in system/memory.c. The existing renderer remains the default
+and reference implementation. Select the prototype with
+Y2KBOX_FLATVIEW_BUILDER=batched. It binary-searches for the first potentially
+overlapping range, collects a region's uncovered gaps in address order, then
+merges that batch backwards into the existing sorted range array once per
+terminating region. This avoids one memmove per gap while preserving recursive
+subregion priority.
+
+For runtime equivalence checking, set Y2KBOX_FLATVIEW_VERIFY=1. The selected
+builder is compared against the other builder for every generated root, before
+and after simplification, including region pointer, address, region offset,
+dirty-log mask, ROMD, readonly, nonvolatile, and unmergeable fields. A mismatch
+reports the stage/range and aborts rather than continuing with a potentially
+incorrect map. Verification runs both algorithms and is intentionally expensive;
+do not use it for performance captures. Keep the legacy builder as default
+until Linux/Windows CI, equivalence checks, and guest testing pass.
+
+New metrics: memory.flatview_search (binary-search comparisons/time),
+memory.flatview_merge (batched merge work/time), and
+memory.flatview_batch_ranges (gaps inserted per batch). Existing scan, ref,
+and realloc metrics remain available. No GART transaction boundaries or
+memory-region semantics were changed. Prototype is not yet validated by CI
+or owner runtime testing; no performance claim yet.
