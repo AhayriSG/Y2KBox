@@ -18,8 +18,10 @@ CONFIG_X86_FW_OVMF=n
 # ---- XP device set --------------------------------------------------------
 # Kept: PC/i440FX platform, PIIX IDE, floppy, PS/2, serial/parallel, VGA +
 # Cirrus (in-box XP driver), RTL8139/PCnet/e1000 NICs, AC97/ES1370/SB16 audio,
-# USB UHCI/OHCI/EHCI + HID + mass storage. VirtIO Block/Net are the standard launch
-# devices; PIIX IDE and RTL8139 remain independent fallbacks. Unrelated VirtIO devices stay off.
+# USB UHCI/OHCI/EHCI + keyboard HID + mass storage. The PC machine's default PS/2
+# IntelliMouse is the only supported pointing device; do not select USB mouse/tablet
+# models in product profiles. VirtIO Block/Net are standard; PIIX IDE and RTL8139
+# remain independent fallbacks. Unrelated VirtIO devices stay off.
 
 # Paravirtual devices used by the standard XP launch profile (T15).
 CONFIG_VIRTIO=y
@@ -129,7 +131,7 @@ CONFIG_BOCHS_DISPLAY=n
 CONFIG_VMMOUSE=y
 CONFIG_VMPORT=y
 
-# USB: UHCI/OHCI/EHCI + hub + HID + storage only
+# USB: UHCI/OHCI/EHCI + hub (keyboard HID) + mass storage; no USB pointing-device profile
 CONFIG_USB_XHCI=n
 CONFIG_USB_XHCI_NEC=n
 CONFIG_USB_XHCI_PCI=n
