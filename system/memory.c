@@ -279,7 +279,7 @@ static FlatView *flatview_new(MemoryRegion *mr_root)
  */
 static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
 {
-    uint64_t perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_INSERT);
+    uint64_t insert_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_INSERT);
 
     if (view->nr == view->nr_allocated) {
         size_t old_capacity = view->nr_allocated;
@@ -298,7 +298,7 @@ static void flatview_insert(FlatView *view, unsigned pos, FlatRange *range)
     memory_region_ref(range->mr);
     ++view->nr;
     qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_INSERT, 1);
-    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_INSERT, perf_start_ns);
+    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_INSERT, insert_start_ns);
 }
 
 static void flatview_destroy(FlatView *view)
@@ -763,7 +763,8 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
 {
     int i;
     FlatView *view;
-    uint64_t perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_TOTAL);
+    uint64_t total_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_TOTAL);
+    uint64_t perf_start_ns;
 
     view = flatview_new(mr);
 
@@ -779,6 +780,7 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_SIMPLIFY);
     flatview_simplify(view);
     qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_SIMPLIFY, perf_start_ns);
+    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_SIMPLIFIED_RANGES, view->nr);
 
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_DISPATCH_BUILD);
     view->dispatch = address_space_dispatch_new(view);
@@ -794,7 +796,7 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
     qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_DISPATCH_COMPACT, perf_start_ns);
 
     g_hash_table_replace(flat_views, mr, view);
-    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_TOTAL, perf_start_ns);
+    qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_TOTAL, total_start_ns);
 
     return view;
 }
