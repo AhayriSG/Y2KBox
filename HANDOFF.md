@@ -149,6 +149,14 @@ drive emulation behavior. T12 may offer an optional **VirtIO SCSI CD-ROM** choic
 the SCSI device implementation and XP driver path are restored and validated; do not
 enable VirtIO SCSI in the current Block/Net restoration.
 
+For pointing input, the supported product device is the PC machine's default **PS/2 IntelliMouse**.
+Do not add USB mouse (`usb-mouse`) or USB tablet (`usb-tablet`) selectors or recommend
+those devices for XP games; their relative/absolute input behavior can cause tracking,
+camera-recentering, and legacy DirectInput compatibility problems. Keep the shared USB HID
+implementation available for USB keyboard support, but do not remove or fork upstream HID
+source merely to hide its optional mouse/tablet models. They are not part of Y2KBox's
+supported device profile and must not be instantiated by product presets.
+
 For a fresh XP installation, load the XP x86 `viostor` driver from
 `virtio-win-0.1.141_x86.vfd` through text-mode Setup's F6 flow; install XP x86 NetKVM
 after setup. An existing IDE installation must have `viostor` installed before switching
