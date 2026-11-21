@@ -1021,3 +1021,17 @@ No emulator source code or runtime instrumentation changed. No local build/test 
 Owner clarified that the 1-3 second Windows TCG pauses are not specific to FIFA 2003. Similar behavior occurs in Joint Operations: Typhoon Rising and F1 Challenge '99-'02. Updated T13e and HANDOFF section 5a4 to describe a general cross-game Windows XP guest/host responsiveness problem. FIFA 2003, Joint Operations, and F1 Challenge are now explicitly listed as representative reproductions, not the scope of the issue or evidence of a game-specific bug. The capture plan now calls for repeatable measurements across representative affected games/workloads.
 
 No emulator source code or profiling instrumentation changed. No local build/test was run and no CI was polled.
+
+
+## Session 48 (ChatGPT), 2026-11-21 - Compare xemu TCG proposals against Y2KBox and record audio symptom
+
+Owner confirms that audio loops, stutters, and freezes during the same 1-3 second pauses seen in FIFA 2003, Joint Operations: Typhoon Rising, and F1 Challenge '99-'02. This broadens the symptom beyond display presentation, but does not distinguish guest CPU execution, audio production, shared host-thread blocking, or another synchronization path. T13e instrumentation should include guest audio production and host audio callback/queue servicing.
+
+Reviewed the current xemu PRs and compared their affected code paths with Y2KBox's QEMU 11.1.90 source:
+
+- xemu #3028 (tcg: keep whole-page TB invalidation off the page the store runs from) is not a direct port candidate. Y2KBox's SoftMMU path in accel/tcg/tb-maint.c, tb_invalidate_phys_page_range__locked(), already computes each TB's physical range and invalidates only when it overlaps the written range. The xemu proposal addresses xemu's own whole-page invalidation behavior.
+- xemu #3140 (Skip unused mmu indexes in tlb_reset_dirty()) maps closely to our current source. Y2KBox sets cpu->neg.tlb.c.dirty when tlb_set_page_full() populates an MMU index, but tlb_reset_dirty() still iterates every NB_MMU_MODES table. The PR iterates only indexes marked populated. This is a small, plausible optimization, but it matters only when tlb_reset_dirty() is called; measure call frequency and elapsed time during the affected workload before implementing it.
+- xemu #3141 (Avoid indirect call in helper_lookup_tb_ptr()) targets the generic cpu->cc->tcg_ops->get_tb_cpu_state() indirect dispatch plus curr_cflags() on the indirect-branch lookup path. Y2KBox has the same generic path in accel/tcg/cpu-exec.c. This may improve steady-state guest throughput for workloads with many indirect branches, but is not evidence for the multi-second pauses. xemu's proposal assumes a single x86 target; any Y2KBox adaptation must preserve target selection and debug/single-step behavior. The xemu maintainer requested profiling evidence; the PR discussion does not provide a measured performance result.
+- All three xemu proposals were still open on 2026-11-21. They are candidate ideas, not merged or proven fixes.
+
+Updated TASKS.md and HANDOFF.md with the audio symptom and these source-level applicability findings. No emulator source or instrumentation changed. No local build/test was run, and no CI was polled. T13e remains CLAIMED; next source task is to implement opt-in aggregate timing/counters (including audio servicing) before deciding whether any xemu optimization or other fix is justified.
