@@ -1078,3 +1078,24 @@ Updated TASKS.md and HANDOFF.md. No performance optimization was applied. No loc
 ## Session 51 (ChatGPT), 2026-11-21 - Add vCPU slice interval telemetry
 
 Added a CPU execution slice-to-slice interval metric alongside the per-slice wall-duration metric. This helps distinguish a long cpu_exec call from a long gap between cpu_exec entries; both are wall-clock observations and may include host scheduling delays. Updated TASKS.md and HANDOFF.md accordingly. No build/test or CI polling performed.
+
+
+## Session 52 (ChatGPT), 2026-11-21 - Attribute VMVGA FIFO time to individual SVGA3D commands
+
+Owner supplied the first Y2KBOX-PERF capture from the Joint Operations map-load transition (15.509 s capture):
+
+- vmvga.fifo_run: 359 calls, 14.358261 s aggregate wall time, 189.455 ms maximum; 201 calls exceeded 10 ms and 6 exceeded 100 ms.
+- cpu.exec: 15.179954 s aggregate, 285.491 ms maximum; cpu.exec_gap maximum 285.501 ms.
+- audio.mix_out_gap maximum 287.452 ms, while mixer execution totaled only 1.464 ms and SDL callback execution totaled 0.229 ms. This indicates delayed guest audio production/service rather than expensive mixer or SDL callback execution, but does not identify which thread was delayed.
+- tcg.tb_flush and tcg.tb_invalidate_range were never called; tlb_reset_dirty totaled 0.900 ms. D3D9 shader-object creation totaled 7.876 ms.
+- FIFO is therefore the leading next investigation target. Timings overlap and are wall-clock measurements; they do not prove that FIFO handling alone accounts for the entire 1-3 s pause, nor distinguish command-handler work from driver waits or host scheduling.
+
+Added a second-stage, opt-in per-command profiler:
+- vmsvga3d_fifo_command() now wraps the existing dispatcher and records one aggregate timer for total command dispatch plus per-command ID/name counters.
+- util/perf-stats.c retains per-command count, total, maximum, and >1/10/100 ms buckets, and emits only nonzero command records when Ctrl+Alt+L capture stops. No per-command log stream is added.
+- The command-level measurements include packet parsing and the selected handler/backend work. They should identify whether draw/clear, guest-backed updates/readbacks, surface/MOB/GART operations, query/wait, or DX command handlers dominate. They are not isolated GPU execution timings.
+- The counters are bounded to command IDs below 4096; SVGA3D command IDs in this implementation fit that range.
+
+Source commits: header c05999c, counter implementation 8b86280, VMVGA dispatcher 6dd5d13. Documentation commits: TASKS 831c430, HANDOFF 2221632.
+
+No local build/test was run and CI was not polled, per project workflow. Windows/Linux CI must validate the new instrumentation before owner runtime testing. No performance optimization or command execution behavior was changed; T13e remains CLAIMED.
