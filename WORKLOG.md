@@ -990,3 +990,16 @@ Updated the XP device configuration comments, README mouse guidance, T12 launche
 and HANDOFF Q3 device policy. No device implementation or runtime behavior changed; no
 USB mouse/tablet launch flags were added to documentation. No local build/test or CI polling
 was performed.
+
+
+## Session 45 (ChatGPT), 2026-11-21 - Prioritize FIFA 2003 scene-transition stalls (T13e)
+
+Owner described repeatable 1-3 second Windows TCG pauses in FIFA 2003 around match-intro camera cuts / newly visible stadium or LOD views. Promoted this responsiveness issue to T13e (P0), ahead of further isolated x87 instruction work:
+
+- T13e is now claimed and requires a repeatable owner-side capture plus opt-in, low-overhead timing/counters across VMVGA FIFO/SVGA3D/GMR uploads, DXVK shader/pipeline creation and cache behavior, TCG code-buffer flushes, TB invalidation/SMC, SoftMMU TLB paths, and host thread waits/contention.
+- Explicitly recorded that the root cause is unknown. Do not enlarge the TCG code buffer, assume a DXVK state-cache setting/async compiler, or pin threads without evidence.
+- Added a source-level Xemu comparison requirement: review individual changes against our QEMU 11.1.90 base and x86 PC/SoftMMU semantics; no wholesale TCG replacement or blind cherry-picks.
+- Paused further T13a x87 expansion while retaining the existing guarded host-x87 arithmetic/load/store paths and correctness differential. The current implementation is not a wholesale guest x87 stack-to-host stack mapping.
+- Reframed the remaining SoftMMU/TLB, TB chaining/invalidation, helper/flags, REP-string, and threading work as P1 candidates to prioritize using the captured XP workload rather than generic assumptions.
+
+No emulator source code or instrumentation changed in this documentation/priority pass. No local build/test was run, and no CI was polled. T13e remains CLAIMED; the next step is to inspect the actual TCG/DXVK code paths and design the smallest useful opt-in timing instrumentation before making performance changes.
