@@ -30,6 +30,7 @@
 */
 
 #include "qemu/osdep.h" /* Required to be the first #include */
+#include "qemu/perf-stats.h"
 #include "qapi/error.h"
 #include "system/system.h"
 #include "qemu/cutils.h"
@@ -6073,7 +6074,7 @@ static void vmsvga_trace_gmr2_sample(struct vmsvga_state_s *s)
     }
 }
 
-static void vmsvga_fifo_run(struct vmsvga_state_s *s, bool flush_damage,
+static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                             uint32_t dx_context)
 {
     VPRINT("vmsvga_fifo_run was just executed\n");
@@ -7807,6 +7808,15 @@ static void vmsvga_fifo_run(struct vmsvga_state_s *s, bool flush_damage,
                 s->fifo_next, s->irq_mask, s->irq_status, s->fence,
                 fifo_goal, s->fence_goal);
     }
+}
+
+static void vmsvga_fifo_run(struct vmsvga_state_s *s,
+                            bool flush_damage, uint32_t dx_context)
+{
+    uint64_t perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_VMVGA_FIFO);
+
+    vmsvga_fifo_run_impl(s, flush_damage, dx_context);
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_FIFO, perf_start_ns);
 }
 
 /*
