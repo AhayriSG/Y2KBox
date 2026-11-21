@@ -1211,3 +1211,24 @@ Added another opt-in profiling layer in `system/memory.c` and the perf-stats API
 - Perf summaries now include `max_work_units`, allowing the largest individual work item to be seen alongside the aggregate.
 
 The range-scan, insertion, memmove, and reference timers are nested/overlapping and must not be summed. All remain opt-in under Ctrl+Alt+L. No GART transaction, cache, FlatView ordering, or memory mapping behavior was changed. No optimization was applied. No local build/test or CI polling was performed; latest instrumentation requires Linux/Windows CI validation and owner capture.
+
+
+## Session 57 (ChatGPT), 2026-11-22 - Opt-in batched FlatView construction prototype
+
+Implemented an alternative FlatView renderer in system/memory.c while retaining the existing renderer as the default/reference path.
+
+The batched renderer:
+- Preserves recursive subregion traversal order (higher-priority regions are rendered first).
+- Binary-searches the sorted existing FlatRange array for the first range whose end can overlap the current region.
+- Walks only potentially intersecting ranges, collecting uncovered gaps in address order.
+- Merges all gaps for that terminating region backwards into the existing array once, rather than calling flatview_insert()/memmove() for each gap.
+- Takes MemoryRegion references for newly inserted ranges; existing references are transferred with the array entries.
+
+Runtime selection:
+- Y2KBOX_FLATVIEW_BUILDER=batched selects the prototype.
+- Y2KBOX_FLATVIEW_VERIFY=1 builds the other implementation as a reference for each generated root and compares exact range count/order and all FlatRange fields before and after simplification. Mismatch calls error_report() and aborts.
+- Verification runs both builders and is expensive; do not use during performance capture. Keep legacy as default pending CI and runtime verification.
+
+New metrics: memory.flatview_search, memory.flatview_merge, memory.flatview_batch_ranges. Existing legacy metrics remain. No GART transaction boundaries, memory topology, or guest-visible mapping semantics were intentionally changed.
+
+No local build/test or CI polling performed. The prototype is not validated yet. Required next steps: Linux and Windows CI; run guest once with builder=batched and verify=1 but without Ctrl+Alt+L; then run a separate capture with builder=batched and verification unset; test XP boot, desktop, representative 3D scene/map transition, and guest memory/device behavior. If equivalence aborts, revert to default legacy and inspect mismatch before any optimization is enabled.
