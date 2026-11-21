@@ -43,6 +43,7 @@
 #include "hw/pci/pci_device.h"
 #include "system/address-spaces.h"
 #include "system/memory_cached.h"
+#include "qemu/perf-stats.h"
 
 _Static_assert(sizeof(SVGA3dCmdDefineGBSurface) == 36,
                "SVGA3dCmdDefineGBSurface wire size");
@@ -19457,7 +19458,7 @@ static bool vmsvga3d_2d_gb_command_allowed(uint32_t cmd)
     }
 }
 
-static bool vmsvga3d_fifo_command(struct vmsvga_state_s *s,
+static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
                                    uint32_t dx_context, uint32_t cmd,
                                    int32_t *len, uint32_t fifo_start)
 {
@@ -19579,6 +19580,27 @@ static bool vmsvga3d_fifo_command(struct vmsvga_state_s *s,
     VPRINT("%s command %u in SVGA command FIFO\n", info->name, cmd);
 
     return true;
+}
+
+/*
+ * Keep one aggregate timer around each decoded SVGA3D FIFO command. The
+ * per-command counters in perf-stats.c retain the command ID/name so a capture
+ * can identify expensive handlers without emitting per-command trace lines.
+ */
+static bool vmsvga3d_fifo_command(struct vmsvga_state_s *s,
+                                  uint32_t dx_context, uint32_t cmd,
+                                  int32_t *len, uint32_t fifo_start)
+{
+    const VMSVGA3DCommandInfo *info = vmsvga3d_command_info(cmd);
+    uint64_t start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_VMVGA_COMMAND_DISPATCH);
+    bool handled = vmsvga3d_fifo_command_impl(
+        s, dx_context, cmd, len, fifo_start);
+
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_COMMAND_DISPATCH, start_ns);
+    qemu_perf_stats_command_end(cmd, info != NULL ? info->name : NULL,
+                                start_ns);
+    return handled;
 }
 
 /*
