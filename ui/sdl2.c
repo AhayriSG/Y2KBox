@@ -24,6 +24,7 @@
 /* Ported SDL 1.2 code to 2.0 by Dave Airlie. */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qemu/module.h"
 #include "qemu/cutils.h"
 #include "ui/console.h"
@@ -316,6 +317,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         sdl_set_debug_trace(true);
+        qemu_perf_stats_start();
         sdl_log_capture_enabled = true;
         sdl_log_capture_created = true;
     } else {
@@ -325,6 +327,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         sdl_set_debug_trace(false);
+        qemu_perf_stats_stop();
         if (dup2(sdl_log_capture_saved_stderr, STDERR_FILENO) < 0) {
             saved_errno = errno;
             object_property_set_bool(vmvga, "debug-log", true, NULL);
