@@ -1003,3 +1003,14 @@ Owner described repeatable 1-3 second Windows TCG pauses in FIFA 2003 around mat
 - Reframed the remaining SoftMMU/TLB, TB chaining/invalidation, helper/flags, REP-string, and threading work as P1 candidates to prioritize using the captured XP workload rather than generic assumptions.
 
 No emulator source code or instrumentation changed in this documentation/priority pass. No local build/test was run, and no CI was polled. T13e remains CLAIMED; the next step is to inspect the actual TCG/DXVK code paths and design the smallest useful opt-in timing instrumentation before making performance changes.
+
+## Session 46 (ChatGPT), 2026-11-21 - Verify TCG scene-stall suspects and xemu references
+
+Follow-up source review for T13e:
+
+- Confirmed the actual code-generation buffer sizing in this QEMU 11.1.90 tree is in `tcg/region.c`: 64-bit system emulation has a 1 GiB default, while automatic sizing is capped at `phys_mem / 8`. With the fixed 2 GiB guest this is approximately 256 MiB, subject to the actual physical-memory value and alignment. The suggested 32 MiB default increase is therefore not applicable to this build; a larger buffer must not be proposed without observing code-buffer exhaustion/full TB flushes at the pause.
+- Located the current implementation points: `tb_flush__exclusive_or_serial()` and `tb_invalidate_phys_range()` in `accel/tcg/tb-maint.c`; `tlb_reset_dirty()` and TLB flush paths in `accel/tcg/cputlb.c`; SVGA3D FIFO dispatch through `vmsvga_fifo_run()` in `hw/display/vmware_vga_3d.c`; and D3D9 shader object creation through `vmsvga3d_dxvk_shader_create()` in `hw/display/vmware_vga_dxvk.c`.
+- Reviewed xemu proposals #3028 (same-page TB invalidation), #3140 (skip unused MMU indexes in `tlb_reset_dirty()`), and #3141 (avoid indirect dispatch in `helper_lookup_tb_ptr()`). All three were open PRs at review time, not merged fixes. #3141's current proposal uses an `XBOX`-guarded direct x86 CPU-state hook, so it is not a drop-in patch for Y2KBox; any equivalent must be scoped to this fork's fixed i386 target and preserve generic fallback/debug flags. Added these references to HANDOFF with compatibility caveats.
+- Refined T13e to require opt-in aggregate timing/counters and a measured cause before code changes. No claim is made that shader compilation, TB invalidation, TLB work, or thread contention is the cause of FIFA 2003's pauses.
+
+No emulator source code or runtime instrumentation changed. No local build/test was run and no CI was polled. T13e remains CLAIMED; next step is to design and implement the smallest opt-in instrumentation, then collect the owner's repeatable Windows-host capture.
