@@ -470,8 +470,8 @@ is unavailable and the title bar does not advertise it.
 
 The `debug` property enables the capability, not continuous output. The shortcut
 redirects stderr to `vmvga_freeze.log`, then activates VMVGA local diagnostics,
-VMPort GuestRPC diagnostics, and the existing `vmware_*` / `vdagent*` trace
-events. Pressing it again disables those sources and restores the original stderr
+VMPort GuestRPC diagnostics, and the existing `vmware_*`, `vmport_*`, and
+`vdagent*` trace events. Pressing it again disables those sources and restores the original stderr
 descriptor. There are no routine start/stop markers or continuous diagnostic
 messages in the console while capture is inactive. The first capture truncates
 the file; later capture intervals in the same QEMU run append.
