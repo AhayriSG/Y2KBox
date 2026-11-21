@@ -438,3 +438,21 @@ capacity growth. This remains diagnostic only; no FlatView caching, topology
 semantics, or transaction boundaries changed. Use the next capture to identify
 whether render traversal, range construction, dispatch generation, or compaction
 dominates before proposing an optimization.
+
+
+T13e follow-up (2026-11-22): the owner capture measured 12.962 s in
+FlatView topology generation across 795 roots: 12.799 s in recursive rendering,
+with 3,890,387 FlatRange insertions and 7,772,434 region visits. Simplification
+was 8.3 ms, dispatch construction 152 ms, and range-array reallocations 59 ms.
+The 11.502 s insertion timer is nested inside rendering. GART map/unmap commit
+totals closely track FlatView reset time; address-space publication remains cheap.
+
+Added a further opt-in diagnostic layer to distinguish FlatView range-search loop
+time/work, memmove() time and shifted-range counts, memory_region_ref() time,
+and maximum pre/post-simplification FlatView sizes. The range-search timer is
+inclusive of nested insertion calls; insertion, memmove, and reference timers
+also overlap by design. These counters are aggregate-only under Ctrl+Alt+L. No
+GART transaction boundaries, FlatView ordering, cache behavior, or memory
+semantics are changed. Await Linux/Windows CI and owner capture before deciding
+whether the measured cost is repeated range scanning, array shifting, or another
+part of insertion. No optimization has been applied.
