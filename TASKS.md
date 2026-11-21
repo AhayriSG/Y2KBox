@@ -312,7 +312,7 @@ they are not assumed to make translated guest instruction execution faster.
 * **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.
 
 
-## T19 (P1) SDL hotkey for on-demand diagnostic log capture  -  Status: CLAIMED by ChatGPT 2026-11-21
+## T19 (P1) SDL hotkey for on-demand diagnostic log capture  -  Status: PAUSED (implementation committed; awaiting CI + XP guest verification)
 Add an SDL2 host-side keyboard shortcut that starts and stops capturing QEMU's
 standard-error diagnostics while the VM keeps running. The goal is to retain only
 the interval relevant to a guest-side freeze instead of recording boot-to-exit.
