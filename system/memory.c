@@ -36,6 +36,7 @@
 #include "hw/core/boards.h"
 #include "migration/vmstate.h"
 #include "system/address-spaces.h"
+#include "qemu/perf-stats.h"
 
 #include "memory-internal.h"
 
@@ -1140,13 +1141,19 @@ static void address_space_update_topology(AddressSpace *as)
 
 void memory_region_transaction_begin(void)
 {
+    uint64_t perf_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_MEMORY_TXN_COALESCED_FLUSH);
+
     qemu_flush_coalesced_mmio_buffer();
+    qemu_perf_stats_end(QEMU_PERF_MEMORY_TXN_COALESCED_FLUSH,
+                        perf_start_ns);
     ++memory_region_transaction_depth;
 }
 
 void memory_region_transaction_commit(void)
 {
     AddressSpace *as;
+    uint64_t perf_start_ns;
 
     assert(memory_region_transaction_depth);
     assert(bql_locked());
@@ -1154,20 +1161,53 @@ void memory_region_transaction_commit(void)
     --memory_region_transaction_depth;
     if (!memory_region_transaction_depth) {
         if (memory_region_update_pending) {
+            perf_start_ns = qemu_perf_stats_begin(
+                QEMU_PERF_MEMORY_TXN_FLATVIEWS_RESET);
             flatviews_reset();
+            qemu_perf_stats_end(QEMU_PERF_MEMORY_TXN_FLATVIEWS_RESET,
+                                perf_start_ns);
 
+            perf_start_ns = qemu_perf_stats_begin(
+                QEMU_PERF_MEMORY_TXN_LISTENER_BEGIN);
             MEMORY_LISTENER_CALL_GLOBAL(begin, Forward);
+            qemu_perf_stats_end(QEMU_PERF_MEMORY_TXN_LISTENER_BEGIN,
+                                perf_start_ns);
 
             QTAILQ_FOREACH(as, &address_spaces, address_spaces_link) {
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_MEMORY_TXN_ADDRESS_SPACE_FLATVIEW, 1);
+                perf_start_ns = qemu_perf_stats_begin(
+                    QEMU_PERF_MEMORY_TXN_ADDRESS_SPACE_FLATVIEW);
                 address_space_set_flatview(as);
+                qemu_perf_stats_end(
+                    QEMU_PERF_MEMORY_TXN_ADDRESS_SPACE_FLATVIEW,
+                    perf_start_ns);
+
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE, 1);
+                perf_start_ns = qemu_perf_stats_begin(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE);
                 address_space_update_ioeventfds(as);
+                qemu_perf_stats_end(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE, perf_start_ns);
             }
             memory_region_update_pending = false;
             ioeventfd_update_pending = false;
+
+            perf_start_ns = qemu_perf_stats_begin(
+                QEMU_PERF_MEMORY_TXN_LISTENER_COMMIT);
             MEMORY_LISTENER_CALL_GLOBAL(commit, Forward);
+            qemu_perf_stats_end(QEMU_PERF_MEMORY_TXN_LISTENER_COMMIT,
+                                perf_start_ns);
         } else if (ioeventfd_update_pending) {
             QTAILQ_FOREACH(as, &address_spaces, address_spaces_link) {
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE, 1);
+                perf_start_ns = qemu_perf_stats_begin(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE);
                 address_space_update_ioeventfds(as);
+                qemu_perf_stats_end(
+                    QEMU_PERF_MEMORY_TXN_IOEVENTFD_UPDATE, perf_start_ns);
             }
             ioeventfd_update_pending = false;
         }
