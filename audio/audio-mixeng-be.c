@@ -5,6 +5,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qemu/audio.h"
 #include "migration/vmstate.h"
 #include "qemu/bswap.h"
@@ -908,7 +909,7 @@ static size_t audio_pcm_hw_run_out(HWVoiceOut *hw, size_t live)
     return clipped;
 }
 
-static void audio_run_out(AudioMixengBackend *s)
+static void audio_run_out_impl(AudioMixengBackend *s)
 {
     AudioMixengBackendClass *k = AUDIO_MIXENG_BACKEND_GET_CLASS(s);
     HWVoiceOut *hw = NULL;
@@ -1058,6 +1059,15 @@ static size_t audio_pcm_hw_run_in(HWVoiceIn *hw, size_t samples)
     }
 
     return conv;
+}
+
+static void audio_run_out(AudioMixengBackend *s)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_AUDIO_MIX_OUT);
+
+    audio_run_out_impl(s);
+    qemu_perf_stats_end(QEMU_PERF_AUDIO_MIX_OUT, perf_start_ns);
 }
 
 static void audio_run_in(AudioMixengBackend *s)
