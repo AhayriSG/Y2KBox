@@ -947,6 +947,7 @@ static gint flatview_sequence_compare(gconstpointer a, gconstpointer b,
     const FlatRange *ra = a;
     const FlatRange *rb = b;
 
+    (void)opaque;
     if (int128_lt(ra->addr.start, rb->addr.start)) {
         return -1;
     }
