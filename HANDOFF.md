@@ -586,3 +586,29 @@ ioeventfd updates. All metrics are opt-in and aggregate-only under Ctrl+Alt+L.
 Do not batch transactions, defer guest-visible mappings, or redesign aliases until
 the internal stage breakdown identifies the actual expensive work and the
 guest-visible ordering requirements are verified.
+
+
+### T13e: FlatView topology-generation breakdown (2026-11-22)
+
+The latest owner capture measured 13.276462 s in 159 calls to
+`flatviews_reset()`. Within those calls, the measured address-space publication,
+ioeventfd update, and global listener stages were negligible. Source inspection
+shows that each reset rebuilds the shared FlatView cache and calls
+`generate_memory_topology()` once per unique memory-region root.
+
+Added opt-in aggregate timings for topology generation stages:
+- Recursive `render_memory_region()` traversal, including a visited-region work
+  count (including alias recursion).
+- FlatRange count before and after `flatview_simplify()`, plus simplification time.
+- Dispatch allocation/population and dispatch compaction time.
+- Total topology-generation time and unique roots generated.
+- FlatRange insert call timing/count and range-array realloc timing/capacity growth.
+
+All counters are active only during Ctrl+Alt+L capture. No caching, batching,
+FlatView lifetime, memory listener ordering, or guest-visible mapping semantics
+were changed. The next capture should identify the dominant internal stage and
+its range/region scale. Do not implement a cache or alter transaction boundaries
+until the stage breakdown and correctness constraints are reviewed.
+
+No local build/test or CI polling was performed. Windows/Linux CI must validate
+before the next owner runtime capture.
