@@ -25,6 +25,7 @@
 */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qapi/error.h"
 
 #include "include/vmware_vga_vgpu9.h"
@@ -17119,7 +17120,7 @@ bool vmsvga3d_dxvk_set_clip_plane(VMSVGA3DDxvk *dxvk, uint32_t index,
 #endif
 }
 
-void *vmsvga3d_dxvk_shader_create(VMSVGA3DDxvk *dxvk, uint32_t stage,
+void *vmsvga3d_dxvk_shader_create_impl(VMSVGA3DDxvk *dxvk, uint32_t stage,
                                   const uint32_t *bytecode)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
@@ -17154,6 +17155,17 @@ void *vmsvga3d_dxvk_shader_create(VMSVGA3DDxvk *dxvk, uint32_t stage,
     (void)bytecode;
     return NULL;
 #endif
+}
+
+void *vmsvga3d_dxvk_shader_create(VMSVGA3DDxvk *dxvk, uint32_t stage,
+                                  const uint32_t *bytecode)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_DXVK_SHADER_CREATE);
+    void *shader = vmsvga3d_dxvk_shader_create_impl(dxvk, stage, bytecode);
+
+    qemu_perf_stats_end(QEMU_PERF_DXVK_SHADER_CREATE, perf_start_ns);
+    return shader;
 }
 
 void vmsvga3d_dxvk_shader_destroy(void *shader)
