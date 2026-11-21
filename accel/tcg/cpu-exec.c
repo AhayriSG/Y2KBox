@@ -1045,6 +1045,7 @@ int cpu_exec(CPUState *cpu)
     }
 #endif
 
+    qemu_perf_stats_mark(QEMU_PERF_CPU_EXEC_GAP);
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_CPU_EXEC);
 
     RCU_READ_LOCK_GUARD();
