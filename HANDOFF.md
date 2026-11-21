@@ -660,3 +660,30 @@ memory.flatview_batch_ranges. Keep legacy as default until Linux and Windows CI,
 runtime equivalence checking, and representative XP guest tests pass. First run
 verification without Ctrl+Alt+L; then run performance capture with batched
 selected and verification unset. No GART transaction changes.
+
+
+### T13e ordered-tree FlatView prototype (2026-11-22)
+
+The owner tested the per-region batched-array prototype. Its 22.07 s capture
+measured 17.965 s in topology generation, with 16.995 s in repeated array
+merging. Approximately 3.89 million batches inserted approximately 3.89
+million ranges, so the batches averaged about one range and still copied
+approximately 23.68 billion range entries. The batched builder is not a
+performance improvement and remains opt-in only.
+
+A second experimental renderer is now available with
+Y2KBOX_FLATVIEW_BUILDER=tree. It uses GLib GSequence to keep FlatRanges
+ordered during the same recursive priority traversal, then flattens the
+sequence once into the ordinary FlatView array. MemoryRegion references are
+acquired for inserted nodes; downstream simplification and dispatch building
+remain unchanged. The legacy renderer remains the default. Verification with
+Y2KBOX_FLATVIEW_VERIFY=1 compares against legacy before and after simplification.
+
+New counters: memory.flatview_tree_insert and
+memory.flatview_tree_flatten; search time uses memory.flatview_search. The
+sequence temporarily allocates a tree node and FlatRange payload per range,
+so peak memory and allocator overhead must be measured. No local build/test or
+CI polling was performed. Validate Linux and Windows CI, then run equivalence
+verification without Ctrl+Alt+L and a separate performance capture with
+verification unset. Do not change the default until both equivalence and
+representative XP gameplay pass.
