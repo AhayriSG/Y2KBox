@@ -12058,8 +12058,8 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
     if (enabled) {
         qatomic_inc(&vmvga_trace_debug_capture_devices);
     } else {
-        assert(vmvga_trace_debug_capture_devices > 0);
-        vmvga_trace_debug_capture_devices--;
+        assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
+        qatomic_dec(&vmvga_trace_debug_capture_devices);
     }
 }
 
