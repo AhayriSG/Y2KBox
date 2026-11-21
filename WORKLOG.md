@@ -1073,3 +1073,8 @@ Extended the initial T13e instrumentation to cover the full VMVGA display-update
 Added separate interval metrics for SDL audio output callbacks and the audio mixer output service. These report callback-to-callback/service-to-service gaps as well as execution durations, so delayed servicing can be detected even when the callback itself is short. Aggregate duration fields now report microseconds to preserve sub-millisecond detail; capture duration remains milliseconds. The summary continues to include threshold counts above 1/10/100 ms and a warning that categories overlap.
 
 Updated TASKS.md and HANDOFF.md. No performance optimization was applied. No local build/test was run and CI was not polled; all source changes still require Windows/Linux CI validation and owner runtime capture.
+
+
+## Session 51 (ChatGPT), 2026-11-21 - Add vCPU slice interval telemetry
+
+Added a CPU execution slice-to-slice interval metric alongside the per-slice wall-duration metric. This helps distinguish a long cpu_exec call from a long gap between cpu_exec entries; both are wall-clock observations and may include host scheduling delays. Updated TASKS.md and HANDOFF.md accordingly. No build/test or CI polling performed.
