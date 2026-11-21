@@ -185,7 +185,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Needs a display/input embedding path (DisplayChangeListener).
+Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add two **independent** device selectors: network adapter (**RTL8139** or **VirtIO Net**) and system-disk controller (**PIIX IDE** or **VirtIO Block**); changing one must not implicitly change the other. Keep RTL8139 + PIIX IDE as the initial defaults until T15's owner-run XP compatibility and performance tests justify changing either default. Keep the CD-ROM on the existing IDE/PIIX path initially; it is separate from the system-disk controller choice. The launcher must make the `virtio-win-0.1.141_x86.vfd` driver floppy attachable during XP setup and warn that an existing XP installation cannot boot from VirtIO Block until its `viostor` driver is installed. Needs a display/input embedding path (DisplayChangeListener).
 
 ## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
 Primary performance target: Windows TCG. Linux product runtime is KVM-only, with no TCG fallback. TCG optimization and performance A/B benchmarks are Windows-only; Linux CI performs KVM build and functional validation. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
@@ -239,12 +239,14 @@ Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin
 APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
 Measure with and without (1 vCPU default; 2-vCPU experimental mode if added).
 
-## T15 (P3) Evaluate virtio for XP (opt-in)  -  Status: TODO
-Owner idea: virtio-win 0.1.141 x86 floppy drivers for XP (VirtIO Ethernet, SCSI/block).
-Re-enable `virtio-net`/`virtio-blk`/`virtio-scsi` (all virtio is OFF in `default.mak`; selects
-may need restoring), install the drivers in an XP guest (needs T08) and benchmark disk/network vs
-IDE + RTL8139 under TCG. Only adopt if clearly faster. Verify what that floppy really contains
-for XP. RTL8139 stays the default.
+## T15 (P3) Enable and evaluate VirtIO Block + Net for XP  -  Status: CLAIMED by ChatGPT 2026-11-21
+Enable the smallest useful VirtIO device set for optional XP guest I/O testing. Initial scope is `virtio-blk-pci` for the system disk and `virtio-net-pci` for networking; retain PIIX IDE and RTL8139 as independent legacy alternatives. Enable only the shared VirtIO core, PCI transport, block, and network devices in `configs/devices/i386-softmmu/default.mak`. Do not enable VirtIO SCSI, virtio-serial/vdagent, ballooning, vhost, or unrelated VirtIO devices as part of this task.
+
+* Keep the normal launch defaults on PIIX IDE + RTL8139 while owner testing is pending. Provide documented opt-in CLI configurations for VirtIO Block and VirtIO Net independently.
+* Validate the XP x86 `viostor` storage driver from `virtio-win-0.1.141_x86.vfd` during text-mode XP Setup (F6 / load additional storage driver); install the XP x86 NetKVM driver after XP is installed. Verify the exact floppy contents and driver compatibility rather than assuming every driver in the image supports XP.
+* Test clean XP installation/boot from VirtIO Block, switching an existing IDE installation only after installing `viostor`, network link/DHCP/connectivity with VirtIO Net, and fallback to IDE/RTL8139. Keep CD-ROM on IDE/PIIX for this first pass.
+* Owner will perform manual disk and network performance comparisons under Windows TCG and report results. **Do not add recurring CI performance benchmarks**; ordinary build/functional CI remains unchanged.
+* Decide whether either VirtIO device should become the default only after owner-reported performance and reliability results. Keep the two default decisions independent.
 
 ## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only  -  Status: CLAIMED by ChatGPT 2026-11-19
 Earlier host/accelerator stripping removed the KVM implementation (see the historical
