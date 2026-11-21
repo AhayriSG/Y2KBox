@@ -243,6 +243,8 @@ Candidate layers to measure on the Windows product path:
 
 Instrumentation should be explicitly opt-in and disabled in normal runs. Prefer monotonic elapsed-time measurements plus aggregate counts, total time, and maximum duration; avoid per-command/per-page log spam that can itself perturb the workload. Correlate timestamps across the VMVGA capture and TCG-side counters. Do not enlarge the code-generation buffer unless evidence shows a full code-buffer flush at the time of the pause. Do not implement thread affinity before measuring actual contention.
 
+Source check: this QEMU 11.1.90 tree sizes the 64-bit system-emulation TCG code buffer in `tcg/region.c` with a 1 GiB default, then caps automatic sizing at `phys_mem / 8`. With the fixed 2 GiB guest this is approximately 256 MiB, subject to actual physical-memory sizing and alignment. This is not the 32 MiB default assumed in some older QEMU discussions; inspect the actual allocated size and flush reason before proposing a larger buffer. The SVGA3D path reaches `vmsvga_fifo_run()` from `hw/display/vmware_vga_3d.c`; D3D9 shader object creation is routed through `vmsvga3d_dxvk_shader_create()` in `hw/display/vmware_vga_dxvk.c`. Instrument those synchronous host calls and the FIFO caller before concluding that shader/pipeline compilation is the cause.
+
 Xemu is a valuable source of candidate TCG optimizations, especially around TB invalidation and lookup/dirty-page handling, but it is an older QEMU-derived tree with a different target machine and memory/device workload. Compare individual commits and source paths against our QEMU 11.1.90 base; validate x86 PC/SoftMMU semantics and retain only narrowly applicable changes. Do not replace our TCG tree or cherry-pick patches wholesale.
 
 **Priority gate:** T13e P0 precedes further isolated x87 instruction expansion. Existing T13a guarded helper fast paths remain in place; they do not map the guest x87 register stack wholesale onto host x87 registers. Keep the differential test and kill switch. Resume more x87 work only after the scene-stall capture has identified and addressed (or ruled out) the dominant cause.
@@ -419,6 +421,19 @@ QEMU-based x86 emulation
 * xemu (original Xbox, Pentium III class CPU + NV2A GPU emulation, QEMU based):
   https://github.com/xemu-project/xemu - reference for a trimmed single-purpose
   QEMU fork, a PIII-era CPU model, and host-GL-backed guest GPU emulation.
+  Specific TCG research candidates (all were OPEN proposals when reviewed on
+  2026-11-21; do not describe them as merged or proven fixes):
+  - #3028, https://github.com/xemu-project/xemu/pull/3028 - avoid broad whole-page
+    TB invalidation when the store executes from the same page as the current TB;
+    preserve the precise overlap check for that self-modifying-code case.
+  - #3140, https://github.com/xemu-project/xemu/pull/3140 - skip MMU indexes with
+    no populated entries during `tlb_reset_dirty()`; its reported benefit depends
+    on how many MMU-index tables the target actually uses.
+  - #3141, https://github.com/xemu-project/xemu/pull/3141 - avoid generic indirect
+    CPU-operation dispatch in `helper_lookup_tb_ptr()` for xemu's single x86 CPU
+    target. Any adaptation here must retain the correct x86 CPU/TB semantics.
+  These are narrow optimizations from a different Xbox/UMA workload. Compare the
+  exact patches with this QEMU 11.1.90 source and profile before adapting them.
 
 Misc x86 emulation
 * xbased (same focus as xemu): https://github.com/crazyriddler/xbased
