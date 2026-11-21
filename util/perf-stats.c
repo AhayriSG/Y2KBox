@@ -16,6 +16,7 @@ typedef struct QemuPerfStatCounter {
 static QemuPerfStatCounter perf_stats[QEMU_PERF_STAT__MAX];
 static bool perf_stats_enabled;
 static uint64_t perf_stats_start_ns;
+static uint64_t perf_stats_last_mark_ns[QEMU_PERF_STAT__MAX];
 
 static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_CPU_EXEC] = "cpu.exec",
@@ -26,6 +27,7 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_DXVK_SHADER_CREATE] = "dxvk.d3d9_shader_create",
     [QEMU_PERF_AUDIO_MIX_OUT] = "audio.mix_out",
     [QEMU_PERF_AUDIO_SDL_CALLBACK_OUT] = "audio.sdl_callback_out",
+    [QEMU_PERF_AUDIO_SDL_CALLBACK_GAP] = "audio.sdl_callback_gap",
 };
 
 void qemu_perf_stats_start(void)
@@ -39,6 +41,7 @@ void qemu_perf_stats_start(void)
         qatomic_set(&perf_stats[i].over_1ms, 0);
         qatomic_set(&perf_stats[i].over_10ms, 0);
         qatomic_set(&perf_stats[i].over_100ms, 0);
+        qatomic_set(&perf_stats_last_mark_ns[i], 0);
     }
     perf_stats_start_ns = g_get_monotonic_time() * 1000;
     qatomic_set(&perf_stats_enabled, true);
@@ -53,18 +56,10 @@ uint64_t qemu_perf_stats_begin(QemuPerfStat stat)
     return g_get_monotonic_time() * 1000;
 }
 
-void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns)
+static void qemu_perf_stats_record(QemuPerfStat stat, uint64_t elapsed_ns)
 {
-    QemuPerfStatCounter *counter;
-    uint64_t elapsed_ns;
+    QemuPerfStatCounter *counter = &perf_stats[stat];
     uint64_t previous;
-
-    if (!start_ns || stat >= QEMU_PERF_STAT__MAX) {
-        return;
-    }
-
-    elapsed_ns = g_get_monotonic_time() * 1000 - start_ns;
-    counter = &perf_stats[stat];
 
     qatomic_inc(&counter->count);
     qatomic_add(&counter->total_ns, elapsed_ns);
@@ -86,6 +81,39 @@ void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns)
             break;
         }
         previous = observed;
+    }
+}
+
+void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns)
+{
+    if (!start_ns || stat >= QEMU_PERF_STAT__MAX) {
+        return;
+    }
+
+    qemu_perf_stats_record(stat, g_get_monotonic_time() * 1000 - start_ns);
+}
+
+void qemu_perf_stats_mark(QemuPerfStat stat)
+{
+    uint64_t now_ns, previous;
+
+    if (stat >= QEMU_PERF_STAT__MAX || !qatomic_read(&perf_stats_enabled)) {
+        return;
+    }
+
+    now_ns = g_get_monotonic_time() * 1000;
+    previous = qatomic_read(&perf_stats_last_mark_ns[stat]);
+    for (;;) {
+        uint64_t observed = qatomic_cmpxchg(&perf_stats_last_mark_ns[stat],
+                                             previous, now_ns);
+        if (observed == previous) {
+            break;
+        }
+        previous = observed;
+    }
+
+    if (previous != 0) {
+        qemu_perf_stats_record(stat, now_ns - previous);
     }
 }
 
