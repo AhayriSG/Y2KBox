@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/perf-stats.h"
 #include "qemu/main-loop.h"
 #include "qemu/target-info.h"
 #include "accel/tcg/cpu-loop.h"
@@ -919,6 +920,8 @@ static inline void copy_tlb_helper_locked(CPUTLBEntry *d, const CPUTLBEntry *s)
 void tlb_reset_dirty(CPUState *cpu, uintptr_t start, uintptr_t length)
 {
     int mmu_idx;
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_TLB_RESET_DIRTY);
 
     qemu_spin_lock(&cpu->neg.tlb.c.lock);
     for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
@@ -938,6 +941,7 @@ void tlb_reset_dirty(CPUState *cpu, uintptr_t start, uintptr_t length)
         }
     }
     qemu_spin_unlock(&cpu->neg.tlb.c.lock);
+    qemu_perf_stats_end(QEMU_PERF_TLB_RESET_DIRTY, perf_start_ns);
 }
 
 /* Called with tlb_c.lock held */
