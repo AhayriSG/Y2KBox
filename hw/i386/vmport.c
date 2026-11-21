@@ -353,6 +353,7 @@ static VMPortGuestRPCChannel *vmport_guestrpc_channel(VMPortState *s,
 
 static bool vmport_guestrpc_debug_enabled(VMPortState *s)
 {
+    (void)s;
     Object *vmvga = object_resolve_path_type("", "vmvga", NULL);
 
     if (!vmvga ||
