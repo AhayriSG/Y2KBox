@@ -313,26 +313,24 @@ they are not assumed to make translated guest instruction execution faster.
 
 
 ## T19 (P1) SDL hotkey for on-demand diagnostic log capture  -  Status: PAUSED (implementation committed; awaiting CI + XP guest verification)
-Add an SDL2 host-side keyboard shortcut that starts and stops capturing QEMU's
-standard-error diagnostics while the VM keeps running. The goal is to retain only
-the interval relevant to a guest-side freeze instead of recording boot-to-exit.
+Add an SDL2 host-side keyboard shortcut that captures only the diagnostic interval
+selected by the tester, without continuously generating diagnostic output.
 
+* `-device vmvga,debug=on` is the opt-in capability switch. With it absent/off,
+  Ctrl+Alt+L is unavailable and no diagnostic capture is performed.
 * Use the existing SDL host-hotkey modifier chord and add **Ctrl+Alt+L** to toggle
   capture; consume the key so it is not sent to the guest.
-* While capture is inactive, leave stderr connected to its original destination
-  (normally the console). While active, redirect stderr to `vmvga_freeze.log` in
-  the launch working directory; restore the original stderr destination when
-  stopped. The first activation truncates the file; later activations in the same
-  QEMU run append another captured interval.
-* Include a visible SDL title-bar hint and an active/inactive indication. Flush
-  before switching descriptors and report open/redirect failures without claiming
-  capture started.
-* This intentionally captures all stderr-based diagnostics during the selected
-  interval, including VMVGA local diagnostics and any trace-log backend output
-  routed to stderr. It does not alter trace-event enablement; `trace-event` remains
-  independently controllable from the HMP monitor.
-* Update the README example to remove shell-level `2>` redirection and explain the
-  shortcut/file behavior. Keep `-monitor stdio`, `debug=on`, and `-trace` usage.
-* DoD: Linux and Windows SDL builds compile in CI; static review confirms stderr is
-  restored on stop and repeated intervals append; owner verifies the hotkey and
-  resulting file with an XP guest. No branch or PR.
+* On activation, redirect stderr to `vmvga_freeze.log` and enable VMVGA local
+  diagnostics, VMPort GuestRPC diagnostics, and the relevant VMVGA/vdagent trace
+  events. On stop, disable those diagnostic sources and restore original stderr.
+  The VM keeps running. The first activation truncates the file; later intervals
+  append. Do not emit capture start/stop markers or routine diagnostic output to
+  the console while capture is inactive.
+* Show the hotkey and active state in the SDL title only when `debug=on`.
+  Report actual file/descriptor errors, not routine logging status.
+* No separate `-trace "vdagent*"` command-line option should be required.
+  Remove shell-level `2>` redirection guidance; it prevents interval capture.
+* DoD: Linux and Windows SDL builds compile in CI; static review confirms all
+  diagnostic sources are quiet while inactive and stderr is restored on stop;
+  owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
+  No branch or PR.
