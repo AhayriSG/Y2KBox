@@ -34,6 +34,7 @@
 #include "system/system.h"
 #include "qemu/log.h"
 #include "qemu/error-report.h"
+#include "trace/control.h"
 #include "qemu-main.h"
 
 #include <fcntl.h>
@@ -224,11 +225,34 @@ static const char *sdl_log_capture_hotkey(void)
 #endif
 }
 
+static bool sdl_vmvga_debug_enabled(Object **vmvga)
+{
+    *vmvga = object_resolve_path_type("", "vmvga", NULL);
+    return *vmvga && object_property_get_bool(*vmvga, "debug", NULL);
+}
+
+static void sdl_set_vdagent_trace(bool enabled)
+{
+    TraceEventIter iter;
+    TraceEvent *event;
+
+    trace_event_iter_init_pattern(&iter, "vdagent*");
+    while ((event = trace_event_iter_next(&iter)) != NULL) {
+        trace_event_set_state_dynamic(event, enabled);
+    }
+}
+
 static void sdl_toggle_log_capture(struct sdl2_console *scon)
 {
+    Object *vmvga;
+    Error *err = NULL;
     int fd;
     int flags;
     int saved_errno;
+
+    if (!sdl_vmvga_debug_enabled(&vmvga)) {
+        return;
+    }
 
     if (!sdl_log_capture_enabled) {
         if (sdl_log_capture_saved_stderr < 0) {
@@ -261,16 +285,28 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         g_close(fd, NULL);
+
+        if (!object_property_set_bool(vmvga, "debug-log", true, &err)) {
+            dup2(sdl_log_capture_saved_stderr, STDERR_FILENO);
+            error_report_err(err);
+            return;
+        }
+        sdl_set_vdagent_trace(true);
         sdl_log_capture_enabled = true;
         sdl_log_capture_created = true;
-        fprintf(stderr, "VMVGA-LOG capture started\n");
-        fflush(stderr);
     } else {
-        fprintf(stderr, "VMVGA-LOG capture stopped\n");
         fflush(stderr);
+        if (!object_property_set_bool(vmvga, "debug-log", false, &err)) {
+            error_report_err(err);
+            return;
+        }
+        sdl_set_vdagent_trace(false);
         if (dup2(sdl_log_capture_saved_stderr, STDERR_FILENO) < 0) {
+            saved_errno = errno;
+            object_property_set_bool(vmvga, "debug-log", true, NULL);
+            sdl_set_vdagent_trace(true);
             error_report("Could not restore stderr after diagnostic capture: %s",
-                         strerror(errno));
+                         strerror(saved_errno));
             return;
         }
         sdl_log_capture_enabled = false;
@@ -283,9 +319,11 @@ static void sdl_update_caption(struct sdl2_console *scon)
 {
     char win_title[1024];
     char icon_title[1024];
-    char log_status[160];
+    char log_status[160] = "";
     const char *status = "";
     const char *hotkey = sdl_log_capture_hotkey();
+    Object *vmvga;
+    bool debug_available = sdl_vmvga_debug_enabled(&vmvga);
 
     if (!runstate_is_running()) {
         status = " [Stopped]";
@@ -307,10 +345,10 @@ static void sdl_update_caption(struct sdl2_console *scon)
         }
     }
 
-    if (sdl_log_capture_enabled) {
+    if (debug_available && sdl_log_capture_enabled) {
         snprintf(log_status, sizeof(log_status),
                  " - VMVGA log recording (%s to stop)", hotkey);
-    } else {
+    } else if (debug_available) {
         snprintf(log_status, sizeof(log_status),
                  " - %s to start VMVGA log", hotkey);
     }
