@@ -1295,3 +1295,25 @@ polled; Windows and Linux CI validation remains outstanding. Do not claim CI
 passed. Remaining FIFA hitches and F1 crowded-grid performance should be
 profiled as separate follow-up symptoms rather than attributed to the
 FlatView renderer without evidence.
+
+
+## Session 60 (ChatGPT), 2026-11-22 - Generalize diagnostic logging and separate debug mode
+
+Generalized the existing SDL Ctrl+Alt+L capture presentation and output name.
+The capture file is now `y2kbox-log.log`; the existing first-capture truncate
+and subsequent-interval append behavior is unchanged. SDL window-title wording
+now describes generic diagnostic logging rather than a VMVGA freeze log.
+
+Separated the tester's debug-mode setting from the VMVGA device declaration.
+The setting remains opt-in and defaults off, but can now be configured
+independently with `-global vmvga.debug=on` instead of embedding
+`debug=on` in `-device vmvga`. This is the intended command-line equivalent
+of T12's future Debug On/Off GUI setting. Debug mode enables diagnostic
+capabilities; it does not start continuous output. Ctrl+Alt+L remains the
+separate interval-capture control. VMVGA local diagnostics and VMPort
+GuestRPC diagnostics remain gated by the capture state, alongside the
+existing dynamic VMVGA/VMPort/vdagent trace events and performance counters.
+
+Updated README, TASKS, and HANDOFF to describe the generic capture, filename,
+and future GUI setting. No local build/test was run and CI was not checked.
+T19 remains PAUSED pending Linux/Windows CI and owner XP guest verification.
