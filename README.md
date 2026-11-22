@@ -98,9 +98,10 @@ with `-y2kboxdebugmode off`; the default is off). This is the command-line
 equivalent of the future T12 GUI's **Debug: On/Off** setting.
 With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
 to capture general Y2KBox diagnostics—including performance counters, VMVGA,
-VMPort GuestRPC, and vdagent traces—to `y2kbox-log.log` in the launch working
-directory; press again to stop. The VM continues running. The first capture
-truncates the file; later capture intervals in the same QEMU run append.
+VMPort GuestRPC, and vdagent traces—to a new timestamped
+`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory; press
+again to stop. The VM continues running. Every capture interval gets its own
+file, and existing files are never overwritten.
 When debug mode is enabled but capture is inactive, the diagnostic streams
 remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
 and no routine capture start/stop messages in the command prompt. The hotkey
