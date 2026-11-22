@@ -688,6 +688,9 @@ bool vmsvga3d_dxvk_set_clip_plane(VMSVGA3DDxvk *dxvk, uint32_t index,
                                   const float plane[4]);
 void *vmsvga3d_dxvk_shader_create(VMSVGA3DDxvk *dxvk, uint32_t stage,
                                   const uint32_t *bytecode);
+void *vmsvga3d_dxvk_shader_create_with_hr(VMSVGA3DDxvk *dxvk, uint32_t stage,
+                                          const uint32_t *bytecode,
+                                          int32_t *out_hr);
 void vmsvga3d_dxvk_shader_destroy(void *shader);
 bool vmsvga3d_dxvk_shader_bind(VMSVGA3DDxvk *dxvk, uint32_t stage,
                                void *shader);

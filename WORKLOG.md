@@ -1413,3 +1413,33 @@ seam wrap-around in Hitman 2: Silent Assassin (D3D8):
 
 Verified translator compilation and assertions standalone via `gcc -Wall -Wextra -Werror`;
 full Linux/Windows CI build and owner XP guest verification remain outstanding.
+### Session 66 — 2026-11-22 — Gemini (AI Studio)
+
+#### Hitman 2: Silent Assassin (D3D8) invisible in-game characters (`apply-shaders` / `d3d9_shader_create`)
+- Diagnosed owner diagnostic log from Hitman 2 in-game gameplay (Garden Shed, where
+  Agent 47 was invisible while world/HUD rendered cleanly): fixed-function draws
+  (`vs=INVALID ps=INVALID`) succeeded, while every character skinning draw failed at
+  `VMVGA-D3D9-DRAW fail cid=1 stage=apply-shaders` (114 times in 873 ms), matching
+  `dxvk.d3d9_shader_create count=114` 1-to-1 (~10 us each, indicating host D3D9
+  shader creation rejection on raw D3D8 vertex shader bytecode).
+- Added `vmsvga3d_dxvk_shader_create_with_hr()` in `hw/display/vmware_vga_dxvk.c`
+  (preserving `vmsvga3d_dxvk_shader_create()` as a wrapper) to report the native
+  `CreateVertexShader`/`CreatePixelShader` `HRESULT`.
+- Added `vmsvga3d_d3d9_normalize_legacy_shader_bytecode()` in
+  `hw/display/vmware_vga_vgpu9.c` as a fallback when raw D3D9 shader creation fails:
+  - Upgrades D3D8 `vs_1_0` (`0xFFFE0100`) -> `vs_1_1` (`0xFFFE0101`) and `ps_1_0`
+    (`0xFFFF0100`) -> `ps_1_1` (`0xFFFF0101`).
+  - Synthesizes missing D3D9 `dcl_<usage><index> v<n>` input declarations for
+    `vs_1_x` shaders that reference `v0..v15` without `dcl` tokens, matching
+    semantics against the draw's `SVGA3dVertexDecl` array (D3D8 `D3DVSDE_*` vs
+    `TEXCOORD(n)` convention detection with unclaimed-decl fallback).
+  - Strips SM 2.0+ instruction-length bits (`[27:24]`) on SM 1.x instructions,
+    normalizes `a0` destination write masks to `.x`, strips stray SM 2.0-style
+    trailing `SVGA3DREG_ADDR` relative-address tokens in `vs_1_1`, and remaps
+    `SVGA3DSAMP_2D_SHADOW` -> `SVGA3DSAMP_2D` in `ps` sampler `dcl`s.
+- Improved `VMVGA-D3D9-SHADER` diagnostic logging in `vmsvga3d_dxvk_apply_context_shaders()`:
+  logs normalization successes, missing/bind/constant sub-stage failures, and
+  one-shot per-trace-session `create-fail` dumps with raw/normalized `HRESULT`s,
+  vertex declaration semantics, and bytecode DWORDs.
+- Verified standalone compilation and 5 unit tests via `gcc -Wall -Wextra -Werror`;
+  full CI build and owner XP guest verification remain outstanding.

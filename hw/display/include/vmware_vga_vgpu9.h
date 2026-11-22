@@ -595,6 +595,10 @@ VMSVGA3DD3D9ShaderStage vmsvga3d_d3d9_shader_stage(SVGA3dShaderType type);
 VMSVGA3DD3D9ShaderConstTarget
 vmsvga3d_d3d9_shader_const_target(SVGA3dShaderType type,
                                    SVGA3dShaderConstType ctype);
+bool vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
+    VMSVGA3DD3D9ShaderStage stage, const uint32_t *src, uint32_t src_dwords,
+    const SVGA3dVertexDecl *vertex_decls, uint32_t vertex_decl_count,
+    uint32_t *dst, uint32_t dst_capacity, uint32_t *out_dwords);
 
 
 /* VGPU9 execution boundary used by the generic SVGA3D command layer. */

@@ -119,6 +119,7 @@ typedef struct vmsvga3d_shader_s {
     uint32_t bytecode_size;
     uint32_t *bytecode;
     void *d3d9_native_shader;
+    bool d3d9_failure_traced;
 } VMSVGA3DShader;
 
 typedef struct vmsvga3d_shader_constant_s {

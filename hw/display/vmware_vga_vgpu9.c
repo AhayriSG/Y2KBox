@@ -2338,6 +2338,490 @@ vmsvga3d_d3d9_shader_const_target(SVGA3dShaderType type,
     return VMSVGA3D_D3D9_CONST_TARGET_INVALID;
 }
 
+enum {
+    D3D9_SHADER_VS_TYPE = 0xFFFEu,
+    D3D9_SHADER_PS_TYPE = 0xFFFFu,
+    D3D9_SHADER_OP_DCL = 0x001Fu,
+    D3D9_SHADER_OP_DEFB = 0x002Fu,
+    D3D9_SHADER_OP_DEFI = 0x0030u,
+    D3D9_SHADER_OP_DEF = 0x0051u,
+    D3D9_SHADER_OP_COMMENT = 0xFFFEu,
+    D3D9_SHADER_OP_END = 0xFFFFu,
+    D3D9_SHADER_REG_INPUT = 1u,
+    D3D9_SHADER_REG_ADDR = 3u,
+    D3D9_SHADER_REG_SAMPLER = 10u,
+    D3D9_SHADER_SAMP_2D = 2u,
+    D3D9_SHADER_SAMP_2D_SHADOW = 6u,
+    D3D9_SHADER_PARAM_BIT = 0x80000000u,
+    D3D9_SHADER_RELADDR_BIT = 0x00002000u,
+    D3D9_SHADER_INST_SIZE_MASK = 0x0F000000u,
+    D3D9_SHADER_WRITEMASK_MASK = 0x000F0000u,
+    D3D9_SHADER_WRITEMASK_X = 0x00010000u,
+    D3D9_SHADER_WRITEMASK_ALL = 0x000F0000u,
+    D3D9_SHADER_MAX_VS_INPUTS = 16u,
+};
+
+static uint32_t vmsvga3d_d3d9_shader_reg_type(uint32_t token)
+{
+    return ((token >> 28) & 0x7u) | (((token >> 11) & 0x3u) << 3);
+}
+
+static void vmsvga3d_d3d8_reg_semantic(uint32_t reg, uint32_t *usage,
+                                       uint32_t *usage_index)
+{
+    static const uint8_t d3d8_usages[D3D9_SHADER_MAX_VS_INPUTS] = {
+        SVGA3D_DECLUSAGE_POSITION,
+        SVGA3D_DECLUSAGE_BLENDWEIGHT,
+        SVGA3D_DECLUSAGE_BLENDINDICES,
+        SVGA3D_DECLUSAGE_NORMAL,
+        SVGA3D_DECLUSAGE_PSIZE,
+        SVGA3D_DECLUSAGE_COLOR,
+        SVGA3D_DECLUSAGE_COLOR,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_TEXCOORD,
+        SVGA3D_DECLUSAGE_POSITION,
+    };
+    static const uint8_t d3d8_indices[D3D9_SHADER_MAX_VS_INPUTS] = {
+        0u, 0u, 0u, 0u, 0u, 0u, 1u,
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 1u,
+    };
+
+    if (reg < D3D9_SHADER_MAX_VS_INPUTS) {
+        *usage = d3d8_usages[reg];
+        *usage_index = d3d8_indices[reg];
+    } else {
+        *usage = SVGA3D_DECLUSAGE_TEXCOORD;
+        *usage_index = reg & 0xFu;
+    }
+}
+
+static bool vmsvga3d_d3d9_vertex_decls_have(
+    const SVGA3dVertexDecl *vertex_decls, uint32_t vertex_decl_count,
+    uint32_t usage, uint32_t usage_index)
+{
+    uint32_t i;
+
+    for (i = 0; i < vertex_decl_count; i++) {
+        if ((uint32_t)vertex_decls[i].identity.usage == usage &&
+            vertex_decls[i].identity.usageIndex == usage_index) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static uint32_t vmsvga3d_d3d9_shader_inst_params(const uint32_t *src,
+                                                 uint32_t src_dwords,
+                                                 uint32_t pos, uint32_t major,
+                                                 uint32_t inst)
+{
+    uint32_t op = inst & 0xFFFFu;
+    uint32_t inst_size = (inst >> 24) & 0xFu;
+    uint32_t count = 0;
+
+    if (op == D3D9_SHADER_OP_DCL) {
+        return (major >= 2u && inst_size != 0u) ? inst_size : 2u;
+    }
+    if (op == D3D9_SHADER_OP_DEF || op == D3D9_SHADER_OP_DEFI) {
+        return (major >= 2u && inst_size != 0u) ? inst_size : 5u;
+    }
+    if (op == D3D9_SHADER_OP_DEFB) {
+        return (major >= 2u && inst_size != 0u) ? inst_size : 2u;
+    }
+    if (major >= 2u && inst_size != 0u) {
+        return inst_size;
+    }
+
+    while (pos + 1u + count < src_dwords &&
+           (src[pos + 1u + count] & D3D9_SHADER_PARAM_BIT) != 0u) {
+        count++;
+    }
+    return count;
+}
+
+bool vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
+    VMSVGA3DD3D9ShaderStage stage, const uint32_t *src, uint32_t src_dwords,
+    const SVGA3dVertexDecl *vertex_decls, uint32_t vertex_decl_count,
+    uint32_t *dst, uint32_t dst_capacity, uint32_t *out_dwords)
+{
+    uint32_t version;
+    uint32_t type;
+    uint32_t major;
+    uint32_t minor;
+    uint32_t pos;
+    uint32_t end_pos = src_dwords;
+    uint32_t out_len = 0;
+    uint32_t used_inputs_mask = 0;
+    uint32_t declared_inputs_mask = 0;
+    uint32_t missing_inputs;
+    uint16_t used_semantics[16];
+    uint8_t synth_usage[D3D9_SHADER_MAX_VS_INPUTS];
+    uint8_t synth_index[D3D9_SHADER_MAX_VS_INPUTS];
+    bool synth_assigned[D3D9_SHADER_MAX_VS_INPUTS];
+
+    if (src == NULL || dst == NULL || out_dwords == NULL ||
+        src_dwords < 2u || dst_capacity < 2u) {
+        return false;
+    }
+
+    version = src[0];
+    type = (version >> 16) & 0xFFFFu;
+    major = (version >> 8) & 0xFFu;
+    minor = version & 0xFFu;
+
+    if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX) {
+        if (type != D3D9_SHADER_VS_TYPE) {
+            return false;
+        }
+        if (major == 1u && minor == 0u) {
+            version = (D3D9_SHADER_VS_TYPE << 16) | 0x0101u;
+            minor = 1u;
+        }
+    } else if (stage == VMSVGA3D_D3D9_SHADER_STAGE_PIXEL) {
+        if (type != D3D9_SHADER_PS_TYPE) {
+            return false;
+        }
+        if (major == 1u && minor == 0u) {
+            version = (D3D9_SHADER_PS_TYPE << 16) | 0x0101u;
+            minor = 1u;
+        }
+    } else {
+        return false;
+    }
+
+    memset(used_semantics, 0, sizeof(used_semantics));
+    memset(synth_usage, 0, sizeof(synth_usage));
+    memset(synth_index, 0, sizeof(synth_index));
+    memset(synth_assigned, 0, sizeof(synth_assigned));
+
+    /* Pass 1: validate token stream bounds and collect declared/used inputs. */
+    pos = 1u;
+    while (pos < src_dwords) {
+        uint32_t inst = src[pos];
+        uint32_t op = inst & 0xFFFFu;
+        uint32_t param_count;
+        uint32_t k;
+
+        if (op == D3D9_SHADER_OP_END) {
+            end_pos = pos;
+            break;
+        }
+        if (op == D3D9_SHADER_OP_COMMENT) {
+            uint32_t comment_dwords = (inst >> 16) & 0x7FFFu;
+            if (comment_dwords > src_dwords - pos - 1u) {
+                return false;
+            }
+            pos += 1u + comment_dwords;
+            continue;
+        }
+
+        param_count = vmsvga3d_d3d9_shader_inst_params(src, src_dwords, pos,
+                                                       major, inst);
+        if (param_count > src_dwords - pos - 1u) {
+            return false;
+        }
+
+        if (op == D3D9_SHADER_OP_DCL && param_count >= 2u) {
+            uint32_t semantic = src[pos + 1u];
+            uint32_t dest = src[pos + 2u];
+            uint32_t reg_type = vmsvga3d_d3d9_shader_reg_type(dest);
+            uint32_t reg_num = dest & 0x7FFu;
+
+            if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX &&
+                reg_type == D3D9_SHADER_REG_INPUT &&
+                reg_num < D3D9_SHADER_MAX_VS_INPUTS) {
+                uint32_t usage = semantic & 0x1Fu;
+                uint32_t usage_index = (semantic >> 16) & 0xFu;
+
+                declared_inputs_mask |= UINT32_C(1) << reg_num;
+                if (usage < 16u) {
+                    used_semantics[usage] |= (uint16_t)(1u << usage_index);
+                }
+            }
+        } else if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX &&
+                   op != D3D9_SHADER_OP_DEF &&
+                   op != D3D9_SHADER_OP_DEFI &&
+                   op != D3D9_SHADER_OP_DEFB) {
+            for (k = 0; k < param_count; k++) {
+                uint32_t tok = src[pos + 1u + k];
+                uint32_t reg_type = vmsvga3d_d3d9_shader_reg_type(tok);
+                uint32_t reg_num = tok & 0x7FFu;
+
+                if (reg_type == D3D9_SHADER_REG_INPUT &&
+                    reg_num < D3D9_SHADER_MAX_VS_INPUTS) {
+                    used_inputs_mask |= UINT32_C(1) << reg_num;
+                }
+            }
+        }
+
+        pos += 1u + param_count;
+    }
+
+    dst[out_len++] = version;
+
+    /*
+     * Direct3D 8 vs_1_0 / vs_1_1 shaders do not embed dcl_* instructions
+     * because D3D8 bound input registers via the separate declaration handle.
+     * Direct3D 9 CreateVertexShader() rejects vs_1_1 shaders that read v#
+     * registers without matching dcl instructions.
+     */
+    missing_inputs = (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX &&
+                      major == 1u)
+                         ? (used_inputs_mask & ~declared_inputs_mask)
+                         : 0u;
+    if (missing_inputs != 0u) {
+        uint32_t score_d3d8 = 0;
+        uint32_t score_texcoord = 0;
+        bool use_texcoord = false;
+        uint32_t reg;
+
+        if (vertex_decls != NULL && vertex_decl_count != 0u) {
+            for (reg = 0; reg < D3D9_SHADER_MAX_VS_INPUTS; reg++) {
+                uint32_t u, idx;
+
+                if ((missing_inputs & (UINT32_C(1) << reg)) == 0u) {
+                    continue;
+                }
+                vmsvga3d_d3d8_reg_semantic(reg, &u, &idx);
+                if (vmsvga3d_d3d9_vertex_decls_have(vertex_decls,
+                                                    vertex_decl_count, u,
+                                                    idx)) {
+                    score_d3d8++;
+                }
+                if (vmsvga3d_d3d9_vertex_decls_have(vertex_decls,
+                                                    vertex_decl_count,
+                                                    SVGA3D_DECLUSAGE_TEXCOORD,
+                                                    reg)) {
+                    score_texcoord++;
+                }
+            }
+            use_texcoord = score_texcoord > score_d3d8;
+        }
+
+        /* Pass A: claim exact matches present in the draw's vertex decls. */
+        if (vertex_decls != NULL && vertex_decl_count != 0u) {
+            for (reg = 0; reg < D3D9_SHADER_MAX_VS_INPUTS; reg++) {
+                uint32_t u, idx;
+
+                if ((missing_inputs & (UINT32_C(1) << reg)) == 0u) {
+                    continue;
+                }
+                if (use_texcoord) {
+                    u = SVGA3D_DECLUSAGE_TEXCOORD;
+                    idx = reg;
+                } else {
+                    vmsvga3d_d3d8_reg_semantic(reg, &u, &idx);
+                }
+                if (u < 16u && idx < 16u &&
+                    (used_semantics[u] & (uint16_t)(1u << idx)) == 0u &&
+                    vmsvga3d_d3d9_vertex_decls_have(vertex_decls,
+                                                    vertex_decl_count, u,
+                                                    idx)) {
+                    synth_usage[reg] = (uint8_t)u;
+                    synth_index[reg] = (uint8_t)idx;
+                    synth_assigned[reg] = true;
+                    used_semantics[u] |= (uint16_t)(1u << idx);
+                }
+            }
+        }
+
+        /* Pass B: assign remaining inputs to unclaimed decls or defaults. */
+        for (reg = 0; reg < D3D9_SHADER_MAX_VS_INPUTS; reg++) {
+            uint32_t u = 0, idx = 0;
+            bool picked = false;
+            uint32_t i;
+
+            if ((missing_inputs & (UINT32_C(1) << reg)) == 0u ||
+                synth_assigned[reg]) {
+                continue;
+            }
+
+            if (vertex_decls != NULL) {
+                for (i = 0; i < vertex_decl_count; i++) {
+                    uint32_t du = (uint32_t)vertex_decls[i].identity.usage;
+                    uint32_t di = vertex_decls[i].identity.usageIndex;
+
+                    if (du < SVGA3D_DECLUSAGE_MAX && du < 16u && di < 16u &&
+                        (used_semantics[du] & (uint16_t)(1u << di)) == 0u) {
+                        u = du;
+                        idx = di;
+                        picked = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!picked) {
+                if (use_texcoord) {
+                    u = SVGA3D_DECLUSAGE_TEXCOORD;
+                    idx = reg;
+                } else {
+                    vmsvga3d_d3d8_reg_semantic(reg, &u, &idx);
+                }
+                if (u < 16u && idx < 16u &&
+                    (used_semantics[u] & (uint16_t)(1u << idx)) != 0u) {
+                    for (i = 0; i < 16u; i++) {
+                        if ((used_semantics[SVGA3D_DECLUSAGE_TEXCOORD] &
+                             (uint16_t)(1u << i)) == 0u) {
+                            u = SVGA3D_DECLUSAGE_TEXCOORD;
+                            idx = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            synth_usage[reg] = (uint8_t)u;
+            synth_index[reg] = (uint8_t)idx;
+            synth_assigned[reg] = true;
+            if (u < 16u && idx < 16u) {
+                used_semantics[u] |= (uint16_t)(1u << idx);
+            }
+        }
+
+        for (reg = 0; reg < D3D9_SHADER_MAX_VS_INPUTS; reg++) {
+            if (!synth_assigned[reg]) {
+                continue;
+            }
+            if (out_len + 3u >= dst_capacity) {
+                return false;
+            }
+            dst[out_len++] = D3D9_SHADER_OP_DCL;
+            dst[out_len++] = D3D9_SHADER_PARAM_BIT |
+                             ((uint32_t)synth_usage[reg] & 0x1Fu) |
+                             (((uint32_t)synth_index[reg] & 0xFu) << 16);
+            dst[out_len++] = D3D9_SHADER_PARAM_BIT |
+                             (D3D9_SHADER_REG_INPUT << 28) |
+                             D3D9_SHADER_WRITEMASK_ALL | reg;
+        }
+    }
+
+    /* Pass 2: emit normalized instructions up to END. */
+    pos = 1u;
+    while (pos < end_pos) {
+        uint32_t inst = src[pos];
+        uint32_t op = inst & 0xFFFFu;
+        uint32_t param_count;
+        uint32_t k;
+
+        if (op == D3D9_SHADER_OP_COMMENT) {
+            uint32_t comment_dwords = (inst >> 16) & 0x7FFFu;
+            uint32_t total = 1u + comment_dwords;
+
+            if (out_len + total >= dst_capacity) {
+                return false;
+            }
+            memcpy(&dst[out_len], &src[pos], (size_t)total * sizeof(uint32_t));
+            out_len += total;
+            pos += total;
+            continue;
+        }
+
+        param_count = vmsvga3d_d3d9_shader_inst_params(src, end_pos, pos,
+                                                       major, inst);
+        if (param_count > end_pos - pos - 1u) {
+            return false;
+        }
+        if (out_len + 1u + param_count >= dst_capacity) {
+            return false;
+        }
+
+        /* D3D9 SM 1.x requires instruction length bits [27:24] to be zero. */
+        if (major == 1u) {
+            inst &= ~D3D9_SHADER_INST_SIZE_MASK;
+        }
+        dst[out_len++] = inst;
+
+        if (op == D3D9_SHADER_OP_DEF || op == D3D9_SHADER_OP_DEFI ||
+            op == D3D9_SHADER_OP_DEFB) {
+            memcpy(&dst[out_len], &src[pos + 1u],
+                   (size_t)param_count * sizeof(uint32_t));
+            out_len += param_count;
+            pos += 1u + param_count;
+            continue;
+        }
+
+        if (op == D3D9_SHADER_OP_DCL && param_count >= 2u) {
+            uint32_t semantic = src[pos + 1u] | D3D9_SHADER_PARAM_BIT;
+            uint32_t dest = src[pos + 2u] | D3D9_SHADER_PARAM_BIT;
+            uint32_t reg_type = vmsvga3d_d3d9_shader_reg_type(dest);
+
+            if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX && major == 1u &&
+                reg_type == D3D9_SHADER_REG_INPUT &&
+                (dest & D3D9_SHADER_WRITEMASK_MASK) == 0u) {
+                dest |= D3D9_SHADER_WRITEMASK_ALL;
+            } else if (stage == VMSVGA3D_D3D9_SHADER_STAGE_PIXEL &&
+                       reg_type == D3D9_SHADER_REG_SAMPLER &&
+                       ((semantic >> 27) & 0xFu) ==
+                           D3D9_SHADER_SAMP_2D_SHADOW) {
+                semantic = (semantic & ~(0xFu << 27)) |
+                           (D3D9_SHADER_SAMP_2D << 27);
+            }
+
+            dst[out_len++] = semantic;
+            dst[out_len++] = dest;
+            for (k = 2u; k < param_count; k++) {
+                dst[out_len++] = src[pos + 1u + k];
+            }
+            pos += 1u + param_count;
+            continue;
+        }
+
+        for (k = 0; k < param_count; k++) {
+            uint32_t tok = src[pos + 1u + k];
+
+            if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX && major == 1u) {
+                if (k == 0u &&
+                    vmsvga3d_d3d9_shader_reg_type(tok) ==
+                        D3D9_SHADER_REG_ADDR) {
+                    uint32_t mask = tok & D3D9_SHADER_WRITEMASK_MASK;
+                    if (mask == 0u || mask == D3D9_SHADER_WRITEMASK_ALL) {
+                        tok = (tok & ~D3D9_SHADER_WRITEMASK_MASK) |
+                              D3D9_SHADER_WRITEMASK_X;
+                    }
+                }
+                dst[out_len++] = tok;
+
+                /*
+                 * In vs_1_1, relative addressing (relAddr=1) implicitly uses
+                 * a0.x with no follow-up address token.  Strip any SM2-style
+                 * trailing SVGA3DREG_ADDR token if present.
+                 */
+                if (k >= 1u && (tok & D3D9_SHADER_RELADDR_BIT) != 0u &&
+                    k + 1u < param_count &&
+                    vmsvga3d_d3d9_shader_reg_type(src[pos + 1u + k + 1u]) ==
+                        D3D9_SHADER_REG_ADDR) {
+                    k++;
+                }
+            } else {
+                dst[out_len++] = tok;
+            }
+        }
+
+        pos += 1u + param_count;
+    }
+
+    if (out_len >= dst_capacity) {
+        return false;
+    }
+    dst[out_len++] = D3D9_SHADER_OP_END;
+    *out_dwords = out_len;
+
+    if (out_len == src_dwords &&
+        memcmp(dst, src, (size_t)out_len * sizeof(uint32_t)) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
 
 #ifdef VMSVGA3D_D3D9_RUNTIME_INTEGRATION
 
@@ -3850,8 +4334,33 @@ static bool vmsvga3d_dxvk_apply_context_textures(
     return true;
 }
 
+static void vmsvga3d_dxvk_trace_shader_bytecode(
+    const char *label, const uint32_t *words, uint32_t count,
+    uint32_t max_words)
+{
+    uint32_t limit = count < max_words ? count : max_words;
+    uint32_t i;
+
+    for (i = 0; i < limit; i += 8u) {
+        uint32_t j;
+        uint32_t end = (i + 8u < limit) ? (i + 8u) : limit;
+
+        fprintf(stderr, "VMVGA-D3D9-SHADER %s[%u..%u]=", label, i, end - 1u);
+        for (j = i; j < end; j++) {
+            fprintf(stderr, "%s0x%08x", j == i ? "" : " ", words[j]);
+        }
+        fprintf(stderr, "\n");
+    }
+    if (count > limit) {
+        fprintf(stderr, "VMVGA-D3D9-SHADER %s truncated=%u total=%u\n",
+                label, count - limit, count);
+    }
+}
+
 static bool vmsvga3d_dxvk_apply_context_shaders(
-    struct vmsvga_state_s *s, VMSVGA3DContext *context, bool full_replay)
+    struct vmsvga_state_s *s, VMSVGA3DContext *context, uint32_t cid,
+    const SVGA3dVertexDecl *vertex_decls, uint32_t vertex_decl_count,
+    bool trace, bool full_replay)
 {
     uint32_t type_index;
 
@@ -3877,21 +4386,115 @@ static bool vmsvga3d_dxvk_apply_context_shaders(
                 if (shid >= SVGA3D_MAX_SHADERIDS ||
                     (shader = context->shader[type_index][shid]) == NULL ||
                     shader->bytecode == NULL || shader->bytecode_size == 0) {
+                    if (trace) {
+                        fprintf(stderr,
+                                "VMVGA-D3D9-SHADER missing cid=%u shid=%u "
+                                "stage=%u\n",
+                                cid, shid, (uint32_t)stage);
+                    }
                     return false;
                 }
 
+                if (!trace) {
+                    shader->d3d9_failure_traced = false;
+                }
+
                 if (shader->d3d9_native_shader == NULL) {
+                    int32_t raw_hr = 0;
+                    int32_t norm_hr = 0;
+                    uint32_t src_dwords =
+                        shader->bytecode_size / (uint32_t)sizeof(uint32_t);
+                    uint32_t norm_dwords = 0;
+                    bool norm_tried = false;
+                    uint32_t *normalized = NULL;
+
                     shader->d3d9_native_shader =
-                        vmsvga3d_dxvk_shader_create(s->dxvk, stage,
-                                                    shader->bytecode);
+                        vmsvga3d_dxvk_shader_create_with_hr(
+                            s->dxvk, stage, shader->bytecode, &raw_hr);
+
+                    if (shader->d3d9_native_shader == NULL &&
+                        src_dwords >= 2u) {
+                        uint32_t norm_cap = src_dwords + 64u;
+
+                        normalized = g_try_malloc((size_t)norm_cap *
+                                                  sizeof(uint32_t));
+                        if (normalized != NULL &&
+                            vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
+                                stage, shader->bytecode, src_dwords,
+                                vertex_decls, vertex_decl_count, normalized,
+                                norm_cap, &norm_dwords)) {
+                            norm_tried = true;
+                            shader->d3d9_native_shader =
+                                vmsvga3d_dxvk_shader_create_with_hr(
+                                    s->dxvk, stage, normalized, &norm_hr);
+                            if (shader->d3d9_native_shader != NULL && trace) {
+                                fprintf(stderr,
+                                        "VMVGA-D3D9-SHADER normalized cid=%u "
+                                        "shid=%u stage=%u raw_hr=0x%08x "
+                                        "src_dwords=%u dst_dwords=%u\n",
+                                        cid, shid, (uint32_t)stage,
+                                        (uint32_t)raw_hr, src_dwords,
+                                        norm_dwords);
+                            }
+                        }
+                    }
+
                     if (shader->d3d9_native_shader == NULL) {
+                        if (trace && !shader->d3d9_failure_traced) {
+                            uint32_t i;
+
+                            shader->d3d9_failure_traced = true;
+                            fprintf(stderr,
+                                    "VMVGA-D3D9-SHADER create-fail cid=%u "
+                                    "shid=%u stage=%u raw_hr=0x%08x "
+                                    "norm_tried=%u norm_hr=0x%08x "
+                                    "src_dwords=%u norm_dwords=%u "
+                                    "ver=0x%08x decls=%u\n",
+                                    cid, shid, (uint32_t)stage,
+                                    (uint32_t)raw_hr, (uint32_t)norm_tried,
+                                    (uint32_t)norm_hr, src_dwords, norm_dwords,
+                                    src_dwords != 0u ? shader->bytecode[0] : 0u,
+                                    vertex_decl_count);
+                            if (vertex_decls != NULL &&
+                                vertex_decl_count != 0u) {
+                                fprintf(stderr, "VMVGA-D3D9-SHADER decls=");
+                                for (i = 0; i < vertex_decl_count; i++) {
+                                    fprintf(
+                                        stderr,
+                                        "%s[%u:u=%u.%u t=%u m=%u off=%u str=%u]",
+                                        i == 0u ? "" : " ", i,
+                                        (uint32_t)vertex_decls[i].identity.usage,
+                                        vertex_decls[i].identity.usageIndex,
+                                        (uint32_t)vertex_decls[i].identity.type,
+                                        (uint32_t)vertex_decls[i].identity.method,
+                                        vertex_decls[i].array.offset,
+                                        vertex_decls[i].array.stride);
+                                }
+                                fprintf(stderr, "\n");
+                            }
+                            vmsvga3d_dxvk_trace_shader_bytecode(
+                                "raw", shader->bytecode, src_dwords, 256u);
+                            if (norm_tried && normalized != NULL &&
+                                norm_dwords != 0u) {
+                                vmsvga3d_dxvk_trace_shader_bytecode(
+                                    "norm", normalized, norm_dwords, 64u);
+                            }
+                        }
+                        g_free(normalized);
                         return false;
                     }
+                    g_free(normalized);
                 }
                 native_shader = shader->d3d9_native_shader;
             }
 
             if (!vmsvga3d_dxvk_shader_bind(s->dxvk, stage, native_shader)) {
+                if (trace) {
+                    fprintf(stderr,
+                            "VMVGA-D3D9-SHADER bind-fail cid=%u shid=%u "
+                            "stage=%u native=%p\n",
+                            cid, shid, (uint32_t)stage, native_shader);
+                }
                 return false;
             }
         }
@@ -3962,6 +4565,13 @@ static bool vmsvga3d_dxvk_apply_context_shaders(
 
                 if (!vmsvga3d_dxvk_shader_constants(
                         s->dxvk, target, run_start, run_count, packed_values)) {
+                    if (trace) {
+                        fprintf(stderr,
+                                "VMVGA-D3D9-SHADER const-fail cid=%u stage=%u "
+                                "target=%u reg=%u count=%u\n",
+                                cid, (uint32_t)stage, (uint32_t)target,
+                                run_start, run_count);
+                    }
                     return false;
                 }
             }
@@ -4154,7 +4764,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     if ((full_replay ||
          (context->legacy_pipeline_dirty &
           VMSVGA3D_LEGACY_PIPELINE_DIRTY_SHADERS) != 0) &&
-        !vmsvga3d_dxvk_apply_context_shaders(s, context, full_replay)) {
+        !vmsvga3d_dxvk_apply_context_shaders(s, context, cid, vertex_decls,
+                                             vertex_decl_count, trace,
+                                             full_replay)) {
         failure_stage = "apply-shaders";
         goto out;
     }

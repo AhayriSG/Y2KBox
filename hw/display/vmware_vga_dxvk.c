@@ -17120,14 +17120,20 @@ bool vmsvga3d_dxvk_set_clip_plane(VMSVGA3DDxvk *dxvk, uint32_t index,
 #endif
 }
 
-void *vmsvga3d_dxvk_shader_create_impl(VMSVGA3DDxvk *dxvk, uint32_t stage,
-                                  const uint32_t *bytecode)
+static void *vmsvga3d_dxvk_shader_create_impl(VMSVGA3DDxvk *dxvk,
+                                              uint32_t stage,
+                                              const uint32_t *bytecode,
+                                              int32_t *out_hr)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     VMSVGA3DDxvkCreateShader create_shader = NULL;
     uint32_t method;
     void *shader = NULL;
     int32_t result;
+
+    if (out_hr != NULL) {
+        *out_hr = -1;
+    }
 
     if (!vmsvga3d_dxvk_ready(dxvk) || bytecode == NULL) {
         return NULL;
@@ -17147,25 +17153,39 @@ void *vmsvga3d_dxvk_shader_create_impl(VMSVGA3DDxvk *dxvk, uint32_t stage,
     }
 
     result = create_shader(dxvk->d3d9_device, bytecode, &shader);
+    if (out_hr != NULL) {
+        *out_hr = result;
+    }
 
     return vmsvga3d_dxvk_succeeded(result) ? shader : NULL;
 #else
     (void)dxvk;
     (void)stage;
     (void)bytecode;
+    if (out_hr != NULL) {
+        *out_hr = -1;
+    }
     return NULL;
 #endif
+}
+
+void *vmsvga3d_dxvk_shader_create_with_hr(VMSVGA3DDxvk *dxvk, uint32_t stage,
+                                          const uint32_t *bytecode,
+                                          int32_t *out_hr)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_DXVK_SHADER_CREATE);
+    void *shader = vmsvga3d_dxvk_shader_create_impl(dxvk, stage, bytecode,
+                                                     out_hr);
+
+    qemu_perf_stats_end(QEMU_PERF_DXVK_SHADER_CREATE, perf_start_ns);
+    return shader;
 }
 
 void *vmsvga3d_dxvk_shader_create(VMSVGA3DDxvk *dxvk, uint32_t stage,
                                   const uint32_t *bytecode)
 {
-    uint64_t perf_start_ns =
-        qemu_perf_stats_begin(QEMU_PERF_DXVK_SHADER_CREATE);
-    void *shader = vmsvga3d_dxvk_shader_create_impl(dxvk, stage, bytecode);
-
-    qemu_perf_stats_end(QEMU_PERF_DXVK_SHADER_CREATE, perf_start_ns);
-    return shader;
+    return vmsvga3d_dxvk_shader_create_with_hr(dxvk, stage, bytecode, NULL);
 }
 
 void vmsvga3d_dxvk_shader_destroy(void *shader)
