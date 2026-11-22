@@ -6418,6 +6418,18 @@ static bool vmsvga3d_clear_depth_stencil_image(
     depth_mask = vmsvga3d_bit_mask(depth_bits) << depth_shift;
     stencil_mask = vmsvga3d_bit_mask(stencil_bits) << stencil_shift;
 
+    if (execute) {
+        uint64_t format_key =
+            (uint64_t)bytes |
+            ((uint64_t)depth_bits << 8) |
+            ((uint64_t)depth_shift << 16) |
+            ((uint64_t)stencil_bits << 24) |
+            ((uint64_t)stencil_shift << 32);
+
+        qemu_perf_stats_record_work(QEMU_PERF_VMVGA_CLEAR_DEPTH_FORMAT,
+                                    format_key);
+    }
+
     if (clear_depth) {
         double normalized = depth;
         uint64_t maximum = vmsvga3d_bit_mask(depth_bits);
@@ -8561,6 +8573,8 @@ static bool vmsvga3d_present_rect_to_buffer_internal(
         !(dst_depth == 15 &&
           (surface->format == SVGA3D_X1R5G5B5 ||
            surface->format == SVGA3D_A1R5G5B5));
+    qemu_perf_stats_record_work(QEMU_PERF_VMVGA_PRESENT_SOURCE_FORMAT,
+                               surface->format);
     present_stat = convert_pixels ? QEMU_PERF_VMVGA_PRESENT_CONVERT
                                   : QEMU_PERF_VMVGA_PRESENT_COPY;
     present_start_ns = qemu_perf_stats_begin(present_stat);
