@@ -167,7 +167,7 @@ qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-nativ
     `"d3d11.dll"` (supporting inbox Windows Direct3D with `D3D_DRIVER_TYPE_WARP` fallback on D3D11, as
     well as optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`).
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips DXVK/D3D init under `-display none`
-    (via `display_backend_active` in `system/vl.c`) unless `debug=on` or `Y2KBOX_3D_HEADLESS` is set,
+    (via `display_backend_active` in `system/vl.c`) unless global VMVGA debug mode (`-global vmvga.debug=on`) or `Y2KBOX_3D_HEADLESS` is set,
     preserving empty `stderr` and zero overhead in non-3D CI benchmarks.
 * **Resume here:** check Linux (including packaged `dxvk-native` + lavapipe smoke check) and Windows CI
   builds from this push; validate live in-guest SVGA3D rendering on both hosts in T11; render-thread
