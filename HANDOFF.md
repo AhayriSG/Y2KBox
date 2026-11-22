@@ -405,7 +405,7 @@ idempotent (`git checkout` touched files first).
     `D3D_DRIVER_TYPE_WARP` fallback on D3D11 (working with inbox Windows Direct3D or optional DXVK Windows DLLs
     placed beside `qemu-system-i386.exe`).
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips 3D backend init when `-display none` is
-    active (`display_backend_active == false`) unless `debug=on` or `Y2KBOX_3D_HEADLESS` is set.
+    active (`display_backend_active == false`) unless global VMVGA debug mode (`-global vmvga.debug=on`) or `Y2KBOX_3D_HEADLESS` is set.
 * Risks: single small upstream; D3D9 is the ceiling for the XP driver (no DX10+); D3D8 and DirectDraw/D3D7
   coverage unknown (T11: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
   under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.
