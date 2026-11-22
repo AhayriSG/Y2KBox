@@ -92,19 +92,23 @@ usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
 
-Diagnostic capture is available only when VMVGA is explicitly enabled with
-`-device vmvga,debug=on`. This option is intended for testers; not for normal use.
-With it enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
-to capture VMVGA, VMPort GuestRPC, and vdagent diagnostics to
-`vmvga_freeze.log` in the launch working directory; press again to stop.
-The VM continues running. The first capture truncates the file; later capture
-intervals in the same QEMU run append. When `debug=on` is set but capture is inactive,
-these diagnostic streams remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
-and no capture start/stop messages in the command prompt. The hotkey is unavailable
-unless `debug=on` is present. No separate `-trace "vdagent*"` option is needed;
-the hotkey enables the relevant VMVGA, VMPort, and vdagent trace events only
-for the selected interval. Do **not** use shell-level `2> vmvga_freeze.log`
-redirection with this feature: it redirects stderr before QEMU starts and defeats interval capture.
+Diagnostic logging is an opt-in tester feature and is **off by default**.
+Enable Y2KBox debug mode independently of the VMVGA device declaration with
+`-global vmvga.debug=on` (omit this option for normal use). This is the
+command-line equivalent of the future T12 GUI's **Debug: On/Off** setting.
+With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
+to capture general Y2KBox diagnostics—including performance counters, VMVGA,
+VMPort GuestRPC, and vdagent traces—to `y2kbox-log.log` in the launch working
+directory; press again to stop. The VM continues running. The first capture
+truncates the file; later capture intervals in the same QEMU run append.
+When debug mode is enabled but capture is inactive, the diagnostic streams
+remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
+and no routine capture start/stop messages in the command prompt. The hotkey
+is unavailable when debug mode is off. No separate `-trace "vdagent*"`
+option is needed; the hotkey enables the relevant diagnostic trace events only
+for the selected interval. Do **not** use shell-level `2> y2kbox-log.log`
+redirection with this feature: it redirects stderr before QEMU starts and
+defeats interval capture.
 
 ### Windows XP guest recommendations
 
