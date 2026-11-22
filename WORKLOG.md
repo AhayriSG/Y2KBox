@@ -1385,3 +1385,31 @@ summary covers only that interval. This reset affects diagnostic statistics
 only; it does not restart the VM or reset guest state.
 
 Documentation-only change. No local build/test was run and CI was not polled.
+
+## Session 65 (Gemini), 2026-11-22 - Fix vGPU9 D3D9 texture address, transform, and fixed-function state translation
+
+Fixed fixed-function SVGA3D-to-D3D9 state translation bugs in
+`hw/display/vmware_vga_vgpu9.c` identified while investigating tiled background
+seam wrap-around in Hitman 2: Silent Assassin (D3D8):
+
+- Mapped `SVGA3D_TEX_ADDRESS_EDGE` (`6`) to `D3D9_TADDRESS_CLAMP` (`3`) for
+  `SVGA3D_TS_ADDRESSU/V/W` instead of forwarding `6` raw to D3D9
+  `SetSamplerState()` (where unrecognized values fall back to `WRAP`).
+- Decoded `SVGA3D_TS_TEXTURETRANSFORMFLAGS` as a component bitmask (`S|T|R|Q`
+  plus `SVGA3D_TEX_PROJECTED`) instead of single-bit switch cases that dropped
+  multi-axis transforms (`COUNT2`/`COUNT3`/`COUNT4` and projected flags) to
+  `D3D9_TTFF_DISABLE`.
+- Added `SVGA3D_TA_TFACTOR` (`D3D9_TA_TFACTOR = 3`) and modifier bits
+  (`SVGA3D_TM_ALPHA` -> `D3D9_TA_ALPHAREPLICATE`, `SVGA3D_TM_ONE_MINUS` ->
+  `D3D9_TA_COMPLEMENT`) in `vmsvga3d_d3d9_texture_arg()`, plus
+  `SVGA3D_TS_CONSTANT` (`D3D9_TSS_CONSTANT = 32`).
+- Mapped D3D8 cubic filter enums (`SVGA3D_TEX_FILTER_FLATCUBIC`,
+  `SVGA3D_TEX_FILTER_GAUSSIANCUBIC`) to `D3D9_TEXF_LINEAR` for sampler
+  min/mag/mip filters.
+- Combined `SVGA3D_TS_TEXCOORDGEN` (`D3DTSS_TCI_*`) with
+  `SVGA3D_TS_TEXCOORDINDEX` when applying texture stage state.
+- Fixed `SVGA3D_RS_VERTEXMATERIALENABLE` mapping from
+  `D3D9_RS_INDEXEDVERTEXBLENDENABLE` to `D3D9_RS_COLORVERTEX` (`141`).
+
+Verified translator compilation and assertions standalone via `gcc -Wall -Wextra -Werror`;
+full Linux/Windows CI build and owner XP guest verification remain outstanding.

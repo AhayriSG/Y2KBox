@@ -129,6 +129,7 @@ enum {
     D3D9_RS_LIGHTING = 137,
     D3D9_RS_AMBIENT = 139,
     D3D9_RS_FOGVERTEXMODE = 140,
+    D3D9_RS_COLORVERTEX = 141,
     D3D9_RS_LOCALVIEWER = 142,
     D3D9_RS_NORMALIZENORMALS = 143,
     D3D9_RS_DIFFUSEMATERIALSOURCE = 145,
@@ -188,6 +189,7 @@ enum {
     D3D9_TSS_TEXTURETRANSFORMFLAGS = 24,
     D3D9_TSS_COLORARG0 = 26,
     D3D9_TSS_ALPHAARG0 = 27,
+    D3D9_TSS_CONSTANT = 32,
 };
 
 enum {
@@ -237,8 +239,37 @@ enum {
     D3D9_TA_DIFFUSE = 0,
     D3D9_TA_CURRENT = 1,
     D3D9_TA_TEXTURE = 2,
+    D3D9_TA_TFACTOR = 3,
     D3D9_TA_SPECULAR = 4,
     D3D9_TA_CONSTANT = 6,
+    D3D9_TA_COMPLEMENT = 0x10u,
+    D3D9_TA_ALPHAREPLICATE = 0x20u,
+};
+
+enum {
+    D3D9_TADDRESS_WRAP = 1,
+    D3D9_TADDRESS_MIRROR = 2,
+    D3D9_TADDRESS_CLAMP = 3,
+    D3D9_TADDRESS_BORDER = 4,
+    D3D9_TADDRESS_MIRRORONCE = 5,
+};
+
+enum {
+    D3D9_TEXF_NONE = 0,
+    D3D9_TEXF_POINT = 1,
+    D3D9_TEXF_LINEAR = 2,
+    D3D9_TEXF_ANISOTROPIC = 3,
+    D3D9_TEXF_PYRAMIDALQUAD = 6,
+    D3D9_TEXF_GAUSSIANQUAD = 7,
+};
+
+enum {
+    D3D9_TCI_PASSTHRU = 0x00000000u,
+    D3D9_TCI_CAMERASPACENORMAL = 0x00010000u,
+    D3D9_TCI_CAMERASPACEPOSITION = 0x00020000u,
+    D3D9_TCI_CAMERASPACEREFLECTIONVECTOR = 0x00030000u,
+    D3D9_TCI_SPHEREMAP = 0x00040000u,
+    D3D9_TCI_MASK = 0x000f0000u,
 };
 
 enum {
@@ -382,7 +413,7 @@ static const VMSVGA3DD3D9DirectRenderState vmsvga3d_d3d9_render_map[] = {
       {SVGA3D_RS_STENCILPASS, D3D9_RS_STENCILPASS},
       {SVGA3D_RS_RANGEFOGENABLE, D3D9_RS_RANGEFOGENABLE},
       {SVGA3D_RS_COLORWRITEENABLE, D3D9_RS_COLORWRITEENABLE},
-      {SVGA3D_RS_VERTEXMATERIALENABLE, D3D9_RS_INDEXEDVERTEXBLENDENABLE},
+      {SVGA3D_RS_VERTEXMATERIALENABLE, D3D9_RS_COLORVERTEX},
       {SVGA3D_RS_DIFFUSEMATERIALSOURCE, D3D9_RS_DIFFUSEMATERIALSOURCE},
       {SVGA3D_RS_SPECULARMATERIALSOURCE, D3D9_RS_SPECULARMATERIALSOURCE},
       {SVGA3D_RS_AMBIENTMATERIALSOURCE, D3D9_RS_AMBIENTMATERIALSOURCE},
@@ -516,39 +547,101 @@ static uint32_t vmsvga3d_d3d9_texture_combiner(uint32_t value)
 
 static uint32_t vmsvga3d_d3d9_texture_arg(uint32_t value)
 {
-    switch (value) {
+    uint32_t result;
+
+    switch (value & ((1u << SVGA3D_TM_MASK_LEN) - 1u)) {
+    case SVGA3D_TA_TFACTOR:
+        result = D3D9_TA_TFACTOR;
+        break;
     case SVGA3D_TA_CONSTANT:
-        return D3D9_TA_CONSTANT;
+        result = D3D9_TA_CONSTANT;
+        break;
     case SVGA3D_TA_PREVIOUS:
-        return D3D9_TA_CURRENT;
+        result = D3D9_TA_CURRENT;
+        break;
     case SVGA3D_TA_DIFFUSE:
-        return D3D9_TA_DIFFUSE;
+        result = D3D9_TA_DIFFUSE;
+        break;
     case SVGA3D_TA_TEXTURE:
-        return D3D9_TA_TEXTURE;
+        result = D3D9_TA_TEXTURE;
+        break;
     case SVGA3D_TA_SPECULAR:
-        return D3D9_TA_SPECULAR;
+        result = D3D9_TA_SPECULAR;
+        break;
     default:
-        return D3D9_TA_DIFFUSE;
+        result = D3D9_TA_DIFFUSE;
+        break;
     }
+
+    if (value & SVGA3D_TM_ALPHA) {
+        result |= D3D9_TA_ALPHAREPLICATE;
+    }
+    if (value & SVGA3D_TM_ONE_MINUS) {
+        result |= D3D9_TA_COMPLEMENT;
+    }
+    return result;
 }
 
 static uint32_t vmsvga3d_d3d9_texture_transform(uint32_t value)
 {
+    uint32_t result;
+
+    if (value & SVGA3D_TEX_TRANSFORM_Q) {
+        result = D3D9_TTFF_COUNT4;
+    } else if (value & SVGA3D_TEX_TRANSFORM_R) {
+        result = D3D9_TTFF_COUNT3;
+    } else if (value & SVGA3D_TEX_TRANSFORM_T) {
+        result = D3D9_TTFF_COUNT2;
+    } else if (value & SVGA3D_TEX_TRANSFORM_S) {
+        result = D3D9_TTFF_COUNT1;
+    } else {
+        result = D3D9_TTFF_DISABLE;
+    }
+
+    if (value & SVGA3D_TEX_PROJECTED) {
+        result |= D3D9_TTFF_PROJECTED;
+    }
+    return result;
+}
+
+static uint32_t vmsvga3d_d3d9_texture_address(uint32_t value)
+{
     switch (value) {
-    case SVGA3D_TEX_TRANSFORM_OFF:
-        return D3D9_TTFF_DISABLE;
-    case SVGA3D_TEX_TRANSFORM_S:
-        return D3D9_TTFF_COUNT1;
-    case SVGA3D_TEX_TRANSFORM_T:
-        return D3D9_TTFF_COUNT2;
-    case SVGA3D_TEX_TRANSFORM_R:
-        return D3D9_TTFF_COUNT3;
-    case SVGA3D_TEX_TRANSFORM_Q:
-        return D3D9_TTFF_COUNT4;
-    case SVGA3D_TEX_PROJECTED:
-        return D3D9_TTFF_PROJECTED;
+    case SVGA3D_TEX_ADDRESS_WRAP:
+        return D3D9_TADDRESS_WRAP;
+    case SVGA3D_TEX_ADDRESS_MIRROR:
+        return D3D9_TADDRESS_MIRROR;
+    case SVGA3D_TEX_ADDRESS_CLAMP:
+    case SVGA3D_TEX_ADDRESS_EDGE:
+        return D3D9_TADDRESS_CLAMP;
+    case SVGA3D_TEX_ADDRESS_BORDER:
+        return D3D9_TADDRESS_BORDER;
+    case SVGA3D_TEX_ADDRESS_MIRRORONCE:
+        return D3D9_TADDRESS_MIRRORONCE;
     default:
-        return D3D9_TTFF_DISABLE;
+        return D3D9_TADDRESS_WRAP;
+    }
+}
+
+static uint32_t vmsvga3d_d3d9_sampler_filter(uint32_t value)
+{
+    switch (value) {
+    case SVGA3D_TEX_FILTER_NONE:
+        return D3D9_TEXF_NONE;
+    case SVGA3D_TEX_FILTER_NEAREST:
+        return D3D9_TEXF_POINT;
+    case SVGA3D_TEX_FILTER_LINEAR:
+    case SVGA3D_TEX_FILTER_FLATCUBIC:
+    case SVGA3D_TEX_FILTER_GAUSSIANCUBIC:
+        return D3D9_TEXF_LINEAR;
+    case SVGA3D_TEX_FILTER_ANISOTROPIC:
+        return D3D9_TEXF_ANISOTROPIC;
+    case SVGA3D_TEX_FILTER_PYRAMIDALQUAD:
+        return D3D9_TEXF_PYRAMIDALQUAD;
+    case SVGA3D_TEX_FILTER_GAUSSIANQUAD:
+        return D3D9_TEXF_GAUSSIANQUAD;
+    default:
+        return D3D9_TEXF_POINT;
     }
 }
 
@@ -1248,8 +1341,11 @@ vmsvga3d_d3d9_texture_state(const SVGA3dTextureState *state,
         plan->state = D3D9_TSS_TEXTURETRANSFORMFLAGS;
         value = vmsvga3d_d3d9_texture_transform(state->value);
         break;
-    case SVGA3D_TS_TEXCOORDGEN:
     case SVGA3D_TS_CONSTANT:
+        plan->state = D3D9_TSS_CONSTANT;
+        value = state->value;
+        break;
+    case SVGA3D_TS_TEXCOORDGEN:
     case SVGA3D_TS_COLOR_KEY_ENABLE:
     case SVGA3D_TS_COLOR_KEY:
         return VMSVGA3D_D3D9_TRANSLATE_IGNORE;
@@ -1280,21 +1376,27 @@ sampler_state:
     switch (state->name) {
     case SVGA3D_TS_ADDRESSU:
         plan->state = D3D9_SAMP_ADDRESSU;
+        plan->value = vmsvga3d_d3d9_texture_address(state->value);
         break;
     case SVGA3D_TS_ADDRESSV:
         plan->state = D3D9_SAMP_ADDRESSV;
+        plan->value = vmsvga3d_d3d9_texture_address(state->value);
         break;
     case SVGA3D_TS_ADDRESSW:
         plan->state = D3D9_SAMP_ADDRESSW;
+        plan->value = vmsvga3d_d3d9_texture_address(state->value);
         break;
     case SVGA3D_TS_MIPFILTER:
         plan->state = D3D9_SAMP_MIPFILTER;
+        plan->value = vmsvga3d_d3d9_sampler_filter(state->value);
         break;
     case SVGA3D_TS_MAGFILTER:
         plan->state = D3D9_SAMP_MAGFILTER;
+        plan->value = vmsvga3d_d3d9_sampler_filter(state->value);
         break;
     case SVGA3D_TS_MINFILTER:
         plan->state = D3D9_SAMP_MINFILTER;
+        plan->value = vmsvga3d_d3d9_sampler_filter(state->value);
         break;
     case SVGA3D_TS_BORDERCOLOR:
         plan->state = D3D9_SAMP_BORDERCOLOR;
@@ -3539,6 +3641,23 @@ static bool vmsvga3d_dxvk_apply_context_fixed_state(
     return true;
 }
 
+static uint32_t vmsvga3d_d3d9_texcoord_gen(uint32_t value)
+{
+    switch (value) {
+    case SVGA3D_TEXCOORD_GEN_EYE_POSITION:
+        return D3D9_TCI_CAMERASPACEPOSITION;
+    case SVGA3D_TEXCOORD_GEN_EYE_NORMAL:
+        return D3D9_TCI_CAMERASPACENORMAL;
+    case SVGA3D_TEXCOORD_GEN_REFLECTIONVECTOR:
+        return D3D9_TCI_CAMERASPACEREFLECTIONVECTOR;
+    case SVGA3D_TEXCOORD_GEN_SPHERE:
+        return D3D9_TCI_SPHEREMAP;
+    case SVGA3D_TEXCOORD_GEN_OFF:
+    default:
+        return D3D9_TCI_PASSTHRU;
+    }
+}
+
 static bool vmsvga3d_dxvk_apply_context_textures(
     struct vmsvga_state_s *s, VMSVGA3DContext *context, bool trace_3d,
     bool full_replay)
@@ -3554,6 +3673,12 @@ static bool vmsvga3d_dxvk_apply_context_textures(
             VMSVGA3DD3D9TextureStatePlan plan;
             SVGA3dTextureState state = { 0 };
             VMSVGA3DD3D9TranslateResult translated;
+
+            if (stage < VMSVGA3D_D3D9_MAX_TEXTURE_STAGES &&
+                (name == SVGA3D_TS_TEXCOORDINDEX ||
+                 name == SVGA3D_TS_TEXCOORDGEN)) {
+                continue;
+            }
 
             if (!context->texture_state[stage][name].valid ||
                 (!full_replay &&
@@ -3678,6 +3803,42 @@ static bool vmsvga3d_dxvk_apply_context_textures(
                 break;
             default:
                 break;
+            }
+        }
+
+        if (stage < VMSVGA3D_D3D9_MAX_TEXTURE_STAGES) {
+            bool idx_valid =
+                context->texture_state[stage][SVGA3D_TS_TEXCOORDINDEX].valid;
+            bool gen_valid =
+                context->texture_state[stage][SVGA3D_TS_TEXCOORDGEN].valid;
+            bool idx_dirty =
+                full_replay ||
+                (context->legacy_texture_state_dirty[stage] &
+                 (UINT64_C(1) << SVGA3D_TS_TEXCOORDINDEX)) != 0;
+            bool gen_dirty =
+                full_replay ||
+                (context->legacy_texture_state_dirty[stage] &
+                 (UINT64_C(1) << SVGA3D_TS_TEXCOORDGEN)) != 0;
+
+            if ((idx_valid && idx_dirty) || (gen_valid && gen_dirty)) {
+                uint32_t texcoord_value =
+                    idx_valid
+                        ? context->texture_state[stage][SVGA3D_TS_TEXCOORDINDEX]
+                              .value
+                        : stage;
+
+                if (gen_valid) {
+                    texcoord_value =
+                        (texcoord_value & ~D3D9_TCI_MASK) |
+                        vmsvga3d_d3d9_texcoord_gen(
+                            context->texture_state[stage][SVGA3D_TS_TEXCOORDGEN]
+                                .value);
+                }
+                if (!vmsvga3d_dxvk_set_texture_stage_state(
+                        s->dxvk, stage, D3D9_TSS_TEXCOORDINDEX,
+                        texcoord_value)) {
+                    return false;
+                }
             }
         }
     }
