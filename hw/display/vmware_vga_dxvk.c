@@ -12879,7 +12879,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                 bool readback_ok = vmsvga3d_dxvk_surface_readback_level(
                     dxvk, surface, level, data, row_pitch, source_height);
 
-                qemu_perf_stats_record_work(
+                qemu_perf_stats_add_work(
                     QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
                     (uint64_t)source_width * source_height);
                 qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
@@ -13122,7 +13122,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                 dxvk->d3d9_device, source_surface, source_rect,
                 surface->d3d9_readback_render_target, &destination_rect,
                 VMSVGA3D_DXVK_D3DTEXF_NONE);
-            qemu_perf_stats_record_work(
+            qemu_perf_stats_add_work(
                 QEMU_PERF_DXVK_READBACK_STRETCH_RECT,
                 (uint64_t)(source_rect->right - source_rect->left) *
                 (uint32_t)(source_rect->bottom - source_rect->top));
@@ -13140,7 +13140,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
         result = get_render_target_data(
             dxvk->d3d9_device, surface->d3d9_readback_render_target,
             surface->d3d9_readback_staging);
-        qemu_perf_stats_record_work(
+        qemu_perf_stats_add_work(
             QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA,
             (uint64_t)batch_width * batch_height);
         qemu_perf_stats_end(
@@ -13206,7 +13206,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
     }
 
     result = unlock_rect(surface->d3d9_readback_staging);
-    qemu_perf_stats_record_work(
+    qemu_perf_stats_add_work(
         QEMU_PERF_DXVK_READBACK_LOCK_COPY,
         (uint64_t)batch_width * batch_height);
     qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY,
