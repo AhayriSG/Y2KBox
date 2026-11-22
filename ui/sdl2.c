@@ -58,7 +58,6 @@ static int gui_saved_grab;
 static int gui_fullscreen;
 static int gui_grab_code = KMOD_LALT | KMOD_LCTRL;
 static bool sdl_log_capture_enabled;
-static bool sdl_log_capture_created;
 static int sdl_log_capture_saved_stderr = -1;
 static SDL_Cursor *sdl_cursor_normal;
 static SDL_Cursor *sdl_cursor_hidden;
@@ -269,8 +268,12 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
 {
     Object *vmvga;
     Error *err = NULL;
+    GDateTime *now;
+    gchar *timestamp;
+    gchar *filename = NULL;
+    guint suffix = 0;
     int fd;
-    int flags;
+    int flags = O_WRONLY | O_CREAT | O_EXCL;
     int saved_errno;
 
     if (!sdl_debug_mode_enabled(&vmvga)) {
@@ -287,15 +290,36 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             }
         }
 
-        flags = O_WRONLY | O_CREAT |
-                (sdl_log_capture_created ? O_APPEND : O_TRUNC);
 #ifdef O_BINARY
         flags |= O_BINARY;
 #endif
-        fd = g_open("y2kbox-log.log", flags, 0666);
+        now = g_date_time_new_now_local();
+        timestamp = g_date_time_format(now, "%Y%m%d-%H%M%S");
+        g_date_time_unref(now);
+
+        do {
+            if (suffix == 0) {
+                filename = g_strdup_printf("y2kbox-log-%s.log", timestamp);
+            } else {
+                filename = g_strdup_printf("y2kbox-log-%s-%u.log",
+                                            timestamp, suffix);
+            }
+            fd = g_open(filename, flags, 0666);
+            if (fd < 0 && errno == EEXIST) {
+                g_free(filename);
+                filename = NULL;
+                suffix++;
+            } else {
+                break;
+            }
+        } while (true);
+        g_free(timestamp);
+
         if (fd < 0) {
-            error_report("Could not open y2kbox-log.log: %s",
+            error_report("Could not create %s: %s",
+                         filename ? filename : "diagnostic log file",
                          strerror(errno));
+            g_free(filename);
             return;
         }
 
@@ -303,11 +327,13 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         if (dup2(fd, STDERR_FILENO) < 0) {
             saved_errno = errno;
             g_close(fd, NULL);
-            error_report("Could not redirect stderr to y2kbox-log.log: %s",
-                         strerror(saved_errno));
+            error_report("Could not redirect stderr to %s: %s",
+                         filename, strerror(saved_errno));
+            g_free(filename);
             return;
         }
         g_close(fd, NULL);
+        g_free(filename);
 
         if (!object_property_set_bool(vmvga, "debug-log", true, &err)) {
             dup2(sdl_log_capture_saved_stderr, STDERR_FILENO);
@@ -317,7 +343,6 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         sdl_set_debug_trace(true);
         qemu_perf_stats_start();
         sdl_log_capture_enabled = true;
-        sdl_log_capture_created = true;
     } else {
         fflush(stderr);
         if (!object_property_set_bool(vmvga, "debug-log", false, &err)) {
