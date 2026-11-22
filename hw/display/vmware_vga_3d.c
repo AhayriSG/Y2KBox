@@ -6335,25 +6335,35 @@ static bool vmsvga3d_clear_color_image(VMSVGA3DSurface *surface,
         rect_count = 1;
     }
 
-    for (i = 0; i < rect_count; i++) {
-        SVGA3dRect rect;
-        uint32_t y;
-        uint32_t x;
+    {
+        uint64_t perf_start_ns = execute
+            ? qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_SHADOW_COLOR) : 0;
 
-        if (!vmsvga3d_clear_rect(&rects[i], &image->size, &rect)) {
-            continue;
-        }
+        for (i = 0; i < rect_count; i++) {
+            SVGA3dRect rect;
+            uint32_t y;
+            uint32_t x;
 
-        if (!execute) {
-            continue;
-        }
-
-        for (y = 0; y < rect.h; y++) {
-            uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
-                           (uint64_t)rect.x * bytes;
-            for (x = 0; x < rect.w; x++) {
-                vmsvga3d_store_le(row + (uint64_t)x * bytes, bytes, value);
+            if (!vmsvga3d_clear_rect(&rects[i], &image->size, &rect)) {
+                continue;
             }
+
+            if (!execute) {
+                continue;
+            }
+
+            for (y = 0; y < rect.h; y++) {
+                uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
+                               (uint64_t)rect.x * bytes;
+                for (x = 0; x < rect.w; x++) {
+                    vmsvga3d_store_le(row + (uint64_t)x * bytes, bytes, value);
+                }
+            }
+        }
+
+        if (execute) {
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_SHADOW_COLOR,
+                                perf_start_ns);
         }
     }
 
@@ -6434,35 +6444,45 @@ static bool vmsvga3d_clear_depth_stencil_image(
         rect_count = 1;
     }
 
-    for (i = 0; i < rect_count; i++) {
-        SVGA3dRect rect;
-        uint32_t y;
-        uint32_t x;
+    {
+        uint64_t perf_start_ns = execute
+            ? qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_SHADOW_DEPTH) : 0;
 
-        if (!vmsvga3d_clear_rect(&rects[i], &image->size, &rect)) {
-            continue;
-        }
+        for (i = 0; i < rect_count; i++) {
+            SVGA3dRect rect;
+            uint32_t y;
+            uint32_t x;
 
-        if (!execute) {
-            continue;
-        }
-
-        for (y = 0; y < rect.h; y++) {
-            uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
-                           (uint64_t)rect.x * bytes;
-            for (x = 0; x < rect.w; x++) {
-                uint8_t *pixel = row + (uint64_t)x * bytes;
-                uint32_t value = vmsvga3d_load_le(pixel, bytes);
-
-                if (clear_depth) {
-                    value = (uint32_t)(((uint64_t)value & ~depth_mask) | depth_value);
-                }
-                if (clear_stencil) {
-                    value = (uint32_t)(((uint64_t)value & ~stencil_mask) |
-                                       stencil_value);
-                }
-                vmsvga3d_store_le(pixel, bytes, value);
+            if (!vmsvga3d_clear_rect(&rects[i], &image->size, &rect)) {
+                continue;
             }
+
+            if (!execute) {
+                continue;
+            }
+
+            for (y = 0; y < rect.h; y++) {
+                uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
+                               (uint64_t)rect.x * bytes;
+                for (x = 0; x < rect.w; x++) {
+                    uint8_t *pixel = row + (uint64_t)x * bytes;
+                    uint32_t value = vmsvga3d_load_le(pixel, bytes);
+
+                    if (clear_depth) {
+                        value = (uint32_t)(((uint64_t)value & ~depth_mask) | depth_value);
+                    }
+                    if (clear_stencil) {
+                        value = (uint32_t)(((uint64_t)value & ~stencil_mask) |
+                                           stencil_value);
+                    }
+                    vmsvga3d_store_le(pixel, bytes, value);
+                }
+            }
+        }
+
+        if (execute) {
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_SHADOW_DEPTH,
+                                perf_start_ns);
         }
     }
 
@@ -16406,18 +16426,26 @@ vmsvga3d_screen_target_async_submit_live(
     }
 
     if (d3d9_resident && !d3d11_resident) {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_SUBMIT);
         result = vmsvga3d_dxvk_d3d9_screen_readback_submit(
             s->dxvk, surface->dxvk_surface, 0, d3d_rects, rect_count,
             image->size.width, image->size.height, bytes_per_pixel,
             sequence_out);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_SUBMIT,
+                            perf_start_ns);
     } else if (d3d11_resident && !d3d9_resident) {
         if (!vmsvga3d_dxvk_d3d11_screen_readback_supported(
                 surface->dxvk_surface)) {
             return VMSVGA3D_DXVK_SCREEN_READBACK_SUBMIT_FAILED;
         }
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_SUBMIT);
         result = vmsvga3d_dxvk_d3d11_screen_readback_submit(
             s->dxvk, surface->dxvk_surface, 0, d3d_rects, rect_count,
             image->size.width, image->size.height, sequence_out);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_SUBMIT,
+                            perf_start_ns);
     } else {
         result = VMSVGA3D_DXVK_SCREEN_READBACK_SUBMIT_FAILED;
     }
@@ -16811,24 +16839,41 @@ static bool vmsvga3d_screen_target_flush_live_mode(
 
 
             if (d3d9_resident) {
-                batch_readback =
-                    vmsvga3d_d3d9_runtime_readback_surface_rects(
-                        s, surface, &surface->mips[0], 0, rects, rect_count,
-                        desc->bytes_per_block,
-                        direct_candidate ? screen_base : NULL,
-                        direct_candidate ? screen_stride : 0,
-                        direct_candidate ? (uint32_t)screen_size : 0) ==
-                    VMSVGA3D_D3D9_ACCEL_COMPLETE;
+                {
+                    uint64_t perf_start_ns =
+                        qemu_perf_stats_begin(
+                            QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK);
+                    batch_readback =
+                        vmsvga3d_d3d9_runtime_readback_surface_rects(
+                            s, surface, &surface->mips[0], 0, rects, rect_count,
+                            desc->bytes_per_block,
+                            direct_candidate ? screen_base : NULL,
+                            direct_candidate ? screen_stride : 0,
+                            direct_candidate ? (uint32_t)screen_size : 0) ==
+                        VMSVGA3D_D3D9_ACCEL_COMPLETE;
+                    qemu_perf_stats_end(
+                        QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK,
+                        perf_start_ns);
+                }
                 direct_screen_readback = batch_readback && direct_candidate;
 
                 /* Keep the proven full-surface path as a correctness fallback
                  * if a host D3D9 implementation rejects the scratch-copy
                  * optimization for a particular render-target format. */
                 if (!batch_readback) {
-                    if (vmsvga3d_d3d9_runtime_readback_surface_image(
-                            s, surface, &surface->mips[0], 0) !=
-                        VMSVGA3D_D3D9_ACCEL_COMPLETE) {
-                        return false;
+                    {
+                        uint64_t perf_start_ns =
+                            qemu_perf_stats_begin(
+                                QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK);
+                        VMSVGA3DD3D9AccelResult readback_result =
+                            vmsvga3d_d3d9_runtime_readback_surface_image(
+                                s, surface, &surface->mips[0], 0);
+                        qemu_perf_stats_end(
+                            QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK,
+                            perf_start_ns);
+                        if (readback_result != VMSVGA3D_D3D9_ACCEL_COMPLETE) {
+                            return false;
+                        }
                     }
                     batch_readback = true;
                     direct_screen_readback = false;
@@ -16841,11 +16886,19 @@ static bool vmsvga3d_screen_target_flush_live_mode(
             }
 
             if (d3d11_resident && (rect_count > 1 || direct_candidate)) {
-                batch_readback = vmsvga3d_d3d10_readback_image_rects_live(
-                    s, surface, 0, rects, rect_count, desc->bytes_per_block,
-                    direct_candidate ? screen_base : NULL,
-                    direct_candidate ? screen_stride : 0,
-                    direct_candidate ? (uint32_t)screen_size : 0);
+                {
+                    uint64_t perf_start_ns =
+                        qemu_perf_stats_begin(
+                            QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK);
+                    batch_readback = vmsvga3d_d3d10_readback_image_rects_live(
+                        s, surface, 0, rects, rect_count, desc->bytes_per_block,
+                        direct_candidate ? screen_base : NULL,
+                        direct_candidate ? screen_stride : 0,
+                        direct_candidate ? (uint32_t)screen_size : 0);
+                    qemu_perf_stats_end(
+                        QEMU_PERF_VMVGA_SCREEN_TARGET_SYNC_READBACK,
+                        perf_start_ns);
+                }
                 direct_screen_readback = batch_readback && direct_candidate;
             }
         }
@@ -16857,9 +16910,14 @@ static bool vmsvga3d_screen_target_flush_live_mode(
      * frontend visible and retry the same presentation on the next refresh.
      */
     for (i = 0; i < rect_count; i++) {
-        if (!vmsvga3d_screen_target_present_live(
-                s, sid, 0, &rects[i], !batch_readback,
-                !direct_screen_readback, false)) {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_PRESENT);
+        bool present_ok = vmsvga3d_screen_target_present_live(
+            s, sid, 0, &rects[i], !batch_readback,
+            !direct_screen_readback, false);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_PRESENT,
+                            perf_start_ns);
+        if (!present_ok) {
             if (s->screen_frontend_deferred &&
                 vmsvga_trace_flight_enabled()) {
                 fprintf(stderr,
