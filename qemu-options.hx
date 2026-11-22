@@ -610,7 +610,9 @@ SRST
     Enable or disable Y2KBox diagnostic mode. The default is off. When enabled,
     the SDL **Ctrl+Alt+L** shortcut can capture diagnostic output to a new
     timestamped ``y2kbox-log-YYYYMMDD-HHMMSS.log`` file for each interval.
-    Existing files are never overwritten. Enabling diagnostic mode does not
+    Existing files are never overwritten. Each capture starts with reset
+    ``Y2KBOX-PERF`` counters and timing baselines, so its summary covers only
+    that interval; the VM is not restarted. Enabling diagnostic mode does not
     start capture; use the shortcut to start and stop each capture interval.
 
 ERST
