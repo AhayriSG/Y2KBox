@@ -6623,10 +6623,17 @@ static bool vmsvga3d_handle_clear(struct vmsvga_state_s *s,
         return true;
     }
 
-    accel = vmsvga3d_d3d9_try_clear(s, body, rects, rect_count);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_ACCEL);
+        accel = vmsvga3d_d3d9_try_clear(s, body, rects, rect_count);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_ACCEL, perf_start_ns);
+    }
     if (accel == VMSVGA3D_D3D9_ACCEL_COMPLETE) {
         wrote = true;
     } else if (accel == VMSVGA3D_D3D9_ACCEL_UNAVAILABLE) {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_FALLBACK);
         /* CPU clear must preserve pixels outside a partial clear.  Pull any
          * resident renderer contents into the canonical shadow first instead
          * of assuming a D3D9 target is still CPU-coherent. */
@@ -6638,15 +6645,19 @@ static bool vmsvga3d_handle_clear(struct vmsvga_state_s *s,
                 s, body->cid, body->clearFlag);
             wrote = true;
         }
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_FALLBACK, perf_start_ns);
     }
 
     if (wrote && (body->clearFlag & SVGA3D_CLEAR_COLOR)) {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_NOTE);
         vmsvga3d_screen_target_note_d3d9_clear_live(
             s, body->cid, rects, rect_count);
         if (trace_3d) {
             vmsvga3d_trace_vgpu9_render_target_write(
                 s, body->cid, VMSVGA3D_TRACE_VGPU9_WRITE_CLEAR);
         }
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_NOTE, perf_start_ns);
     }
 
     VMVGA_TRACE_LOCAL_CACHED(
