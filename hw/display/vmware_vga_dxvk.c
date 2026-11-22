@@ -12506,8 +12506,15 @@ bool vmsvga3d_dxvk_surface_readback_level(
                 &get_render_target_data, sizeof(get_render_target_data))) {
             goto out;
         }
-        result = get_render_target_data(dxvk->d3d9_device, source_surface,
-                                        bounce_surface);
+        {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(
+                    QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA);
+            result = get_render_target_data(dxvk->d3d9_device, source_surface,
+                                            bounce_surface);
+            qemu_perf_stats_end(
+                QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA, perf_start_ns);
+        }
         if (!vmsvga3d_dxvk_succeeded(result)) {
             goto out;
         }
@@ -12525,26 +12532,34 @@ bool vmsvga3d_dxvk_surface_readback_level(
         goto out;
     }
 
-    result = lock_rect(lock_surface, &locked, NULL,
-                       VMSVGA3D_DXVK_D3DLOCK_READONLY);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_LOCK_COPY);
 
-    if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
-        locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
-        if (vmsvga3d_dxvk_succeeded(result)) {
-            unlock_rect(lock_surface);
+        result = lock_rect(lock_surface, &locked, NULL,
+                           VMSVGA3D_DXVK_D3DLOCK_READONLY);
+
+        if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
+            locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
+            if (vmsvga3d_dxvk_succeeded(result)) {
+                unlock_rect(lock_surface);
+            }
+            qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY,
+                                perf_start_ns);
+            goto out;
         }
-        goto out;
+
+        source = locked.bits;
+
+        for (y = 0; y < rows; y++) {
+            memcpy(destination + (size_t)y * row_bytes,
+                   source + (size_t)y * (uint32_t)locked.pitch, row_bytes);
+        }
+
+        result = unlock_rect(lock_surface);
+        success = vmsvga3d_dxvk_succeeded(result);
+        qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY, perf_start_ns);
     }
-
-    source = locked.bits;
-
-    for (y = 0; y < rows; y++) {
-        memcpy(destination + (size_t)y * row_bytes,
-               source + (size_t)y * (uint32_t)locked.pitch, row_bytes);
-    }
-
-    result = unlock_rect(lock_surface);
-    success = vmsvga3d_dxvk_succeeded(result);
 
 out:
     if (bounce_surface != NULL) {
