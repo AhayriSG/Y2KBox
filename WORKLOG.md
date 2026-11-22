@@ -1262,3 +1262,36 @@ steps: Linux and Windows CI; owner equivalence verification with
 Y2KBOX_FLATVIEW_BUILDER=tree and Y2KBOX_FLATVIEW_VERIFY=1 (without Ctrl+Alt+L);
 then a separate performance capture with verification unset. No default
 switch or GART transaction changes.
+
+
+## Session 59 (ChatGPT), 2026-11-22 - Promote and validate ordered-tree FlatView renderer
+
+Owner first confirmed the tree renderer's correctness comparison against the
+legacy renderer with Y2KBOX_FLATVIEW_VERIFY=1. In the separate performance
+capture (verification unset), topology generation took 1.713354 s across the
+same 795 generations, compared with 17.964536 s in the earlier batched
+prototype capture. GART map commits took 1.508186 s across 138 operations
+(compared with 15.479662 s), and unmap commits took 0.235412 s across 159
+operations (compared with 2.517483 s). Maximum cpu.exec duration fell from
+399.384 ms to 85.693 ms, with zero >100 ms slices versus 144 in the batched
+capture. The captures were not perfectly controlled A/B runs, but operation
+counts match and the improvement is substantial.
+
+Owner then tested the tree renderer in three affected games:
+- Joint Operations: previous 1-3 second freezes and associated audio
+  interruptions were no longer noticeable.
+- FIFA 2003: major improvement; occasional roughly one-second hitches remain.
+- F1 Challenge '99-'02: scene-transition stalls improved; a crowded opening
+  grid still causes sustained slideshow-like performance until nearby cars
+  leave view.
+
+Promoted the ordered-tree renderer to the unconditional default in
+system/memory.c. Removed Y2KBOX_FLATVIEW_BUILDER selection and the unsuccessful
+batched renderer. Kept the legacy renderer only as the reference implementation
+for Y2KBOX_FLATVIEW_VERIFY=1, which compares output before and after
+simplification. No GART transaction boundaries or memory mapping semantics
+were intentionally changed. No local build/test was performed and CI was not
+polled; Windows and Linux CI validation remains outstanding. Do not claim CI
+passed. Remaining FIFA hitches and F1 crowded-grid performance should be
+profiled as separate follow-up symptoms rather than attributed to the
+FlatView renderer without evidence.
