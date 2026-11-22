@@ -297,10 +297,11 @@ struct vmsvga_cursor_source_s {
  * This project overlays vmware_vga.c onto an otherwise stock QEMU source
  * tree, so it cannot add generated trace events without also replacing
  * hw/display/trace-events.  Use the existing VMVGA debug device property as
- * the runtime master switch, then keep the extra diagnostics local.
+ * the debug-mode capability switch, then keep extra local diagnostics
+ * disabled until SDL starts an explicit capture interval.
  *
- * Enable at runtime with:
- *   -device vmvga,debug=on
+ * Enable debug mode independently of device creation with:
+ *   -global vmvga.debug=on
  *
  * QEMU trace events such as vmware_value_read remain independently gated.
  * Categories set to 0 compile down to a constant-false branch.
@@ -12058,7 +12059,7 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
     struct pci_vmsvga_state_s *s = VMVGA(PCI_DEVICE(obj));
 
     if (enabled && !s->chip.debug) {
-        error_setg(errp, "VMVGA diagnostic capture requires debug=on");
+        error_setg(errp, "Y2KBox debug mode is disabled; use -global vmvga.debug=on");
         return;
     }
     if (s->chip.debug_log == enabled) {
