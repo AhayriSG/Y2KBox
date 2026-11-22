@@ -1322,7 +1322,7 @@ T19 remains PAUSED pending Linux/Windows CI and owner XP guest verification.
 ## Session 61 (ChatGPT), 2026-11-22 - Add Y2KBox debug mode CLI option
 
 Replaced the user-facing QEMU-specific global-property syntax with the native
-Y2KBox option `-y2kboxdebugmode=on|off`. The option is registered in
+Y2KBox option `-y2kboxdebugmode on|off`. The option is registered in
 `qemu-options.hx` so it is parsed by QEMU's normal command-line option
 machinery and appears in command-line help. `system/vl.c` validates the value
 and maps it internally to the VMVGA debug capability property. The default
