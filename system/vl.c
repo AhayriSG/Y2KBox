@@ -2994,6 +2994,21 @@ void qemu_init(int argc, char **argv)
                 if (qemu_global_option(optarg) != 0)
                     exit(1);
                 break;
+            case QEMU_OPTION_y2kboxdebugmode:
+                if (g_str_equal(optarg, "on")) {
+                    if (qemu_global_option("vmvga.debug=on") != 0) {
+                        exit(1);
+                    }
+                } else if (g_str_equal(optarg, "off")) {
+                    if (qemu_global_option("vmvga.debug=off") != 0) {
+                        exit(1);
+                    }
+                } else {
+                    error_report("Invalid value for -y2kboxdebugmode: %s (expected on or off)",
+                                 optarg);
+                    exit(1);
+                }
+                break;
             case QEMU_OPTION_mtdblock:
                 drive_add(IF_MTD, -1, optarg, MTD_OPTS);
                 break;
