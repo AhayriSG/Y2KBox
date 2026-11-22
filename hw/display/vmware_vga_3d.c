@@ -6487,21 +6487,38 @@ static bool vmsvga3d_clear_depth_stencil_image(
                     (uint64_t)rect.w * rect.h * bytes);
             }
 
-            for (y = 0; y < rect.h; y++) {
-                uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
-                               (uint64_t)rect.x * bytes;
-                for (x = 0; x < rect.w; x++) {
-                    uint8_t *pixel = row + (uint64_t)x * bytes;
-                    uint32_t value = vmsvga3d_load_le(pixel, bytes);
+            if (clear_depth && !clear_stencil && stencil_bits == 0) {
+                /* Depth-only formats have no preserved stencil component.
+                 * Any bits outside the depth field are padding (for example,
+                 * the X8 byte in D24X8), so avoid reading the old pixel. */
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * bytes;
+                    for (x = 0; x < rect.w; x++) {
+                        vmsvga3d_store_le(row + (uint64_t)x * bytes,
+                                          bytes, (uint32_t)depth_value);
+                    }
+                }
+            } else {
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * bytes;
+                    for (x = 0; x < rect.w; x++) {
+                        uint8_t *pixel = row + (uint64_t)x * bytes;
+                        uint32_t value = vmsvga3d_load_le(pixel, bytes);
 
-                    if (clear_depth) {
-                        value = (uint32_t)(((uint64_t)value & ~depth_mask) | depth_value);
+                        if (clear_depth) {
+                            value = (uint32_t)(((uint64_t)value & ~depth_mask) |
+                                               depth_value);
+                        }
+                        if (clear_stencil) {
+                            value = (uint32_t)(((uint64_t)value & ~stencil_mask) |
+                                               stencil_value);
+                        }
+                        vmsvga3d_store_le(pixel, bytes, value);
                     }
-                    if (clear_stencil) {
-                        value = (uint32_t)(((uint64_t)value & ~stencil_mask) |
-                                           stencil_value);
-                    }
-                    vmsvga3d_store_le(pixel, bytes, value);
                 }
             }
         }
