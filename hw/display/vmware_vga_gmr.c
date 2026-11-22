@@ -1651,6 +1651,7 @@ static void vmsvga_screen_reset(struct vmsvga_state_s *s)
     s->screen_backing_pitch = 0;
     s->screen_clone_count = 0;
     s->screen_frontend_deferred = false;
+    s->screen_frontend_deferred_frames = 0;
     s->screen_frontend_hold_frames = 0;
     s->screen_destroyed_reuse_valid = false;
     s->gmrfb_defined = false;
@@ -1861,6 +1862,7 @@ static bool vmsvga_screen_define(struct vmsvga_state_s *s, uint32_t id,
         s->new_height = height;
         s->new_depth = 32;
         s->screen_frontend_deferred = false;
+        s->screen_frontend_deferred_frames = 0;
         s->svga_surface_bound = true;
         if (s->dirty_log_enabled) {
             /* Dirty tracking stayed active across DESTROY/DEFINE, so the
@@ -2072,6 +2074,7 @@ static bool vmsvga_screen_define(struct vmsvga_state_s *s, uint32_t id,
     s->new_depth = 32;
     s->screen_frontend_deferred = defer_frontend && handoff_active &&
                                   !backing_present;
+    s->screen_frontend_deferred_frames = 0;
     s->svga_surface_bound = false;
     if (s->screen_frontend_deferred) {
         s->invalidated = false;
@@ -2344,6 +2347,7 @@ static bool vmsvga_screen_destroy(struct vmsvga_state_s *s,
     s->screen_clone_count = 0;
     s->screen_stride = 0;
     s->screen_frontend_deferred = false;
+    s->screen_frontend_deferred_frames = 0;
     s->screen_annotation_type = VMSVGA_ANNOTATION_NONE;
     s->damage_count = 0;
     s->svga_surface_bound = false;
