@@ -596,16 +596,18 @@ capabilities but does not start continuous output. Do not use
 `-device vmvga,debug=on`; keep device creation and debug configuration separate.
 
 When debug mode is enabled, the SDL title advertises **Ctrl+Alt+L**. Pressing
-the shortcut redirects stderr to `y2kbox-log.log` in the launch working
-directory and starts a diagnostic capture interval: general performance
+the shortcut creates a new timestamped `y2kbox-log-YYYYMMDD-HHMMSS.log`
+file in the launch working directory, redirects stderr to it, and starts a
+diagnostic capture interval: general performance
 counters, VMVGA local diagnostics, VMPort GuestRPC diagnostics, and the existing
 `vmware_*`, `vmport_*`, and `vdagent*` trace events. Pressing it again stops
 those sources and restores the original stderr descriptor. The title uses
 generic diagnostic-logging wording, not VMVGA-freeze wording. The VM keeps
 running throughout.
 
-The first successful capture truncates `y2kbox-log.log`; subsequent intervals
-in the same QEMU run append. Debug mode off means the shortcut is unavailable
+Every capture interval creates a separate file. If a timestamped filename
+already exists, a numeric suffix is added rather than overwriting it. Debug
+mode off means the shortcut is unavailable
 and the title does not advertise it. Debug mode on but capture inactive still
 produces no continuous VMVGA/GuestRPC diagnostics, vdagent trace output, or
 routine capture start/stop messages in the console. The hotkey consumes the
