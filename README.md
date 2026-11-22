@@ -101,7 +101,9 @@ to capture general Y2KBox diagnostics—including performance counters, VMVGA,
 VMPort GuestRPC, and vdagent traces—to a new timestamped
 `y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory; press
 again to stop. The VM continues running. Every capture interval gets its own
-file, and existing files are never overwritten.
+file, and existing files are never overwritten. At the start of each interval,
+all `Y2KBOX-PERF` counters and timing baselines reset, so each file reports only
+work measured during that capture; the VM and guest state are not restarted.
 When debug mode is enabled but capture is inactive, the diagnostic streams
 remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
 and no routine capture start/stop messages in the command prompt. The hotkey
