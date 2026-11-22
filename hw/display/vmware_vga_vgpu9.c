@@ -5181,9 +5181,9 @@ out:
             if (!reset_ok && trace) {
                 perf_tail_phase_start = qemu_perf_stats_begin(
                     QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
-            fprintf(stderr,
-                    "VMVGA-D3D9-DRAW fail cid=%u stage=reset-state-after\n",
-                    cid);
+                fprintf(stderr,
+                        "VMVGA-D3D9-DRAW fail cid=%u stage=reset-state-after\n",
+                        cid);
                 qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE,
                                     perf_tail_phase_start);
             }
