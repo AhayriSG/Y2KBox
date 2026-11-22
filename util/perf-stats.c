@@ -64,6 +64,7 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_FLATVIEW_TREE_INSERT] = "memory.flatview_tree_insert",
     [QEMU_PERF_FLATVIEW_TREE_FLATTEN] = "memory.flatview_tree_flatten",
     [QEMU_PERF_VMVGA_DISPLAY_UPDATE] = "vmvga.display_update",
+    [QEMU_PERF_VMVGA_D3D9_DRAW_TOTAL] = "vmvga.d3d9_draw_total",
     [QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT] = "vmvga.d3d9_draw_layout",
     [QEMU_PERF_VMVGA_D3D9_DRAW_STATE] = "vmvga.d3d9_draw_state",
     [QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE] = "vmvga.d3d9_draw_resource",
