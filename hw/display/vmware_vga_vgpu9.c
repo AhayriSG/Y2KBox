@@ -5192,7 +5192,7 @@ out:
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_STATE,
                         perf_tail_state_start);
 
-    if (trace && success) {
+    if (deep_draw && success) {
         perf_tail_phase_start = qemu_perf_stats_begin(
             QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
         fprintf(stderr,
