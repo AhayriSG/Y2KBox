@@ -196,16 +196,10 @@ Add three independent device selectors:
 The launcher must make the `virtio-win-0.1.141_x86.vfd` driver floppy attachable during XP setup and warn that an existing XP installation cannot boot from VirtIO Block until its `viostor` driver is installed. It should also expose the appropriate guest driver guidance for VirtIO Net and, if the optional VirtIO SCSI CD-ROM path is implemented, its XP storage driver. Needs a display/input embedding path (DisplayChangeListener).
 ## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: TODO (baseline measured)
 Primary performance target: Windows TCG. Linux product runtime is KVM-only, with no TCG fallback. TCG optimization and performance A/B benchmarks are Windows-only; Linux CI performs KVM build and functional validation. Scope (owner): everything up to SSE2, not just SSE2. Measure with `xp/bench/perf.py` (see
-`xp/bench/README.md` for the baseline table). Measured hotspots and optimization work are tracked in the sub-tasks below. T13e is the current P0 responsiveness investigation; T13a's existing guarded paths remain, while further x87 expansion is paused pending evidence. T13b/c and the broader TCG work remain P1 and should be pursued after the P0 capture identifies whether they are relevant.
+`xp/bench/README.md` for the baseline table). Measured hotspots and optimization work are tracked in the sub-tasks below. T13e's main FlatView topology bottleneck has been addressed by the ordered-tree renderer; its CI gate and residual FIFA/F1 workload follow-ups remain. T13a's existing guarded paths remain, while further x87 expansion is paused pending representative profiling. T13b/c and the broader TCG work remain P1.
 
-* **T13e (P0) Profile and eliminate multi-second scene-transition stalls - Status: PAUSED (ordered-tree renderer implemented and owner-validated across three XP games; CI validation pending).** Owner reports a general Windows TCG responsiveness problem across multiple XP games: scene transitions, camera changes, newly visible LOD/geometry, and other content changes can cause pauses of roughly 1-3 seconds before execution resumes. Reproduced in FIFA 2003, Joint Operations: Typhoon Rising, and F1 Challenge '99-'02; these are examples, not the scope or a game-specific bug report. Treat this as a cross-game guest/host performance issue. **The cause is unknown; do not assume it is TCG, DXVK shader compilation, SVGA3D, TB invalidation, or scheduling until measured.**
-  1. Establish repeatable owner-side captures across representative affected games/workloads, using the same scene/transition, host, graphics driver/backend, guest settings, and warm/cold run distinction for each comparison. Record frame/pause duration, whether audio continues or also stutters/freezes, and whether the host is CPU-bound, GPU-bound, blocked, or waiting on I/O. Owner confirms audio loops/stutters/freezes during the same pauses; this broadens the symptom beyond a display-only presentation delay but does not identify the cause.
-  2. **Initial opt-in instrumentation implemented (awaiting Windows CI and owner runtime capture):** Ctrl+Alt+L VMVGA capture now also starts/resets aggregate monotonic timing counters and writes a `Y2KBOX-PERF` summary to the same `vmvga_freeze.log` when capture stops. Measures wall duration/count/total/max and >1/10/100 ms thresholds for `cpu_exec` slice durations and slice-to-slice intervals, full TB flushes, system-mode physical TB range invalidation, `tlb_reset_dirty`, VMVGA FIFO passes and full display-update/deferred-present servicing, D3D9 shader-object creation, and guest audio mixer output service. For SDL audio, also measures host output-callback duration and callback-to-callback intervals, plus mixer-service intervals; the latter interval metrics help expose callbacks that were not serviced on time even when each callback itself is short. Counters are atomic and aggregate-only (no per-event log spam); all are disabled except during the diagnostic capture. Category times overlap and must not be summed. This first pass does not directly measure Windows scheduler ready/running time, GPU queue wait duration, or non-SDL host audio backends; use ETW/WPR or add narrowly targeted instrumentation only if these counters leave the stall unattributed. The first 15.509 s owner capture recorded 14.358 s across 359 FIFO passes (maximum 189.455 ms; 201 over 10 ms and 6 over 100 ms), while TB flush/invalidation counts were zero, dirty-TLB reset time was 0.9 ms total, and D3D9 shader-object creation was 7.876 ms total. CPU execution slices and audio mixer service gaps both reached about 285-287 ms. These overlapping wall-clock measurements make FIFO command handling the leading area to investigate, but do not yet identify which command or prove it explains the full 1-3 s pause. Second-stage instrumentation now records aggregate duration/count/max/thresholds by SVGA3D FIFO command ID/name, including draw/clear, GB updates/readbacks, surface/MOB/GART, query and DX commands; it remains opt-in and emits no per-command log stream. The second 16.452 s owner capture recorded 14.971 s across SVGA3D command dispatch. `MAP_MOB_INTO_GART` consumed 10.451 s across 132 calls (79.2 ms average, 94.7 ms max); `UNMAP_GART_RANGE` consumed 1.856 s across 153 calls (12.1 ms average, 101.0 ms max). Together these two commands account for about 82.2% of command-dispatch wall time. `UPDATE_GB_IMAGE` consumed 916 ms and `DRAW_PRIMITIVES` 1.543 s; D3D9 shader-object creation was only 0.689 ms. This strongly prioritizes GART mapping, but command timings are inclusive wall time and may include host scheduling. Source inspection shows MAP resolves each MOB GPA with `memory_region_find()`, creates BAR1 aliases per page, and commits a memory-region transaction; UNMAP removes aliases per page and commits. New opt-in substage timers now separate map page resolution, alias installation, map transaction commit, unmap alias removal, and unmap transaction commit, with affected page counts reported as `work_units`. Use these measurements before changing GART mapping behavior.
-  3. Correlate the captured pause with the measured layer before changing code. In particular, do **not** increase DEFAULT_CODE_GEN_BUFFER_SIZE unless a code-buffer flush is observed at the pause. This tree's `tcg/region.c` uses a 1 GiB 64-bit system-emulation default but caps automatic sizing at `phys_mem / 8`; for the fixed 2 GiB guest that is approximately 256 MiB, subject to actual physical-memory sizing/alignment. Do not assume a DXVK state-cache environment variable or asynchronous compilation path exists in this backend without verifying the actual implementation and API behavior.
-  4. Compare xemu's relevant TCG changes against this QEMU 11.1.90 base at the source/commit level. Initial source audit: xemu #3028 is not a direct port candidate because Y2KBox's SoftMMU path already performs precise TB/range overlap checks in `tb_invalidate_phys_page_range__locked()`; the xemu proposal addresses its own whole-page invalidation behavior. xemu #3140 is a closer candidate: Y2KBox already maintains `cpu->neg.tlb.c.dirty` when a TLB mode is populated, but `tlb_reset_dirty()` still scans every `NB_MMU_MODES` table; measure call frequency/time before adapting the bitmap iteration. xemu #3141 targets the indirect CPU-state dispatch and `curr_cflags()` work in `helper_lookup_tb_ptr()`; assess it as a possible steady-state indirect-branch throughput optimization, not a demonstrated cause of multi-second pauses, and preserve all Y2KBox target/debug behavior. Do not transplant xemu's older TCG tree or cherry-pick patches wholesale; retain only independently reviewed, applicable changes with focused tests.
-  5. Implement the smallest fix supported by the capture. Validate correctness and compare repeated cold/warm scene-transition runs on the owner's Windows host. Keep ordinary compile/functional CI, but **do not add recurring CI performance benchmarks**; owner performs performance A/B and reports results.
-  **Exit criteria:** identify the dominant source of the cross-game 1-3 second pauses with timing evidence; either fix it with repeatable owner-side improvement or document why the suspected layer is not responsible and continue to the next measured candidate.
-
+* **T13e (P0) Profile and eliminate multi-second scene-transition stalls - Status: PAUSED (ordered-tree FlatView renderer implemented; owner equivalence and three-game validation reported; Windows/Linux CI pending).** The measured cross-game stall hotspot was repeated sorted-array insertion during recursive FlatView topology generation, triggered by GART map/unmap transaction commits. The ordered-tree renderer is now the default; the ineffective batched prototype and builder selector were removed. The legacy renderer remains only for `Y2KBOX_FLATVIEW_VERIFY=1`; leave verification unset during normal runs. Owner validation: Joint Operations' 1-3 s freezes/audio interruptions are no longer noticeable; FIFA 2003 is substantially improved but retains occasional ~1 s hitches; F1 Challenge '99-'02 scene transitions improved, while crowded-grid slowdown remains. Tree topology generation measured 1.713 s across 795 roots versus 17.965 s in the earlier batched capture (not a controlled A/B). **Resume:** verify Windows and Linux CI after promotion. If CI passes, close the original FlatView-stall fix and track the remaining FIFA hitches and F1 crowded-grid slowdown as separate profiling tasks; do not assume they share the same cause. Do not mark T13e DONE until CI validation is reported. No recurring CI performance benchmarks.
+ 
 * **T13a x87 - Status: PAUSED 2026-11-21 (existing guarded arithmetic/load/store paths retained; further instruction expansion deferred until T13e identifies the dominant scene-stall cost).** Implemented: host-x87 fast paths for fadd/fsub/fsubr/fmul/fdiv/fdivr (ST0/FT0 and STN/ST0 forms), fsqrt on normal finite operands, integer-only fld m32/m64 for normal and zero operands, exact-load correction for the softfloat fallback, and normal-finite FST m32/m64 stores. Arithmetic results were bit-identical to softfloat across 7.2M randomized operations (xp/bench/x87cmp.sh; XPQEMU_NO_HX87=1 kill switch). Focused x87add/x87div microbenchmarks improved 3.0x/4.6x. Windows five-run FST A/B medians: m32 2.474809 s softfloat vs 2.383368 s host x87 (+3.69%, 1.038x); m64 2.508467 s vs 2.359847 s (+5.92%, 1.063x). These are isolated hot-cache loop results, not general application gains. Deferred: fild/fist/fistt, compares, frndint/fscale/fprem, transcendental operations, fadd m80, broader exceptional-operand paths, and any host-register-stack mapping. Revisit only if representative XP profiling justifies it.
 * **T13b call/ret (~12 ns per call+ret pair).** `ret` = indirect jump through
   `tcg_gen_lookup_and_goto_ptr`/`lookup_tb_ptr`. Ideas: return-address shadow stack verified on `ret`,
@@ -414,119 +408,3 @@ The current device defaults are implemented separately from this future GUI
 task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
-
-
-T13e follow-up (2026-11-22): the owner capture isolated most measured GART time
-inside `memory_region_transaction_commit()`, not GPA resolution or per-page alias
-installation. Added opt-in internal transaction-stage timings for coalesced-MMIO
-flush, flatview rebuild, global listener begin/commit, per-address-space flatview
-publication, and ioeventfd updates. These counters are enabled only during the
-existing Ctrl+Alt+L capture. This is diagnostic instrumentation only; no memory
-mapping semantics or transaction boundaries are changed. Use the next capture to
-identify which internal stage dominates before attempting commit batching or
-alias representation changes.
-
-
-T13e follow-up (2026-11-22): the owner capture measured 13.276 s in
-`flatviews_reset()` across 159 calls, while address-space publication, ioeventfd
-updates, and global listener callbacks were negligible. Added opt-in breakdown of
-`generate_memory_topology()`: recursive region-render time and visited-region
-count, pre/post-simplification FlatRange counts, simplification time, dispatch
-construction time, dispatch compaction time, total topology generation time,
-unique roots generated, FlatRange insertions, and range-array reallocations/
-capacity growth. This remains diagnostic only; no FlatView caching, topology
-semantics, or transaction boundaries changed. Use the next capture to identify
-whether render traversal, range construction, dispatch generation, or compaction
-dominates before proposing an optimization.
-
-
-T13e follow-up (2026-11-22): the owner capture measured 12.962 s in
-FlatView topology generation across 795 roots: 12.799 s in recursive rendering,
-with 3,890,387 FlatRange insertions and 7,772,434 region visits. Simplification
-was 8.3 ms, dispatch construction 152 ms, and range-array reallocations 59 ms.
-The 11.502 s insertion timer is nested inside rendering. GART map/unmap commit
-totals closely track FlatView reset time; address-space publication remains cheap.
-
-Added a further opt-in diagnostic layer to distinguish FlatView range-search loop
-time/work, memmove() time and shifted-range counts, memory_region_ref() time,
-and maximum pre/post-simplification FlatView sizes. The range-search timer is
-inclusive of nested insertion calls; insertion, memmove, and reference timers
-also overlap by design. These counters are aggregate-only under Ctrl+Alt+L. No
-GART transaction boundaries, FlatView ordering, cache behavior, or memory
-semantics are changed. Await Linux/Windows CI and owner capture before deciding
-whether the measured cost is repeated range scanning, array shifting, or another
-part of insertion. No optimization has been applied.
-
-
-T13e implementation prototype (2026-11-22): added an opt-in alternative
-FlatView renderer in system/memory.c. The existing renderer remains the default
-and reference implementation. Select the prototype with
-Y2KBOX_FLATVIEW_BUILDER=batched. It binary-searches for the first potentially
-overlapping range, collects a region's uncovered gaps in address order, then
-merges that batch backwards into the existing sorted range array once per
-terminating region. This avoids one memmove per gap while preserving recursive
-subregion priority.
-
-For runtime equivalence checking, set Y2KBOX_FLATVIEW_VERIFY=1. The selected
-builder is compared against the other builder for every generated root, before
-and after simplification, including region pointer, address, region offset,
-dirty-log mask, ROMD, readonly, nonvolatile, and unmergeable fields. A mismatch
-reports the stage/range and aborts rather than continuing with a potentially
-incorrect map. Verification runs both algorithms and is intentionally expensive;
-do not use it for performance captures. Keep the legacy builder as default
-until Linux/Windows CI, equivalence checks, and guest testing pass.
-
-New metrics: memory.flatview_search (binary-search comparisons/time),
-memory.flatview_merge (batched merge work/time), and
-memory.flatview_batch_ranges (gaps inserted per batch). Existing scan, ref,
-and realloc metrics remain available. No GART transaction boundaries or
-memory-region semantics were changed. Prototype is not yet validated by CI
-or owner runtime testing; no performance claim yet.
-
-
-### T13e: ordered-tree FlatView builder prototype (2026-11-22)
-
-The owner tested the per-region batched-array prototype. Its 22.07 s capture
-measured 17.965 s in topology generation, with 16.995 s in repeated array
-merging. The capture showed approximately 3.89 million batches for 3.89
-million inserted ranges, so the batches averaged about one range and still
-copied approximately 23.68 billion range entries. The batched builder is not
-a performance improvement and remains opt-in only.
-
-Added a second experimental renderer selected with
-Y2KBOX_FLATVIEW_BUILDER=tree. It uses GLib GSequence to keep the disjoint
-FlatRanges ordered during the same recursive priority traversal, then flattens
-the sequence once into the ordinary FlatView array. It takes MemoryRegion
-references when inserting nodes and preserves the existing downstream
-simplification and dispatch construction. The legacy renderer remains the
-default. Y2KBOX_FLATVIEW_VERIFY=1 compares the tree output against the legacy
-renderer before and after simplification.
-
-New aggregate timings: memory.flatview_tree_insert and
-memory.flatview_tree_flatten. Search timing is reported by the existing
-memory.flatview_search counter. The tree's temporary node/data allocations
-increase peak memory use; measure runtime and memory impact rather than
-assuming the balanced-tree approach is faster.
-
-No local build/test was run and CI was not polled. Required next steps:
-Linux and Windows CI, then owner verification with builder=tree and
-Y2KBOX_FLATVIEW_VERIFY=1 (without Ctrl+Alt+L), followed by a separate
-performance capture with verification unset. Keep legacy as default until
-equivalence and representative XP gameplay are validated.
-
-
-T13e owner validation (2026-11-22): the ordered-tree FlatView renderer is now
-the unconditional default in `system/memory.c`; the experimental builder
-environment selector and unsuccessful batched renderer have been removed.
-The legacy renderer remains available only as the reference for the opt-in
-`Y2KBOX_FLATVIEW_VERIFY=1` equivalence check. The owner reports that the
-previous 1-3 second stalls and accompanying audio interruptions were no longer
-noticeable in Joint Operations; FIFA 2003 also improved dramatically, with
-occasional approximately one-second hitches remaining; F1 Challenge '99-'02
-showed substantially improved scene-transition behavior, while a crowded
-opening grid still causes sustained slideshow-like rendering that clears when
-the other cars leave view. These remaining FIFA/F1 symptoms are separate
-follow-up profiling targets, not evidence that FlatView topology construction
-is still the cause. The tree builder's correctness comparison passed on the
-owner's tested topology. Windows and Linux CI status has not been checked here;
-do not mark T13e DONE until required CI validation is reported.
