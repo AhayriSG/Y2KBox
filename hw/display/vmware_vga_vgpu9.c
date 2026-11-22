@@ -4705,6 +4705,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     bool deep_draw = trace && VMVGA_TRACE_DEEP_D3D9_DRAW;
     const char *failure_stage = NULL;
     uint32_t failure_range = UINT32_MAX;
+    uint64_t perf_total_start = 0;
     uint64_t perf_layout_start = 0;
     uint64_t perf_state_start = 0;
     uint64_t perf_submit_start = 0;
@@ -4729,6 +4730,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
         }
         return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
     }
+
+    perf_total_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_TOTAL);
 
     if (deep_draw) {
         fprintf(stderr,
@@ -5112,6 +5116,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     success = true;
 
 out:
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TOTAL,
+                        perf_total_start);
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT,
                         perf_layout_start);
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_STATE,
