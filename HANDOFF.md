@@ -601,9 +601,10 @@ file in the launch working directory, redirects stderr to it, and starts a
 diagnostic capture interval: general performance
 counters, VMVGA local diagnostics, VMPort GuestRPC diagnostics, and the existing
 `vmware_*`, `vmport_*`, and `vdagent*` trace events. Pressing it again stops
-those sources and restores the original stderr descriptor. The title uses
-generic diagnostic-logging wording, not VMVGA-freeze wording. The VM keeps
-running throughout.
+those sources and restores the original stderr descriptor. At each capture
+start, `Y2KBOX-PERF` counters and timing baselines are reset; the stop summary
+therefore covers only that capture interval. This resets diagnostic statistics
+only; the VM and guest continue running throughout.
 
 Every capture interval creates a separate file. If a timestamped filename
 already exists, a numeric suffix is added rather than overwriting it. Debug
