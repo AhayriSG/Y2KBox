@@ -415,3 +415,23 @@ The current device defaults are implemented separately from this future GUI
 task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
+
+## T24 (P1) Fixed-size SDL guest display window  -  Status: PAUSED (implementation committed; awaiting CI + XP guest verification)
+Make the SDL host window follow the VMVGA guest display surface rather than
+allowing host-side window geometry to influence the guest.
+
+* Windowed SDL windows remain decorated but are non-resizable; the titlebar
+  maximize/resize affordance must be disabled by the non-resizable window style.
+* Guest display-surface changes resize the window programmatically.
+* Host `SDL_WINDOWEVENT_RESIZED` and `SDL_WINDOWEVENT_SIZE_CHANGED` events
+  must not call `qemu_console_set_ui_info()` or change guest display geometry.
+  If a host window manager changes the window dimensions anyway, restore the
+  current guest surface dimensions.
+* Fullscreen desktop dimensions are presentation-only and never feed back into
+  the guest resolution. Keep `Ctrl+Alt+F` as the interactive fullscreen toggle.
+* Do not alter mouse emulation or coordinate mapping to compensate for
+  host-window resizing.
+* DoD: Linux and Windows SDL builds pass CI; owner verifies windowed guest
+  resolution changes, disabled maximize/manual resize, fullscreen toggling,
+  and mouse tracking in an XP guest.
+
