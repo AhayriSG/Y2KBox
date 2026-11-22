@@ -12951,9 +12951,20 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                 }
             }
 
-            if (!vmsvga3d_dxvk_surface_readback_level(
-                    dxvk, surface, level, data, row_pitch, source_height)) {
-                goto out;
+            {
+                uint64_t perf_start_ns =
+                    qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_FULL_SURFACE);
+                bool readback_ok = vmsvga3d_dxvk_surface_readback_level(
+                    dxvk, surface, level, data, row_pitch, source_height);
+
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
+                    (uint64_t)source_width * source_height);
+                qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
+                                    perf_start_ns);
+                if (!readback_ok) {
+                    goto out;
+                }
             }
 
             if (secondary_data != NULL) {
