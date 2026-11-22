@@ -16127,6 +16127,7 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvkBufferUnlock unlock = NULL;
     void *destination = NULL;
     int32_t result;
+    uint64_t perf_start_ns;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL || !surface->d3d9_resident ||
         surface->d3d9_resource == NULL || data == NULL || size == 0 ||
@@ -16142,13 +16143,21 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
         return false;
     }
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK);
     result = lock(surface->d3d9_resource, offset, size, &destination, 0);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK, perf_start_ns);
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
         return false;
     }
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_COPY);
     memcpy(destination, data, size);
+    qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_COPY, size);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_COPY, perf_start_ns);
+
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK);
     result = unlock(surface->d3d9_resource);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK, perf_start_ns);
 
     return vmsvga3d_dxvk_succeeded(result);
 #else
