@@ -93,9 +93,9 @@ libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
 
 Diagnostic logging is an opt-in tester feature and is **off by default**.
-Enable Y2KBox debug mode independently of the VMVGA device declaration with
-`-global vmvga.debug=on` (omit this option for normal use). This is the
-command-line equivalent of the future T12 GUI's **Debug: On/Off** setting.
+Enable Y2KBox debug mode with `-y2kboxdebugmode=on` (or explicitly disable it
+with `-y2kboxdebugmode=off`; the default is off). This is the command-line
+equivalent of the future T12 GUI's **Debug: On/Off** setting.
 With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
 to capture general Y2KBox diagnostics—including performance counters, VMVGA,
 VMPort GuestRPC, and vdagent traces—to `y2kbox-log.log` in the launch working
