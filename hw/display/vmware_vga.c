@@ -10540,8 +10540,16 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
     {
         uint64_t perf_start_ns =
             qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_DEFERRED_FLUSH);
+        uint64_t legacy_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_LEGACY_PRESENT);
         (void)vmsvga3d_legacy_present_flush_live(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_LEGACY_PRESENT,
+                            legacy_start_ns);
+        legacy_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_SCREEN_TARGET);
         (void)vmsvga3d_screen_target_flush_live(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_SCREEN_TARGET,
+                            legacy_start_ns);
         qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_DEFERRED_FLUSH,
                             perf_start_ns);
     }
