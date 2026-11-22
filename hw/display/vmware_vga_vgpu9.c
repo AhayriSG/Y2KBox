@@ -4711,6 +4711,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     uint64_t perf_submit_start = 0;
     uint64_t perf_tail_start = 0;
     uint64_t perf_tail_phase_start = 0;
+    uint64_t perf_tail_state_start = 0;
 
     if (s == NULL || !vmsvga3d_dxvk_ready(s->dxvk) || s->svga3d == NULL ||
         vertex_decls == NULL || ranges == NULL || vertex_decl_count == 0 ||
@@ -5162,7 +5163,7 @@ out:
                             perf_tail_phase_start);
     }
 
-    perf_tail_phase_start = qemu_perf_stats_begin(
+    perf_tail_state_start = qemu_perf_stats_begin(
         QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_STATE);
     if (success) {
         context->legacy_full_replay = false;
@@ -5189,7 +5190,7 @@ out:
         }
     }
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_STATE,
-                        perf_tail_phase_start);
+                        perf_tail_state_start);
 
     if (trace && success) {
         perf_tail_phase_start = qemu_perf_stats_begin(
