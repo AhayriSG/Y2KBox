@@ -142,6 +142,13 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_AUDIO_MIX_OUT_GAP] = "audio.mix_out_gap",
     [QEMU_PERF_AUDIO_SDL_CALLBACK_OUT] = "audio.sdl_callback_out",
     [QEMU_PERF_AUDIO_SDL_CALLBACK_GAP] = "audio.sdl_callback_gap",
+    [QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK] = "dxvk.upload_buffer_lock",
+    [QEMU_PERF_DXVK_UPLOAD_BUFFER_COPY] = "dxvk.upload_buffer_copy",
+    [QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK] = "dxvk.upload_buffer_unlock",
+    [QEMU_PERF_DXVK_UPLOAD_TEXTURE_LOCK] = "dxvk.upload_texture_lock",
+    [QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY] = "dxvk.upload_texture_copy",
+    [QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK] = "dxvk.upload_texture_unlock",
+    [QEMU_PERF_DXVK_UPLOAD_TEXTURE_UPDATE] = "dxvk.upload_texture_update",
 };
 
 void qemu_perf_stats_start(void)
