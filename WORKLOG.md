@@ -1374,3 +1374,14 @@ restores the original stderr descriptor. The VM continues running.
 Updated README, TASKS, HANDOFF, and command-line option documentation. No local
 build/test was run and CI was not polled, per project workflow. Linux/Windows
 CI and owner XP guest verification remain outstanding.
+
+
+## Session 64 (ChatGPT), 2026-11-22 - Document per-capture performance counter reset
+
+Clarified the diagnostic capture contract in README.md, TASKS.md, HANDOFF.md,
+and qemu-options.hx: every Ctrl+Alt+L capture starts a fresh `Y2KBOX-PERF`
+measurement interval by resetting counters and timing baselines. The resulting
+summary covers only that interval. This reset affects diagnostic statistics
+only; it does not restart the VM or reset guest state.
+
+Documentation-only change. No local build/test was run and CI was not polled.
