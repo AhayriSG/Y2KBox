@@ -608,9 +608,10 @@ DEF("y2kboxdebugmode", HAS_ARG, QEMU_OPTION_y2kboxdebugmode,
 SRST
 ``-y2kboxdebugmode on|off``
     Enable or disable Y2KBox diagnostic mode. The default is off. When enabled,
-    the SDL **Ctrl+Alt+L** shortcut can capture diagnostic output to
-    ``y2kbox-log.log``. Enabling diagnostic mode does not start capture;
-    use the shortcut to start and stop each capture interval.
+    the SDL **Ctrl+Alt+L** shortcut can capture diagnostic output to a new
+    timestamped ``y2kbox-log-YYYYMMDD-HHMMSS.log`` file for each interval.
+    Existing files are never overwritten. Enabling diagnostic mode does not
+    start capture; use the shortcut to start and stop each capture interval.
 
 ERST
 SRST
