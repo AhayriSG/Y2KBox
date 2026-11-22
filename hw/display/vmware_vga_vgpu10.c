@@ -24,6 +24,12 @@
 
 */
 
+/* Per-resource update success logs are intentionally opt-in: they are
+ * extremely frequent during normal guest rendering and distort profiling. */
+#ifndef VMVGA_TRACE_DEEP_GB_UPDATE
+#define VMVGA_TRACE_DEEP_GB_UPDATE 0
+#endif
+
 #include "include/vmware_vga_vgpu10.h"
 #include "qemu/perf-stats.h"
 
@@ -12449,6 +12455,7 @@ static bool vmsvga3d_d3d10_update_subresource_live_impl(
         surface->d3d11_indirect_args_shadow_authoritative = true;
     }
 
+#if VMVGA_TRACE_DEEP_GB_UPDATE
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "GB-UPDATE sid=%u sub=%u box=%u,%u,%u/%ux%ux%u backend=%s "
@@ -12456,6 +12463,7 @@ static bool vmsvga3d_d3d10_update_subresource_live_impl(
         command->sid, command->subResource, layout.box.x, layout.box.y,
         layout.box.z, layout.box.w, layout.box.h, layout.box.d,
         d3d9_resident ? "d3d9" : (d3d11_resident ? "d3d11" : "cpu"));
+#endif
 
     perf_surface_changed_start = qemu_perf_stats_begin(
         QEMU_PERF_VMVGA_GB_UPDATE_SURFACE_CHANGED);
@@ -12534,7 +12542,8 @@ static bool vmsvga3d_d3d10_buffer_update_live(
     }
 
     result = vmsvga3d_d3d10_update_subresource_live(s, &update);
-    if (VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D)) {
+    if (VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D) &&
+        (!result || VMVGA_TRACE_DEEP_GB_UPDATE)) {
         uint32_t words[8] = { 0 };
         uint32_t dump_bytes = 0;
 
