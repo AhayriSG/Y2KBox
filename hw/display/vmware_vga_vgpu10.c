@@ -12146,7 +12146,7 @@ static bool vmsvga3d_d3d10_constant_buffers_refresh_sid_live(
     return true;
 }
 
-static bool vmsvga3d_d3d10_update_subresource_live(
+static bool vmsvga3d_d3d10_update_subresource_live_impl(
     struct vmsvga_state_s *s, const SVGA3dCmdDXUpdateSubResource *command)
 {
     SVGAOTableSurfaceEntry entry;
@@ -12172,29 +12172,48 @@ static bool vmsvga3d_d3d10_update_subresource_live(
     uint64_t perf_mob_read_start;
     uint64_t perf_upload_start;
     uint64_t perf_cb_start;
+    uint64_t perf_lookup_start;
+    uint64_t perf_layout_start;
+    uint64_t perf_backend_start;
+    uint64_t perf_surface_changed_start;
 
     if (s == NULL || command == NULL || s->svga3d == NULL ||
-        command->sid >= SVGA3D_MAX_SURFACE_IDS ||
-        !vmsvga3d_otable_read(s, SVGA_OTABLE_SURFACE, command->sid,
+        command->sid >= SVGA3D_MAX_SURFACE_IDS) {
+        return false;
+    }
+
+    perf_lookup_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP);
+    if (!vmsvga3d_otable_read(s, SVGA_OTABLE_SURFACE, command->sid,
                               sizeof(entry), &entry, sizeof(entry))) {
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP,
+                            perf_lookup_start);
         return false;
     }
 
     mob = vmsvga3d_mob_get(s, le32_to_cpu(entry.mobid));
     if (mob == NULL) {
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP,
+                            perf_lookup_start);
         return true;
     }
 
     surface = s->svga3d->surfaces[command->sid];
     if (surface == NULL || surface->mips == NULL ||
         command->subResource >= surface->mip_count) {
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP,
+                            perf_lookup_start);
         return false;
     }
 
     /* VBox skips guest-backed transfers for multisampled surfaces. */
     if (surface->multisample_count > 1) {
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP,
+                            perf_lookup_start);
         return true;
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LOOKUP,
+                        perf_lookup_start);
 
     image = &surface->mips[command->subResource];
     if (vmsvga3d_video_planar(surface->format) &&
@@ -12203,21 +12222,31 @@ static bool vmsvga3d_d3d10_update_subresource_live(
             s, &entry, mob, surface, image, command->subResource,
             &command->box, false, false);
     }
+    perf_layout_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_LAYOUT);
     if (!vmsvga3d_d3d10_update_box_live(
             surface, image, &command->box, &layout) ||
         !vmsvga3d_d3d10_mob_subresource_layout_live(
             &entry, surface, command->subResource, &mob_layout) ||
         image->pitch == 0 || image->plane_size == 0 ||
         image->plane_size % image->pitch != 0) {
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LAYOUT,
+                            perf_layout_start);
         return false;
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LAYOUT,
+                        perf_layout_start);
 
+    perf_backend_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_BACKEND);
     d3d9_resident =
         vmsvga3d_d3d9_runtime_surface_info(s, surface, &d3d9_info) &&
         d3d9_info.resident;
     d3d11_resident =
         surface->dxvk_surface != NULL &&
         vmsvga3d_dxvk_d3d11_surface_resident(surface->dxvk_surface);
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_BACKEND,
+                        perf_backend_start);
     if (d3d9_resident && d3d11_resident) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
@@ -12428,9 +12457,24 @@ static bool vmsvga3d_d3d10_update_subresource_live(
         layout.box.z, layout.box.w, layout.box.h, layout.box.d,
         d3d9_resident ? "d3d9" : (d3d11_resident ? "d3d11" : "cpu"));
 
+    perf_surface_changed_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_SURFACE_CHANGED);
     (void)vmsvga3d_surface_changed_live(
         s, command->sid, command->subResource, &layout.box);
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_SURFACE_CHANGED,
+                        perf_surface_changed_start);
     return true;
+}
+
+static bool vmsvga3d_d3d10_update_subresource_live(
+    struct vmsvga_state_s *s, const SVGA3dCmdDXUpdateSubResource *command)
+{
+    uint64_t perf_total_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_TOTAL);
+    bool result = vmsvga3d_d3d10_update_subresource_live_impl(s, command);
+
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_TOTAL, perf_total_start);
+    return result;
 }
 
 static bool vmsvga3d_d3d10_buffer_update_live(
