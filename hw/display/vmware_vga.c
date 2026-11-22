@@ -568,6 +568,8 @@ struct vmsvga_state_s {
     uint32_t screen_backing_pitch;
     uint32_t screen_clone_count;
     bool screen_frontend_deferred;
+    /* Display-refresh timeout for a deferred Screen Object frontend handoff. */
+    uint32_t screen_frontend_deferred_frames;
     uint32_t screen_frontend_hold_frames;
     bool screen_destroyed_reuse_valid;
     uint32_t screen_destroyed_flags;
