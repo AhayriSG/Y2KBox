@@ -12535,14 +12535,21 @@ bool vmsvga3d_dxvk_surface_readback_level(
     {
         uint64_t perf_start_ns =
             qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_LOCK_COPY);
+        uint64_t stage_start_ns;
 
+        stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_FULL_LOCK);
         result = lock_rect(lock_surface, &locked, NULL,
                            VMSVGA3D_DXVK_D3DLOCK_READONLY);
+        qemu_perf_stats_end(QEMU_PERF_DXVK_FULL_LOCK, stage_start_ns);
 
         if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
             locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
             if (vmsvga3d_dxvk_succeeded(result)) {
+                stage_start_ns =
+                    qemu_perf_stats_begin(QEMU_PERF_DXVK_FULL_UNLOCK);
                 unlock_rect(lock_surface);
+                qemu_perf_stats_end(QEMU_PERF_DXVK_FULL_UNLOCK,
+                                    stage_start_ns);
             }
             qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY,
                                 perf_start_ns);
@@ -12551,12 +12558,16 @@ bool vmsvga3d_dxvk_surface_readback_level(
 
         source = locked.bits;
 
+        stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_FULL_COPY);
         for (y = 0; y < rows; y++) {
             memcpy(destination + (size_t)y * row_bytes,
                    source + (size_t)y * (uint32_t)locked.pitch, row_bytes);
         }
+        qemu_perf_stats_end(QEMU_PERF_DXVK_FULL_COPY, stage_start_ns);
 
+        stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_FULL_UNLOCK);
         result = unlock_rect(lock_surface);
+        qemu_perf_stats_end(QEMU_PERF_DXVK_FULL_UNLOCK, stage_start_ns);
         success = vmsvga3d_dxvk_succeeded(result);
         qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY, perf_start_ns);
     }
@@ -13219,19 +13230,28 @@ bool vmsvga3d_dxvk_surface_readback_rects(
 
     uint64_t lock_copy_start_ns =
         qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_LOCK_COPY);
+    uint64_t stage_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_LOCK);
     result = lock_rect(surface->d3d9_readback_staging, &locked, NULL,
                        VMSVGA3D_DXVK_D3DLOCK_READONLY);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_LOCK, stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
         locked.pitch < 0 ||
         (uint64_t)(uint32_t)locked.pitch <
             (uint64_t)batch_width * bytes_per_pixel) {
         if (vmsvga3d_dxvk_succeeded(result)) {
+            stage_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_UNLOCK);
             unlock_rect(surface->d3d9_readback_staging);
+            qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_UNLOCK, stage_start_ns);
         }
+        qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY,
+                            lock_copy_start_ns);
         goto out;
     }
     locked_staging = true;
 
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_COPY);
     for (i = 0; i < rect_count; i++) {
         const VMSVGA3DD3D9Rect *rect = &rects[i];
         uint32_t source_x = (uint32_t)rect->left - batch_left;
@@ -13264,7 +13284,10 @@ bool vmsvga3d_dxvk_surface_readback_rects(
         }
     }
 
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_COPY, stage_start_ns);
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_UNLOCK);
     result = unlock_rect(surface->d3d9_readback_staging);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_UNLOCK, stage_start_ns);
     qemu_perf_stats_add_work(
         QEMU_PERF_DXVK_READBACK_LOCK_COPY,
         (uint64_t)batch_width * batch_height);
