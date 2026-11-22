@@ -25,6 +25,7 @@
 */
 
 #include "include/vmware_vga_vgpu10.h"
+#include "qemu/perf-stats.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -12167,6 +12168,10 @@ static bool vmsvga3d_d3d10_update_subresource_live(
     uint32_t guest_z;
     uint32_t z;
     uint32_t y;
+    uint64_t perf_preserve_start;
+    uint64_t perf_mob_read_start;
+    uint64_t perf_upload_start;
+    uint64_t perf_cb_start;
 
     if (s == NULL || command == NULL || s->svga3d == NULL ||
         command->sid >= SVGA3D_MAX_SURFACE_IDS ||
@@ -12242,8 +12247,12 @@ static bool vmsvga3d_d3d10_update_subresource_live(
     if (d3d9_resident && !full_image_update &&
         (d3d9_info.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_TEXTURE ||
          d3d9_info.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_SURFACE)) {
+        perf_preserve_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_GB_UPDATE_PRESERVE);
         d3d9_result = vmsvga3d_d3d9_runtime_readback_surface_image(
             s, surface, image, command->subResource);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_PRESERVE,
+                            perf_preserve_start);
         if (d3d9_result != VMSVGA3D_D3D9_ACCEL_COMPLETE) {
             VMVGA_TRACE_LOCAL(
                 VMVGA_TRACE_3D,
@@ -12281,6 +12290,8 @@ static bool vmsvga3d_d3d10_update_subresource_live(
         return false;
     }
 
+    perf_mob_read_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ);
     if (layout.depth_count == 1 && layout.row_bytes == image->pitch &&
         mob_layout.row_pitch == image->pitch) {
         uint64_t transfer_size =
@@ -12292,6 +12303,8 @@ static bool vmsvga3d_d3d10_update_subresource_live(
             !vmsvga3d_mob_read(s, mob, (uint32_t)subresource_offset,
                                image->data + layout.box_offset,
                                (uint32_t)transfer_size)) {
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ,
+                                perf_mob_read_start);
             return false;
         }
     } else {
@@ -12314,11 +12327,18 @@ static bool vmsvga3d_d3d10_update_subresource_live(
                     !vmsvga3d_mob_read_cursor(
                         s, mob, &read_cursor, (uint32_t)offset,
                         image->data + host_offset, layout.row_bytes)) {
+                    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ,
+                                        perf_mob_read_start);
                     return false;
                 }
             }
         }
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ,
+                        perf_mob_read_start);
+    qemu_perf_stats_add_work(
+        QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ,
+        (uint64_t)layout.row_bytes * layout.row_count * layout.depth_count);
 
     native_box.left = layout.box.x;
     native_box.top = layout.box.y;
@@ -12335,9 +12355,13 @@ static bool vmsvga3d_d3d10_update_subresource_live(
             (layout.depth_count != 1 || layout.row_count != 1)) {
             return false;
         }
+        perf_upload_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_GB_UPDATE_NATIVE_UPLOAD);
         d3d9_result = vmsvga3d_d3d9_runtime_upload_surface_image(
             s, surface, image, command->subResource, layout.box_offset,
             layout.row_bytes);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_NATIVE_UPLOAD,
+                            perf_upload_start);
         if (d3d9_result != VMSVGA3D_D3D9_ACCEL_COMPLETE) {
             VMVGA_TRACE_LOCAL(
                 VMVGA_TRACE_3D,
@@ -12348,29 +12372,45 @@ static bool vmsvga3d_d3d10_update_subresource_live(
                 layout.box.d);
             return false;
         }
-    } else if (d3d11_resident &&
-               !vmsvga3d_dxvk_d3d11_update_subresource(
-                   s->dxvk, surface->dxvk_surface, command->subResource,
-                   &native_box, image->data + layout.box_offset, image->pitch,
-                   image->plane_size)) {
-        VMVGA_TRACE_LOCAL(
-            VMVGA_TRACE_3D,
-            "GB-UPDATE sid=%u sub=%u box=%u,%u,%u/%ux%ux%u "
-            "backend=d3d11 stage=upload result=FAIL",
-            command->sid, command->subResource, layout.box.x, layout.box.y,
-            layout.box.z, layout.box.w, layout.box.h, layout.box.d);
-        return false;
+    } else if (d3d11_resident) {
+        bool upload_ok;
+
+        perf_upload_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_GB_UPDATE_NATIVE_UPLOAD);
+        upload_ok = vmsvga3d_dxvk_d3d11_update_subresource(
+            s->dxvk, surface->dxvk_surface, command->subResource,
+            &native_box, image->data + layout.box_offset, image->pitch,
+            image->plane_size);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_NATIVE_UPLOAD,
+                            perf_upload_start);
+        if (!upload_ok) {
+            VMVGA_TRACE_LOCAL(
+                VMVGA_TRACE_3D,
+                "GB-UPDATE sid=%u sub=%u box=%u,%u,%u/%ux%ux%u "
+                "backend=d3d11 stage=upload result=FAIL",
+                command->sid, command->subResource, layout.box.x, layout.box.y,
+                layout.box.z, layout.box.w, layout.box.h, layout.box.d);
+            return false;
+        }
     }
 
-    if (command->subResource == 0 &&
-        !vmsvga3d_d3d10_constant_buffers_refresh_sid_live(
-            s, command->sid)) {
-        VMVGA_TRACE_LOCAL(
-            VMVGA_TRACE_3D,
-            "GB-UPDATE sid=%u sub=%u stage=constant-buffer-refresh "
-            "result=FAIL",
-            command->sid, command->subResource);
-        return false;
+    if (command->subResource == 0) {
+        bool refresh_ok;
+
+        perf_cb_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_GB_UPDATE_CB_REFRESH);
+        refresh_ok = vmsvga3d_d3d10_constant_buffers_refresh_sid_live(
+            s, command->sid);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_CB_REFRESH,
+                            perf_cb_start);
+        if (!refresh_ok) {
+            VMVGA_TRACE_LOCAL(
+                VMVGA_TRACE_3D,
+                "GB-UPDATE sid=%u sub=%u stage=constant-buffer-refresh "
+                "result=FAIL",
+                command->sid, command->subResource);
+            return false;
+        }
     }
 
     /* Only a successful complete guest write proves that all bytes consumed
