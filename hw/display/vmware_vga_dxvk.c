@@ -12254,6 +12254,7 @@ bool vmsvga3d_dxvk_surface_upload_level(
     const uint32_t intz =
         VMSVGA3D_D3D9_MAKE_FOURCC('I', 'N', 'T', 'Z');
     bool direct_lock_texture;
+    uint64_t perf_start_ns;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL ||
         !surface->d3d9_resident || surface->d3d9_resource == NULL ||
@@ -12287,7 +12288,9 @@ bool vmsvga3d_dxvk_surface_upload_level(
             goto out;
         }
 
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_LOCK);
         result = lock_rect(source_surface, &locked, NULL, 0);
+        qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_LOCK, perf_start_ns);
         if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
             locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
             if (vmsvga3d_dxvk_succeeded(result)) {
@@ -12296,13 +12299,19 @@ bool vmsvga3d_dxvk_surface_upload_level(
             goto out;
         }
 
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY);
         destination = locked.bits;
         for (y = 0; y < rows; y++) {
             memcpy(destination + (size_t)y * (uint32_t)locked.pitch,
                    source + (size_t)y * row_bytes, row_bytes);
         }
+        qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY,
+                                 (uint64_t)row_bytes * rows);
 
+        qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY, perf_start_ns);
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK);
         result = unlock_rect(source_surface);
+        qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK, perf_start_ns);
         success = vmsvga3d_dxvk_succeeded(result);
         goto out;
     }
@@ -12421,7 +12430,9 @@ bool vmsvga3d_dxvk_surface_upload_level(
         goto out;
     }
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_LOCK);
     result = lock_rect(source_surface, &locked, NULL, 0);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_LOCK, perf_start_ns);
     if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
         locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
         if (vmsvga3d_dxvk_succeeded(result)) {
@@ -12430,20 +12441,28 @@ bool vmsvga3d_dxvk_surface_upload_level(
         goto out;
     }
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY);
     destination = locked.bits;
     source = data;
     for (y = 0; y < rows; y++) {
         memcpy(destination + (size_t)y * (uint32_t)locked.pitch,
                source + (size_t)y * row_bytes, row_bytes);
     }
+    qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY,
+                             (uint64_t)row_bytes * rows);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY, perf_start_ns);
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK);
     result = unlock_rect(source_surface);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK, perf_start_ns);
     if (!vmsvga3d_dxvk_succeeded(result)) {
         goto out;
     }
 
+    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UPDATE);
     result = update_surface(dxvk->d3d9_device, source_surface, NULL,
                             destination_surface, NULL);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_TEXTURE_UPDATE, perf_start_ns);
     success = vmsvga3d_dxvk_succeeded(result);
 
 out:
