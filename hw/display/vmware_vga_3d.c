@@ -6111,6 +6111,8 @@ static bool vmsvga3d_handle_draw_primitives(struct vmsvga_state_s *s,
     uint64_t base_size;
     uint64_t divisor_size;
     uint32_t divisor_count = 0;
+    uint64_t perf_handler_start;
+    uint64_t perf_validate_start;
 
     (void)cmd;
     if (!vmsvga3d_fifo_read_payload(s, len, fifo_start, &payload, &size)) {
@@ -6152,9 +6154,17 @@ static bool vmsvga3d_handle_draw_primitives(struct vmsvga_state_s *s,
         divisor_count = body->numVertexDecls;
     }
 
-    if (vmsvga3d_state_draw_primitives(
+    perf_handler_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_HANDLER);
+    perf_validate_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_VALIDATE);
+    {
+        bool draw_state_valid = vmsvga3d_state_draw_primitives(
             s, body->cid, body->numVertexDecls, decls, body->numRanges, ranges,
-            divisor_count, divisors)) {
+            divisor_count, divisors);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_VALIDATE,
+                            perf_validate_start);
+        if (draw_state_valid) {
         vmsvga3d_screen_target_prepare_d3d9_draw_live(s, body->cid);
         if (vmsvga3d_d3d9_runtime_draw_primitives(
                 s, body->cid, body->numVertexDecls, decls, body->numRanges,
@@ -6166,7 +6176,10 @@ static bool vmsvga3d_handle_draw_primitives(struct vmsvga_state_s *s,
                     s, body->cid, VMSVGA3D_TRACE_VGPU9_WRITE_DRAW);
             }
         }
+        }
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_HANDLER,
+                        perf_handler_start);
 
     vmsvga3d_fifo_release_payload(s, payload);
     return true;
