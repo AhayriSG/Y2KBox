@@ -5767,10 +5767,17 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
         upload_cpu = (command->clearFlag & SVGA3D_CLEAR_COLOR) == 0 ||
                      rect_count != 0;
 
-        if (!vmsvga3d_dxvk_materialize_surface(
+        {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_MATERIALIZE);
+            bool materialized = vmsvga3d_dxvk_materialize_surface(
                 s, surface, VMSVGA3D_D3D9_RESOURCE_USE_COLOR_TARGET,
-                upload_cpu)) {
-            return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
+                upload_cpu);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_MATERIALIZE,
+                                perf_start_ns);
+            if (!materialized) {
+                return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
+            }
         }
 
         color_targets[i] = surface->dxvk_surface;
@@ -5841,9 +5848,16 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
             return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
         }
 
-        if (!vmsvga3d_dxvk_materialize_surface(
-                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_DEPTH_TARGET, false)) {
-            return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
+        {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_MATERIALIZE);
+            bool materialized = vmsvga3d_dxvk_materialize_surface(
+                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_DEPTH_TARGET, false);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_MATERIALIZE,
+                                perf_start_ns);
+            if (!materialized) {
+                return VMSVGA3D_D3D9_ACCEL_UNAVAILABLE;
+            }
         }
 
         depth_stencil = surface->dxvk_surface;
@@ -5868,22 +5882,33 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
         }
     }
 
-    if (!vmsvga3d_d3d9_clear_shadow_non_msaa(
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_SHADOW);
+        bool shadow_ok = vmsvga3d_d3d9_clear_shadow_non_msaa(
             s, command->cid, command->clearFlag, command->color,
             command->depth, command->stencil, rect_count, rects,
-            &skipped_multisample_shadow)) {
-        g_free(d3d_rects);
-        return VMSVGA3D_D3D9_ACCEL_FAILED;
+            &skipped_multisample_shadow);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_SHADOW, perf_start_ns);
+        if (!shadow_ok) {
+            g_free(d3d_rects);
+            return VMSVGA3D_D3D9_ACCEL_FAILED;
+        }
     }
 
     d3d_flags = vmsvga3d_d3d9_clear_flags(effective_clear_flags);
-    if (d3d_flags != 0 &&
-        vmsvga3d_dxvk_clear(
+    if (d3d_flags != 0) {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_BACKEND);
+        bool clear_ok = vmsvga3d_dxvk_clear(
             s->dxvk, color_targets, color_levels, depth_stencil,
             depth_stencil_level, d3d_rects, rect_count, &plan->clear_scissor,
-            d3d_flags, plan->color, plan->depth, plan->stencil)) {
-        g_free(d3d_rects);
-        return VMSVGA3D_D3D9_ACCEL_COMPLETE;
+            d3d_flags, plan->color, plan->depth, plan->stencil);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_BACKEND, perf_start_ns);
+        if (clear_ok) {
+            g_free(d3d_rects);
+            return VMSVGA3D_D3D9_ACCEL_COMPLETE;
+        }
     }
 
     if (d3d_flags != 0) {
@@ -5900,8 +5925,13 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
         g_free(d3d_rects);
         return VMSVGA3D_D3D9_ACCEL_FAILED;
     }
-    vmsvga3d_dxvk_sync_clear_targets_from_cpu(s, command->cid,
-                                              command->clearFlag);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_CPU_SYNC);
+        vmsvga3d_dxvk_sync_clear_targets_from_cpu(s, command->cid,
+                                                  command->clearFlag);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_CPU_SYNC, perf_start_ns);
+    }
     g_free(d3d_rects);
     return VMSVGA3D_D3D9_ACCEL_COMPLETE;
 }
