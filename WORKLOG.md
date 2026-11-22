@@ -1333,3 +1333,32 @@ The future T12 GUI Debug On/Off control maps to this Y2KBox option, while
 Ctrl+Alt+L remains the separate interval-capture control. No local build/test
 or CI check was run; T19 remains PAUSED pending CI and owner XP guest
 verification.
+
+## Session 62 (ChatGPT), 2026-11-22 - Make SDL window geometry follow the guest display
+
+Owner clarified that Y2KBox's SDL window must act as a fixed-size virtual
+monitor: windowed mode must not be manually resizable or maximizable, guest
+resolution controls the window client size, and fullscreen remains controlled
+by Ctrl+Alt+F. Mouse emulation and coordinate mapping are considered working
+and were intentionally left untouched.
+
+In `ui/sdl2.c`, removed `SDL_WINDOW_RESIZABLE` from windowed window creation,
+leaving the normal decorated, non-resizable SDL window style. This also removes
+the host titlebar maximize/resize affordance through SDL's non-resizable window
+style. Kept the existing programmatic `sdl2_window_resize()` path used when the
+guest display surface changes.
+
+Changed host resize handling so both `SDL_WINDOWEVENT_RESIZED` and
+`SDL_WINDOWEVENT_SIZE_CHANGED` are presentation-only. They no longer forward
+host dimensions to `qemu_console_set_ui_info()`; if a windowed host window is
+nevertheless resized, SDL is instructed to restore the current guest surface
+dimensions. Fullscreen desktop dimensions are never fed back into guest display
+geometry.
+
+Updated HANDOFF.md with the owner-approved SDL display policy and added T24
+to TASKS.md. Source commit: `58d3098`; policy documentation:
+`7fbe09c`; task tracking: `75618b6`. No mouse implementation or coordinate
+mapping code was changed. No local build or XP guest test was run, and CI was
+not polled. T24 remains PAUSED until Linux/Windows CI and owner XP guest
+verification are reported.
+
