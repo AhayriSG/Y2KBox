@@ -6470,6 +6470,9 @@ static bool vmsvga3d_clear_depth_stencil_image(
 
                 qemu_perf_stats_record_work(
                     pixel_stat, (uint64_t)rect.w * rect.h);
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_VMVGA_CLEAR_SHADOW_DEPTH,
+                    (uint64_t)rect.w * rect.h * bytes);
             }
 
             for (y = 0; y < rect.h; y++) {
