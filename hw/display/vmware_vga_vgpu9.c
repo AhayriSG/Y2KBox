@@ -26,6 +26,7 @@
 
 #include "include/vmware_vga_vgpu9.h"
 #include "include/vmware_vga_video.h"
+#include "qemu/perf-stats.h"
 
 #include <string.h>
 
@@ -4704,6 +4705,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     bool deep_draw = trace && VMVGA_TRACE_DEEP_D3D9_DRAW;
     const char *failure_stage = NULL;
     uint32_t failure_range = UINT32_MAX;
+    uint64_t perf_layout_start = 0;
+    uint64_t perf_state_start = 0;
+    uint64_t perf_submit_start = 0;
 
     if (s == NULL || !vmsvga3d_dxvk_ready(s->dxvk) || s->svga3d == NULL ||
         vertex_decls == NULL || ranges == NULL || vertex_decl_count == 0 ||
@@ -4786,6 +4790,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
         }
     }
 
+    perf_layout_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT);
     if (!vmsvga3d_d3d9_vertex_layout(
             vertex_decls, vertex_decl_count, divisors, divisor_count, elements,
             G_N_ELEMENTS(elements), streams, G_N_ELEMENTS(streams),
@@ -4820,10 +4826,16 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
         goto out;
     }
 
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT,
+                        perf_layout_start);
+    perf_layout_start = 0;
+
     /* A new context still needs a pristine native D3D9 state and a complete
      * replay.  Shader bindings and constants are independent D3D9 state, so a
      * shader switch only needs the dirty shader stage rather than replaying
      * render targets, fixed-function state, and all texture stages. */
+    perf_state_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_STATE);
     reset_state = context->legacy_full_replay ||
                   s->svga3d->active_legacy_context_id != cid;
     full_replay = reset_state;
@@ -4873,6 +4885,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
         failure_stage = "bind-vertex-declaration";
         goto out;
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_STATE,
+                        perf_state_start);
+    perf_state_start = 0;
 
     for (i = 0; i < stream_count; i++) {
         VMSVGA3DSurface *surface;
@@ -4886,10 +4901,20 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
             failure_stage = "stream-surface-missing";
             goto out;
         }
-        if (!vmsvga3d_dxvk_materialize_buffer(
-                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_VERTEX_BUFFER, 0)) {
-            failure_stage = "materialize-vertex-buffer";
-            goto out;
+        {
+            uint64_t resource_start = qemu_perf_stats_begin(
+                QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE);
+            bool materialized = vmsvga3d_dxvk_materialize_buffer(
+                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_VERTEX_BUFFER, 0);
+
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
+                                resource_start);
+            qemu_perf_stats_add_work(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
+                                     surface->storage_bytes);
+            if (!materialized) {
+                failure_stage = "materialize-vertex-buffer";
+                goto out;
+            }
         }
         if (deep_draw) {
             fprintf(stderr,
@@ -4976,13 +5001,23 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 failure_stage = "unbind-indices";
                 goto out;
             }
+            perf_submit_start = qemu_perf_stats_begin(
+                QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT);
             if (!vmsvga3d_dxvk_draw_primitive(
                     s->dxvk, plan.primitive_type, plan.start_vertex,
                     plan.primitive_count)) {
+                qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                    perf_submit_start);
+                perf_submit_start = 0;
                 failure_range = i;
                 failure_stage = "draw-primitive";
                 goto out;
             }
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                perf_submit_start);
+            perf_submit_start = 0;
+            qemu_perf_stats_add_work(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                     plan.primitive_count);
             if (deep_draw) {
                 fprintf(stderr,
                         "VMVGA-D3D9-DRAW issued[%u] nonindexed prim=%u "
@@ -5004,13 +5039,24 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 failure_stage = "index-surface-missing";
                 goto out;
             }
-            if (!vmsvga3d_dxvk_materialize_buffer(
+            {
+                uint64_t resource_start = qemu_perf_stats_begin(
+                    QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE);
+                bool materialized = vmsvga3d_dxvk_materialize_buffer(
                     s, index_surface,
                     VMSVGA3D_D3D9_RESOURCE_USE_INDEX_BUFFER,
-                    ranges[i].indexWidth)) {
-                failure_range = i;
-                failure_stage = "materialize-index-buffer";
-                goto out;
+                    ranges[i].indexWidth);
+
+                qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
+                                    resource_start);
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
+                    index_surface->storage_bytes);
+                if (!materialized) {
+                    failure_range = i;
+                    failure_stage = "materialize-index-buffer";
+                    goto out;
+                }
             }
             if (deep_draw) {
                 fprintf(stderr,
@@ -5026,16 +5072,26 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 failure_stage = "set-indices";
                 goto out;
             }
+            perf_submit_start = qemu_perf_stats_begin(
+                QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT);
             if (!vmsvga3d_dxvk_draw_indexed_primitive(
                     s->dxvk, plan.primitive_type,
                     plan.indexed.base_vertex_index,
                     plan.indexed.min_vertex_index, plan.indexed.num_vertices,
                     plan.indexed.start_index,
                     plan.indexed.primitive_count)) {
+                qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                    perf_submit_start);
+                perf_submit_start = 0;
                 failure_range = i;
                 failure_stage = "draw-indexed-primitive";
                 goto out;
             }
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                perf_submit_start);
+            perf_submit_start = 0;
+            qemu_perf_stats_add_work(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                                     plan.indexed.primitive_count);
             if (deep_draw) {
                 fprintf(stderr,
                         "VMVGA-D3D9-DRAW issued[%u] indexed prim=%u base=%d "
@@ -5061,6 +5117,12 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     success = true;
 
 out:
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT,
+                        perf_layout_start);
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_STATE,
+                        perf_state_start);
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
+                        perf_submit_start);
     if (trace && !success) {
         if (failure_range == UINT32_MAX) {
             fprintf(stderr,
