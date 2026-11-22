@@ -12890,6 +12890,11 @@ bool vmsvga3d_dxvk_surface_readback_rects(
             }
 
             if (secondary_data != NULL) {
+                uint64_t perf_start_ns =
+                    qemu_perf_stats_begin(
+                        QEMU_PERF_DXVK_READBACK_SECONDARY_COPY);
+                uint64_t copied_pixels = 0;
+
                 for (i = 0; i < rect_count; i++) {
                     const VMSVGA3DD3D9Rect *rect = &rects[i];
                     uint32_t width = (uint32_t)(rect->right - rect->left);
@@ -12897,6 +12902,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                     size_t row_bytes = (size_t)width * bytes_per_pixel;
                     uint32_t y;
 
+                    copied_pixels += (uint64_t)width * height;
                     for (y = 0; y < height; y++) {
                         const uint8_t *source =
                             (const uint8_t *)data +
@@ -12911,6 +12917,11 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                         memcpy(destination, source, row_bytes);
                     }
                 }
+
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_DXVK_READBACK_SECONDARY_COPY, copied_pixels);
+                qemu_perf_stats_end(
+                    QEMU_PERF_DXVK_READBACK_SECONDARY_COPY, perf_start_ns);
             }
             success = true;
             goto out;
@@ -12924,10 +12935,21 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                 row_bytes64 <= UINT32_MAX ? (uint32_t)row_bytes64 : 0;
 
             if (VMVGA_TRACE_FLIGHT && trace_row_bytes != 0) {
-                renderer_hash.valid =
-                    vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
-                        dxvk, surface, source_surface, source_width,
-                        source_height, bytes_per_pixel, &renderer_hash);
+                {
+                    uint64_t perf_start_ns =
+                        qemu_perf_stats_begin(
+                            QEMU_PERF_DXVK_READBACK_TRACE_BAND);
+                    renderer_hash.valid =
+                        vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
+                            dxvk, surface, source_surface, source_width,
+                            source_height, bytes_per_pixel, &renderer_hash);
+                    qemu_perf_stats_add_work(
+                        QEMU_PERF_DXVK_READBACK_TRACE_BAND,
+                        (uint64_t)source_width *
+                        MIN(source_height, VMSVGA3D_TRACE_PRESENT_BAND_ROWS));
+                    qemu_perf_stats_end(
+                        QEMU_PERF_DXVK_READBACK_TRACE_BAND, perf_start_ns);
+                }
                 if (renderer_hash.valid) {
                     fprintf(stderr,
                             "VMVGA-D3D9-BAND phase=renderer-before-readback "
@@ -12968,6 +12990,11 @@ bool vmsvga3d_dxvk_surface_readback_rects(
             }
 
             if (secondary_data != NULL) {
+                uint64_t perf_start_ns =
+                    qemu_perf_stats_begin(
+                        QEMU_PERF_DXVK_READBACK_SECONDARY_COPY);
+                uint64_t copied_pixels = 0;
+
                 for (i = 0; i < rect_count; i++) {
                     const VMSVGA3DD3D9Rect *rect = &rects[i];
                     uint32_t width = (uint32_t)(rect->right - rect->left);
@@ -12975,6 +13002,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                     size_t row_bytes = (size_t)width * bytes_per_pixel;
                     uint32_t y;
 
+                    copied_pixels += (uint64_t)width * height;
                     for (y = 0; y < height; y++) {
                         const uint8_t *source =
                             (const uint8_t *)data +
@@ -12989,6 +13017,11 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                         memcpy(destination, source, row_bytes);
                     }
                 }
+
+                qemu_perf_stats_add_work(
+                    QEMU_PERF_DXVK_READBACK_SECONDARY_COPY, copied_pixels);
+                qemu_perf_stats_end(
+                    QEMU_PERF_DXVK_READBACK_SECONDARY_COPY, perf_start_ns);
             }
 
             if (VMVGA_TRACE_FLIGHT && trace_row_bytes != 0) {
