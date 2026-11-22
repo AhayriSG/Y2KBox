@@ -4909,8 +4909,6 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
 
             qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
                                 resource_start);
-            qemu_perf_stats_add_work(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
-                                     surface->storage_bytes);
             if (!materialized) {
                 failure_stage = "materialize-vertex-buffer";
                 goto out;
@@ -5049,9 +5047,6 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
 
                 qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
                                     resource_start);
-                qemu_perf_stats_add_work(
-                    QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
-                    index_surface->storage_bytes);
                 if (!materialized) {
                     failure_range = i;
                     failure_stage = "materialize-index-buffer";
