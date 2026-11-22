@@ -329,9 +329,10 @@ Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
 * Debug mode is a separate opt-in setting, default **off**, configured independently
-  of device creation with `-global vmvga.debug=on`. This is the command-line
-  equivalent of T12's future **Debug: On/Off** GUI setting. Do not put the debug
-  property back inside the `-device vmvga` declaration.
+  of device creation with `-y2kboxdebugmode=on` (or explicitly disabled with
+  `-y2kboxdebugmode=off`). This is the command-line equivalent of T12's future
+  **Debug: On/Off** GUI setting. Do not put the debug property inside the
+  `-device vmvga` declaration or expose the internal VMVGA property to users.
 * With debug mode off, Ctrl+Alt+L is unavailable and no diagnostic capture is
   performed. With it on, the SDL title advertises the shortcut; debug mode enables
   diagnostic capability but does not itself start continuous output.
