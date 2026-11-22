@@ -301,7 +301,7 @@ struct vmsvga_cursor_source_s {
  * disabled until SDL starts an explicit capture interval.
  *
  * Enable debug mode independently of device creation with:
- *   -global vmvga.debug=on
+ *   -y2kboxdebugmode=on
  *
  * QEMU trace events such as vmware_value_read remain independently gated.
  * Categories set to 0 compile down to a constant-false branch.
@@ -12059,7 +12059,7 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
     struct pci_vmsvga_state_s *s = VMVGA(PCI_DEVICE(obj));
 
     if (enabled && !s->chip.debug) {
-        error_setg(errp, "Y2KBox debug mode is disabled; use -global vmvga.debug=on");
+        error_setg(errp, "Y2KBox debug mode is disabled; launch with -y2kboxdebugmode=on");
         return;
     }
     if (s->chip.debug_log == enabled) {
