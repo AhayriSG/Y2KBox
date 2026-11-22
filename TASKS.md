@@ -167,7 +167,7 @@ qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-nativ
     `"d3d11.dll"` (supporting inbox Windows Direct3D with `D3D_DRIVER_TYPE_WARP` fallback on D3D11, as
     well as optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`).
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips DXVK/D3D init under `-display none`
-    (via `display_backend_active` in `system/vl.c`) unless Y2KBox debug mode (`-y2kboxdebugmode=on`) or `Y2KBOX_3D_HEADLESS` is set,
+    (via `display_backend_active` in `system/vl.c`) unless Y2KBox debug mode (`-y2kboxdebugmode on`) or `Y2KBOX_3D_HEADLESS` is set,
     preserving empty `stderr` and zero overhead in non-3D CI benchmarks.
 * **Resume here:** check Linux (including packaged `dxvk-native` + lavapipe smoke check) and Windows CI
   builds from this push; validate live in-guest SVGA3D rendering on both hosts in T11; render-thread
@@ -185,7 +185,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode=on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
+Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent device selectors:
 * Network adapter: **VirtIO Net** as the default, with **RTL8139** as the fallback.
@@ -329,8 +329,8 @@ Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
 * Debug mode is a separate opt-in setting, default **off**, configured independently
-  of device creation with `-y2kboxdebugmode=on` (or explicitly disabled with
-  `-y2kboxdebugmode=off`). This is the command-line equivalent of T12's future
+  of device creation with `-y2kboxdebugmode on` (or explicitly disabled with
+  `-y2kboxdebugmode off`). This is the command-line equivalent of T12's future
   **Debug: On/Off** GUI setting. Do not put the debug property inside the
   `-device vmvga` declaration or expose the internal VMVGA property to users.
 * With debug mode off, Ctrl+Alt+L is unavailable and no diagnostic capture is
