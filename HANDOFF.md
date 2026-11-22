@@ -58,6 +58,20 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
     remains a separate requirement before T17 can be closed.
 * **Host:** x86-64, **x86-64-v3 minimum**, **Windows and Linux only** (no macOS, BSD,
   Solaris, ...). AVX-512 stays runtime-detected (measured: no gain for SSE2 guests).
+* **SDL display policy (owner decision, 2026-11-22):** SDL is a fixed-size
+  virtual monitor, not a host-resizable desktop window. In windowed mode, create
+  a decorated but non-resizable SDL window; the guest display surface is the sole
+  source of its client-area dimensions. The titlebar maximize/resize affordance
+  must be unavailable/disabled through SDL's non-resizable window style.
+  Guest resolution changes may resize the window programmatically. Host
+  `SDL_WINDOWEVENT_RESIZED` and `SDL_WINDOWEVENT_SIZE_CHANGED` notifications
+  must never be forwarded to `qemu_console_set_ui_info()` or otherwise change
+  guest display geometry; if a window manager changes the window size anyway,
+  restore the current guest surface dimensions. Fullscreen desktop sizing is
+  host-display presentation only and must not change the guest resolution.
+  Interactive fullscreen toggling remains `Ctrl+Alt+F`. Do not modify mouse
+  emulation or coordinate mapping to compensate for host-side resizing.
+
 * **Performance is the point, for ALL guest instruction classes** (integer, flags, x87,
   MMX/SSE/SSE2, string ops, memory/MMU, interrupts and ring transitions, I/O), not only
   SSE2. SSE2 was merely the first thing measured. See T13.
