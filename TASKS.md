@@ -185,7 +185,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
+Our own executable with an **SDL2 + Dear ImGui** frontend, using Xemu's `ui/xui/` as an architectural reference. Dear ImGui is the primary GUI choice; wxWidgets is a fallback alternative, not a parallel implementation target. Keep QEMU's existing **SDL2 display backend**: do not migrate to SDL3 or replace the VMVGA renderer, display path, fullscreen handling, or mouse/input behavior as part of frontend work. Reuse Xemu's relevant frontend patterns, but do not import its Xbox-specific systems or unnecessary dependencies wholesale. Keep the dependency footprint and SDL2/QEMU event-loop integration complexity as explicit design considerations; begin with Dear ImGui core and its SDL2 integration, adding components only when Y2KBox needs them. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent device selectors:
 * Network adapter: **VirtIO Net** as the default, with **RTL8139** as the fallback.
@@ -365,13 +365,13 @@ visible insert/eject of images in the emulated CD-ROM is tracked under T12.
 
 ## T21 (P2) Verify ReShade injection compatibility  -  Status: TODO
 Investigate and verify that ReShade injection is compatible with Y2KBox's
-Windows/SDL2 display path and the planned wxWidgets frontend. Identify any
+Windows/SDL2 display path and the planned SDL2 + Dear ImGui frontend. Identify any
 limitations or conflicts in the current host-window/display lifecycle and
 implement only the compatibility work actually needed. This compatibility
 investigation takes priority over integrating librashader.
 
 ## T22 (P3) Consider librashader integration  -  Status: TODO (after T12)
-After the wxWidgets frontend is implemented, consider integrating librashader
+After the SDL2 + Dear ImGui frontend is implemented, consider integrating librashader
 as an optional shader/post-processing path. This is deliberately very low
 priority; first establish ReShade injection compatibility (T21). Do not let
 librashader integration delay the frontend or higher-priority compatibility
@@ -379,7 +379,7 @@ work. See HANDOFF.md section 9 for librashader and emulator integration
 references.
 
 ## T23 (P3) Configurable RAM and vGPU memory presets  -  Status: TODO (after T12)
-After the wxWidgets frontend is implemented, add simple user-facing memory
+After the SDL2 + Dear ImGui frontend is implemented, add simple user-facing memory
 presets in the launcher. RAM candidates remain 512, 1024, and 2048 MB; the
 current machine stays fixed at 2048 MB until that GUI work is implemented.
 
