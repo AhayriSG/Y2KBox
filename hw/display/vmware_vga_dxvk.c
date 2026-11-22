@@ -12672,6 +12672,7 @@ static bool vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
     uint64_t row_bytes64;
     uint32_t row_bytes;
     int32_t call_result;
+    uint64_t stage_start_ns;
     bool locked_staging = false;
     bool success = false;
 
@@ -12708,16 +12709,24 @@ static bool vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
         goto out;
     }
 
+    stage_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_DXVK_TRACE_CREATE_RENDER_TARGET);
     call_result = create_render_target(
         dxvk->d3d9_device, source_width, row_count, surface->d3d9_format,
         0, 0, 0, &render_target, NULL);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_CREATE_RENDER_TARGET,
+                        stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(call_result) || render_target == NULL) {
         goto out;
     }
 
+    stage_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_DXVK_TRACE_CREATE_STAGING);
     call_result = create_offscreen(
         dxvk->d3d9_device, source_width, row_count, surface->d3d9_format,
         VMSVGA3D_DXVK_D3DPOOL_SYSTEMMEM, &staging, NULL);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_CREATE_STAGING,
+                        stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(call_result) || staging == NULL) {
         goto out;
     }
@@ -12731,15 +12740,23 @@ static bool vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
     destination_rect.right = (int32_t)source_width;
     destination_rect.bottom = (int32_t)row_count;
 
+    stage_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_DXVK_TRACE_STRETCH_RECT);
     call_result = stretch_rect(
         dxvk->d3d9_device, source_surface, &source_rect, render_target,
         &destination_rect, VMSVGA3D_DXVK_D3DTEXF_NONE);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_STRETCH_RECT,
+                        stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(call_result)) {
         goto out;
     }
 
+    stage_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_DXVK_TRACE_GET_RENDER_TARGET_DATA);
     call_result = get_render_target_data(dxvk->d3d9_device, render_target,
                                          staging);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_GET_RENDER_TARGET_DATA,
+                        stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(call_result) ||
         !vmsvga3d_dxvk_get_method(
             staging, VMSVGA3D_DXVK_IDIRECT3DSURFACE9_LOCK_RECT,
@@ -12750,8 +12767,10 @@ static bool vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
         goto out;
     }
 
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_LOCK);
     call_result = lock_rect(staging, &locked, NULL,
                             VMSVGA3D_DXVK_D3DLOCK_READONLY);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_LOCK, stage_start_ns);
     if (!vmsvga3d_dxvk_succeeded(call_result) || locked.bits == NULL ||
         locked.pitch < 0 || (uint32_t)locked.pitch < row_bytes) {
         if (vmsvga3d_dxvk_succeeded(call_result)) {
@@ -12761,17 +12780,22 @@ static bool vmsvga3d_dxvk_trace_d3d9_renderer_bottom_rows(
     }
     locked_staging = true;
 
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_HASH);
     success = vmsvga3d_dxvk_trace_hash_bottom_rows(
         locked.bits, row_bytes, (uint32_t)locked.pitch, row_count, hash);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_HASH, stage_start_ns);
     if (success) {
         hash->first_row = source_height - row_count;
     }
 
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_UNLOCK);
     call_result = unlock_rect(staging);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_UNLOCK, stage_start_ns);
     locked_staging = false;
     success = success && vmsvga3d_dxvk_succeeded(call_result);
 
 out:
+    stage_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_TRACE_RELEASE);
     if (locked_staging && unlock_rect != NULL) {
         unlock_rect(staging);
     }
@@ -12783,6 +12807,7 @@ out:
         vmsvga3d_dxvk_release(render_target,
                               VMSVGA3D_DXVK_IDIRECT3DDEVICE9_RELEASE);
     }
+    qemu_perf_stats_end(QEMU_PERF_DXVK_TRACE_RELEASE, stage_start_ns);
     return success;
 }
 #endif
