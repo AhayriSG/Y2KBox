@@ -1362,3 +1362,15 @@ mapping code was changed. No local build or XP guest test was run, and CI was
 not polled. T24 remains PAUSED until Linux/Windows CI and owner XP guest
 verification are reported.
 
+## Session 63 (ChatGPT), 2026-11-22 - Separate diagnostic capture files
+
+Changed the SDL Ctrl+Alt+L capture path so every start creates a new
+`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory.
+Files are opened with exclusive creation, so an existing file is never
+truncated or appended to; if the timestamp collides, a numeric suffix is
+added. Stopping a capture still disables the same diagnostic sources and
+restores the original stderr descriptor. The VM continues running.
+
+Updated README, TASKS, HANDOFF, and command-line option documentation. No local
+build/test was run and CI was not polled, per project workflow. Linux/Windows
+CI and owner XP guest verification remain outstanding.
