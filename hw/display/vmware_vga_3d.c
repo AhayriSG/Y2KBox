@@ -361,6 +361,7 @@ typedef struct vmsvga3d_dx_context_s {
 
 #define VMSVGA3D_MAX_MIP_LEVELS 16
 #define VMSVGA3D_SCREEN_TARGET_DAMAGE_RECTS 32
+#define VMSVGA3D_SCREEN_FRONTEND_DEFERRED_MAX_FRAMES 8u
 #define VMSVGA3D_LEGACY_PRESENT_DAMAGE_RECTS 256
 
 typedef struct vmsvga3d_surface_image_s {
@@ -17187,6 +17188,59 @@ static bool vmsvga3d_screen_target_flush_live(struct vmsvga_state_s *s)
     if (retired_pending) {
         return true;
     }
+
+    /*
+     * A Screen Object without guest backing can keep the old frontend bound
+     * while its new target is being painted.  Normally a complete handoff
+     * releases that hold; if even a small area is never written, the coverage
+     * gate can otherwise hold the old frontend forever.  Before falling back
+     * to the seeded CPU mirror, synchronously drain renderer readbacks and
+     * flush all queued presentation damage so no older async frame can land
+     * after the frontend has been rebound.
+     */
+    if (s != NULL && s->screen_frontend_deferred) {
+        if (s->screen_frontend_deferred_frames <
+            VMSVGA3D_SCREEN_FRONTEND_DEFERRED_MAX_FRAMES) {
+            s->screen_frontend_deferred_frames++;
+        }
+        if (s->screen_frontend_deferred_frames >=
+            VMSVGA3D_SCREEN_FRONTEND_DEFERRED_MAX_FRAMES) {
+            bool quiesced = vmsvga3d_screen_target_quiesce_live(s);
+
+            if (quiesced && s->svga3d != NULL &&
+                !s->svga3d->screen_target_frontend_commit_pending) {
+                if (s->screen_frontend_deferred) {
+                    uint32_t sid = s->svga3d->active_screen_target_sid;
+
+                    s->screen_frontend_deferred = false;
+                    vmsvga3d_screen_handoff_coverage_reset_live(
+                        s, SVGA3D_INVALID_ID, false);
+                    vmsvga_check_size(s);
+                    VMVGA_TRACE_LOCAL(
+                        VMVGA_TRACE_3D,
+                        "SCREEN-HANDOFF frontend-timeout sid=%u frames=%u "
+                        "size=%ux%u",
+                        sid, VMSVGA3D_SCREEN_FRONTEND_DEFERRED_MAX_FRAMES,
+                        s->screen_width, s->screen_height);
+                }
+                s->screen_frontend_deferred_frames = 0;
+            } else {
+                /* Retry after another bounded window; never expose scanout
+                 * while a renderer-owned commit is still outstanding. */
+                s->screen_frontend_deferred_frames = 0;
+                VMVGA_TRACE_LOCAL(
+                    VMVGA_TRACE_3D,
+                    "SCREEN-HANDOFF frontend-timeout-retry quiesced=%u "
+                    "commit-pending=%u",
+                    quiesced ? 1u : 0u,
+                    s->svga3d != NULL &&
+                    s->svga3d->screen_target_frontend_commit_pending ? 1u : 0u);
+            }
+        }
+    } else if (s != NULL) {
+        s->screen_frontend_deferred_frames = 0;
+    }
+
     return vmsvga3d_screen_target_flush_live_mode(s, true, false, false);
 }
 
