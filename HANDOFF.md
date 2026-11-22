@@ -571,23 +571,36 @@ Shader and post-processing integration
   documented for context but are not repeated.
 
 
-### SDL on-demand diagnostic capture (2026-11-21; updated)
+### General SDL diagnostic logging capture (2026-11-22; T19)
 
-The SDL **Ctrl+Alt+L** shortcut is an opt-in tester feature, available only when
-the VM is launched with `-device vmvga,debug=on`. With debug off, the shortcut
-is unavailable and the title bar does not advertise it.
+Y2KBox has one supported renderer, VMVGA, so its local diagnostic hooks are
+always part of the product. The debug-mode setting is nevertheless separate
+from device declaration: enable it with `-global vmvga.debug=on`, independently
+of `-device vmvga`. Debug mode defaults off and is the command-line equivalent
+of the future T12 wxWidgets **Debug: On/Off** setting. It enables diagnostic
+capabilities but does not start continuous output. Do not use
+`-device vmvga,debug=on`; keep device creation and debug configuration separate.
 
-The `debug` property enables the capability, not continuous output. The SDL title
-also advertises the fullscreen toggle (Ctrl+Alt+F) and the grab-release chord when
-applicable. The shortcut redirects stderr to `vmvga_freeze.log`, then activates VMVGA local diagnostics,
-VMPort GuestRPC diagnostics, and the existing `vmware_*`, `vmport_*`, and
-`vdagent*` trace events. Pressing it again disables those sources and restores the original stderr
-descriptor. There are no routine start/stop markers or continuous diagnostic
-messages in the console while capture is inactive. The first capture truncates
-the file; later capture intervals in the same QEMU run append.
+When debug mode is enabled, the SDL title advertises **Ctrl+Alt+L**. Pressing
+the shortcut redirects stderr to `y2kbox-log.log` in the launch working
+directory and starts a diagnostic capture interval: general performance
+counters, VMVGA local diagnostics, VMPort GuestRPC diagnostics, and the existing
+`vmware_*`, `vmport_*`, and `vdagent*` trace events. Pressing it again stops
+those sources and restores the original stderr descriptor. The title uses
+generic diagnostic-logging wording, not VMVGA-freeze wording. The VM keeps
+running throughout.
 
-Do not add shell-level `2>` redirection or require `-trace "vdagent*"`; SDL
-controls the relevant trace events for the capture interval. Exceptional file or
-descriptor errors are still reported. The feature has not been locally built or
-runtime-tested; keep T19 PAUSED until Linux/Windows CI and owner XP guest
-verification are reported.
+The first successful capture truncates `y2kbox-log.log`; subsequent intervals
+in the same QEMU run append. Debug mode off means the shortcut is unavailable
+and the title does not advertise it. Debug mode on but capture inactive still
+produces no continuous VMVGA/GuestRPC diagnostics, vdagent trace output, or
+routine capture start/stop messages in the console. The hotkey consumes the
+host key chord; it does not inject Ctrl+Alt+L into XP. No separate
+`-trace "vdagent*"` option is needed. Do not redirect stderr from the shell
+when using this feature, because QEMU must control stderr redirection for the
+capture interval. Exceptional file/descriptor errors are still reported.
+
+The generalized naming and debug-mode separation are implemented, but no local
+build/test was run and CI or XP guest verification has not yet been reported.
+Keep T19 PAUSED until Linux/Windows CI and owner XP guest verification are
+reported.
