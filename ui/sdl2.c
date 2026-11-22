@@ -101,8 +101,6 @@ void sdl2_window_create(struct sdl2_console *scon)
 
     if (gui_fullscreen) {
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    } else {
-        flags |= SDL_WINDOW_RESIZABLE;
     }
     if (scon->hidden) {
         flags |= SDL_WINDOW_HIDDEN;
@@ -880,12 +878,16 @@ static void handle_windowevent(SDL_Event *ev)
 
     switch (ev->window.event) {
     case SDL_WINDOWEVENT_RESIZED:
-        {
-            QemuUIInfo info = {
-                .width = ev->window.data1,
-                .height = ev->window.data2,
-            };
-            qemu_console_set_ui_info(scon->dcl.con, &info, true);
+    case SDL_WINDOWEVENT_SIZE_CHANGED:
+        /*
+         * The guest surface owns windowed dimensions. Host window-manager
+         * size changes must never feed back into guest display geometry.
+         * Reassert the guest size if a window manager changes it anyway.
+         */
+        if (!gui_fullscreen && scon->surface &&
+            (ev->window.data1 != surface_width(scon->surface) ||
+             ev->window.data2 != surface_height(scon->surface))) {
+            sdl2_window_resize(scon);
         }
         sdl2_redraw(scon);
         break;
