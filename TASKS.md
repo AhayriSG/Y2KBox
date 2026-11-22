@@ -185,7 +185,7 @@ Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA,
 T16c GL stream receiver/replay (consider a separate process).
 
 ## T12 (P2) Own front end: launcher + display  -  Status: TODO
-Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games.
+Our own executable + wxWidgets GUI. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the global `-global vmvga.debug=on` setting, not a property embedded in the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent device selectors:
 * Network adapter: **VirtIO Net** as the default, with **RTL8139** as the fallback.
@@ -324,22 +324,28 @@ they are not assumed to make translated guest instruction execution faster.
 * **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.
 
 
-## T19 (P1) SDL hotkey for on-demand diagnostic log capture  -  Status: PAUSED (implementation committed; awaiting CI + XP guest verification)
-Add an SDL2 host-side keyboard shortcut that captures only the diagnostic interval
-selected by the tester, without continuously generating diagnostic output.
+## T19 (P1) General SDL diagnostic logging capture  -  Status: PAUSED (generalized implementation committed; awaiting CI + XP guest verification)
+Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
+interval across Y2KBox, without continuously generating diagnostic output.
 
-* `-device vmvga,debug=on` is the opt-in capability switch. With it absent/off,
-  Ctrl+Alt+L is unavailable and no diagnostic capture is performed.
+* Debug mode is a separate opt-in setting, default **off**, configured independently
+  of device creation with `-global vmvga.debug=on`. This is the command-line
+  equivalent of T12's future **Debug: On/Off** GUI setting. Do not put the debug
+  property back inside the `-device vmvga` declaration.
+* With debug mode off, Ctrl+Alt+L is unavailable and no diagnostic capture is
+  performed. With it on, the SDL title advertises the shortcut; debug mode enables
+  diagnostic capability but does not itself start continuous output.
 * Use the existing SDL host-hotkey modifier chord and add **Ctrl+Alt+L** to toggle
   capture; consume the key so it is not sent to the guest.
-* On activation, redirect stderr to `vmvga_freeze.log` and enable VMVGA local
-  diagnostics, VMPort GuestRPC diagnostics, and the relevant VMVGA/VMPort/vdagent trace
-  events. On stop, disable those diagnostic sources and restore original stderr.
-  The VM keeps running. The first activation truncates the file; later intervals
-  append. Do not emit capture start/stop markers or routine diagnostic output to
-  the console while capture is inactive.
-* Show the hotkey and active state in the SDL title only when `debug=on`.
-  Report actual file/descriptor errors, not routine logging status.
+* On activation, redirect stderr to `y2kbox-log.log` and enable general
+  performance counters, VMVGA local diagnostics, VMPort GuestRPC diagnostics,
+  and the relevant VMVGA/VMPort/vdagent trace events. On stop, disable those
+  diagnostic sources and restore original stderr. The VM keeps running. The first
+  activation truncates the file; later intervals append. Do not emit routine
+  capture start/stop markers or diagnostic output to the console while inactive.
+* Show generic diagnostic-logging availability and active state in the SDL title
+  only when debug mode is enabled. Report actual file/descriptor errors, not
+  routine logging status.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
