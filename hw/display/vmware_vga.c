@@ -10437,27 +10437,38 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
     struct vmsvga_state_s *s = opaque;
     bool scan_dirty;
 
-    if (s->enable && !s->screen_defined) {
-        vmsvga_try_commit_mode(s);
-    }
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_FIFO);
 
-    /* FIFO execution is independent of whether the requested mode is currently
-     * a complete/usable scanout tuple. */
-    if (s->enable && s->config) {
-        if (vmsvga_fifo_pending(s)) {
-            vmsvga_fifo_run(s, false, SVGA3D_INVALID_ID);
+        if (s->enable && !s->screen_defined) {
+            vmsvga_try_commit_mode(s);
+        }
+
+        /* FIFO execution is independent of whether the requested mode is currently
+         * a complete/usable scanout tuple. */
+        if (s->enable && s->config) {
+            if (vmsvga_fifo_pending(s)) {
+                vmsvga_fifo_run(s, false, SVGA3D_INVALID_ID);
+            } else {
+                cursor_update_from_fifo(s);
+            }
         } else {
             cursor_update_from_fifo(s);
         }
-    } else {
-        cursor_update_from_fifo(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_FIFO, perf_start_ns);
     }
 
     /* Current VirtualBox completes GPU queries from its pending-task pump
      * rather than blocking END_QUERY on GetData.  The display refresh callback
      * is QEMU's regular renderer-service point. */
-    vmsvga3d_d3d9_process_pending_gb_queries(s, "DISPLAY");
-    vmsvga3d_d3d10_process_pending_queries(s, "DISPLAY");
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_QUERIES);
+        vmsvga3d_d3d9_process_pending_gb_queries(s, "DISPLAY");
+        vmsvga3d_d3d10_process_pending_queries(s, "DISPLAY");
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_QUERIES, perf_start_ns);
+    }
 
 
     /* A display refresh may opportunistically wake a yielded shadow
@@ -10526,8 +10537,14 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
     /* Flush deferred legacy SVGA3D PRESENTs and Screen-Target writes here
      * so pure-3D render loops stay visible on display refreshes without waiting
      * for a 2D GDI barrier or mode change. */
-    (void)vmsvga3d_legacy_present_flush_live(s);
-    (void)vmsvga3d_screen_target_flush_live(s);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_DEFERRED_FLUSH);
+        (void)vmsvga3d_legacy_present_flush_live(s);
+        (void)vmsvga3d_screen_target_flush_live(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_DEFERRED_FLUSH,
+                            perf_start_ns);
+    }
 
     /*
      * A scanout can be rebuilt through transient storage: vGPU9 can tear down
@@ -10595,13 +10612,18 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
      * so it is always safe to bind. GMRFB and 3D Screen updates paint on top
      * of that snapshot until a complete new frame ends the handoff.
      */
-    vmsvga_check_size(s);
-    /*
-     * DEFINE_SCREEN/DESTROY_SCREEN may have changed the required dirty-log
-     * policy while processing the FIFO above. Re-evaluate it before scanning.
-     */
-    vmsvga_update_dirty_log(s);
-    scan_dirty = vmsvga_effective_traces(s);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_SCAN_PREP);
+        vmsvga_check_size(s);
+        /*
+         * DEFINE_SCREEN/DESTROY_SCREEN may have changed the required dirty-log
+         * policy while processing the FIFO above. Re-evaluate it before scanning.
+         */
+        vmsvga_update_dirty_log(s);
+        scan_dirty = vmsvga_effective_traces(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_SCAN_PREP, perf_start_ns);
+    }
 
     if (scan_dirty) {
         struct vmsvga_damage_rect_s explicit_damage[VMSVGA_DAMAGE_RECTS];
@@ -10610,23 +10632,35 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
             memcpy(explicit_damage, s->damage,
                    explicit_count * sizeof(explicit_damage[0]));
         }
-        vmsvga_scan_vram_dirty(
-            s, explicit_count != 0 ? explicit_damage : NULL, explicit_count);
+        {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_DIRTY_SCAN);
+            vmsvga_scan_vram_dirty(
+                s, explicit_count != 0 ? explicit_damage : NULL,
+                explicit_count);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_DIRTY_SCAN,
+                                perf_start_ns);
+        }
     }
 
-    if (s->invalidated) {
-        s->damage_count = 0;
-        VMVGA_TRACE_LOCAL(VMVGA_TRACE_DRAW,
-                           "DAMAGE_FULL x=0 y=0 w=%u h=%u",
-                           s->active_width, s->active_height);
-        if (vmsvga_trace_flight_enabled()) {
-            vmsvga_trace_frontend_snapshot(s, "damage-full");
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_DISPLAY_FRONTEND);
+        if (s->invalidated) {
+            s->damage_count = 0;
+            VMVGA_TRACE_LOCAL(VMVGA_TRACE_DRAW,
+                               "DAMAGE_FULL x=0 y=0 w=%u h=%u",
+                               s->active_width, s->active_height);
+            if (vmsvga_trace_flight_enabled()) {
+                vmsvga_trace_frontend_snapshot(s, "damage-full");
+            }
+            vmvga_console_update(s->vga.con, 0, 0, s->active_width,
+                                 s->active_height);
+            s->invalidated = false;
+        } else {
+            vmsvga_damage_flush(s);
         }
-        vmvga_console_update(s->vga.con, 0, 0, s->active_width,
-                             s->active_height);
-        s->invalidated = false;
-    } else {
-        vmsvga_damage_flush(s);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_DISPLAY_FRONTEND, perf_start_ns);
     }
 
 done:
