@@ -1317,3 +1317,19 @@ existing dynamic VMVGA/VMPort/vdagent trace events and performance counters.
 Updated README, TASKS, and HANDOFF to describe the generic capture, filename,
 and future GUI setting. No local build/test was run and CI was not checked.
 T19 remains PAUSED pending Linux/Windows CI and owner XP guest verification.
+
+
+## Session 61 (ChatGPT), 2026-11-22 - Add Y2KBox debug mode CLI option
+
+Replaced the user-facing QEMU-specific global-property syntax with the native
+Y2KBox option `-y2kboxdebugmode=on|off`. The option is registered in
+`qemu-options.hx` so it is parsed by QEMU's normal command-line option
+machinery and appears in command-line help. `system/vl.c` validates the value
+and maps it internally to the VMVGA debug capability property. The default
+remains off; explicit `off` also sets the internal property off.
+
+Updated VMVGA's diagnostic error guidance and the README, TASKS, and HANDOFF.
+The future T12 GUI Debug On/Off control maps to this Y2KBox option, while
+Ctrl+Alt+L remains the separate interval-capture control. No local build/test
+or CI check was run; T19 remains PAUSED pending CI and owner XP guest
+verification.
