@@ -1474,3 +1474,13 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   and 4 unit tests covering `shid=9` (`raw[202]`: `0xc0010001` -> `0xc00f0001`,
   idempotent), `oPts`/swizzle fixups, scalar op swizzles, and `vs_1_0` regression;
   full Linux/Windows CI build and owner XP guest verification remain outstanding.
+
+
+### Session 68 — 2026-11-22 — ChatGPT
+#### F1 Challenge '99-'02 crowded-grid slowdown — SVGA3D phase profiling
+- Owner's Albert Park A/B reports that disabling Ctrl+Alt+L makes the crowded-grid scene only slightly better; the scene remains slideshow-like. Diagnostic logging overhead is therefore a secondary contributor, not the root cause.
+- Source review traced the expensive `DRAW_PRIMITIVES` command to the D3D9 runtime path in `hw/display/vmware_vga_vgpu9.c`: vertex-layout planning, legacy D3D9 state replay, buffer materialization, and native draw submission. The common vertex/index buffer materialization path already has a resident-buffer fast check, so it should not be changed without phase measurements.
+- Source review traced `UPDATE_GB_IMAGE` through `hw/display/vmware_vga_3d.c` into `vmsvga3d_d3d10_update_subresource_live()` in `hw/display/vmware_vga_vgpu10.c`. The normal path reads guest MOB data into the CPU image shadow and then uploads to resident D3D9/D3D11 resources; partial D3D9-resident updates may first read back the full image to preserve pixels outside the update box.
+- Added capture-gated phase counters: `vmvga.d3d9_draw_layout`, `vmvga.d3d9_draw_state`, `vmvga.d3d9_draw_resource`, `vmvga.d3d9_draw_submit`, `vmvga.gb_update_preserve`, `vmvga.gb_update_mob_read`, `vmvga.gb_update_native_upload`, and `vmvga.gb_update_cb_refresh`. MOB-read `work_units` reports transferred bytes; draw-submit `work_units` reports primitive count. Counter timings are nested within the existing per-command/FIFO timings and must not be summed with those enclosing categories.
+- Instrumentation only; no rendering semantics or optimization changed. It is inert while performance capture is stopped. No local build or CI run was performed; owner Windows guest capture is required next.
+- Commits: `72a46d5d` (counter IDs), `c5e055f5` (counter names), `968e5af7` (D3D9 draw phases), `1625c76a` (GB image-update phases), `fd045363` (remove misleading resource-byte work units), `fd522fc0` (task tracking).
