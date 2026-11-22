@@ -6165,15 +6165,31 @@ static bool vmsvga3d_handle_draw_primitives(struct vmsvga_state_s *s,
         qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_VALIDATE,
                             perf_validate_start);
         if (draw_state_valid) {
+            uint64_t perf_phase_start;
+
+            perf_phase_start = qemu_perf_stats_begin(
+                QEMU_PERF_VMVGA_D3D9_DRAW_PREPARE);
             vmsvga3d_screen_target_prepare_d3d9_draw_live(s, body->cid);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_PREPARE,
+                                perf_phase_start);
+
             if (vmsvga3d_d3d9_runtime_draw_primitives(
                     s, body->cid, body->numVertexDecls, decls,
                     body->numRanges, ranges, divisor_count, divisors) ==
                 VMSVGA3D_D3D9_ACCEL_COMPLETE) {
+                perf_phase_start = qemu_perf_stats_begin(
+                    QEMU_PERF_VMVGA_D3D9_DRAW_NOTE);
                 vmsvga3d_screen_target_note_d3d9_draw_live(s, body->cid);
+                qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_NOTE,
+                                    perf_phase_start);
+
                 if (VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D)) {
+                    perf_phase_start = qemu_perf_stats_begin(
+                        QEMU_PERF_VMVGA_D3D9_DRAW_TRACE);
                     vmsvga3d_trace_vgpu9_render_target_write(
                         s, body->cid, VMSVGA3D_TRACE_VGPU9_WRITE_DRAW);
+                    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TRACE,
+                                        perf_phase_start);
                 }
             }
         }
