@@ -8513,6 +8513,9 @@ static bool vmsvga3d_present_rect_to_buffer_internal(
     uint64_t src_row_bytes;
     uint64_t dst_row_bytes;
     uint32_t row;
+    uint64_t present_start_ns;
+    QemuPerfStat present_stat;
+    bool convert_pixels;
 
     if (dst_width == 0 || dst_height == 0 || dst_pitch == 0 ||
         (dst_depth != 15 && dst_depth != 16 && dst_depth != 24 &&
@@ -8547,6 +8550,17 @@ static bool vmsvga3d_present_rect_to_buffer_internal(
     if (!execute) {
         return true;
     }
+
+    convert_pixels =
+        !(dst_depth == 32 &&
+          vmsvga3d_present_bgr8_storage_compatible(surface->format)) &&
+        !(dst_depth == 16 && surface->format == SVGA3D_R5G6B5) &&
+        !(dst_depth == 15 &&
+          (surface->format == SVGA3D_X1R5G5B5 ||
+           surface->format == SVGA3D_A1R5G5B5));
+    present_stat = convert_pixels ? QEMU_PERF_VMVGA_PRESENT_CONVERT
+                                  : QEMU_PERF_VMVGA_PRESENT_COPY;
+    present_start_ns = qemu_perf_stats_begin(present_stat);
 
     if (dst_depth == 32 &&
         vmsvga3d_present_bgr8_storage_compatible(surface->format)) {
@@ -8596,6 +8610,10 @@ static bool vmsvga3d_present_rect_to_buffer_internal(
             }
         }
     }
+
+    qemu_perf_stats_add_work(
+        present_stat, (uint64_t)clipped.w * clipped.h);
+    qemu_perf_stats_end(present_stat, present_start_ns);
 
     if (mark_vram_dirty) {
         vmsvga_mark_vram_dirty_rect(s, dirty_base_offset, dst_pitch, dst_bypp,
