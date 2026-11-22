@@ -2341,15 +2341,35 @@ vmsvga3d_d3d9_shader_const_target(SVGA3dShaderType type,
 enum {
     D3D9_SHADER_VS_TYPE = 0xFFFEu,
     D3D9_SHADER_PS_TYPE = 0xFFFFu,
+    D3D9_SHADER_OP_MOV = 0x0001u,
+    D3D9_SHADER_OP_ADD = 0x0002u,
+    D3D9_SHADER_OP_SUB = 0x0003u,
+    D3D9_SHADER_OP_MAD = 0x0004u,
+    D3D9_SHADER_OP_MUL = 0x0005u,
+    D3D9_SHADER_OP_RCP = 0x0006u,
+    D3D9_SHADER_OP_RSQ = 0x0007u,
+    D3D9_SHADER_OP_MIN = 0x000Au,
+    D3D9_SHADER_OP_MAX = 0x000Bu,
+    D3D9_SHADER_OP_SLT = 0x000Cu,
+    D3D9_SHADER_OP_SGE = 0x000Du,
+    D3D9_SHADER_OP_EXP = 0x000Eu,
+    D3D9_SHADER_OP_LOG = 0x000Fu,
+    D3D9_SHADER_OP_LRP = 0x0012u,
+    D3D9_SHADER_OP_FRC = 0x0013u,
     D3D9_SHADER_OP_DCL = 0x001Fu,
     D3D9_SHADER_OP_DEFB = 0x002Fu,
     D3D9_SHADER_OP_DEFI = 0x0030u,
+    D3D9_SHADER_OP_EXPP = 0x004Eu,
+    D3D9_SHADER_OP_LOGP = 0x004Fu,
     D3D9_SHADER_OP_DEF = 0x0051u,
     D3D9_SHADER_OP_COMMENT = 0xFFFEu,
     D3D9_SHADER_OP_END = 0xFFFFu,
     D3D9_SHADER_REG_INPUT = 1u,
     D3D9_SHADER_REG_ADDR = 3u,
+    D3D9_SHADER_REG_RASTOUT = 4u,
     D3D9_SHADER_REG_SAMPLER = 10u,
+    D3D9_SHADER_RASTOUT_FOG = 1u,
+    D3D9_SHADER_RASTOUT_PTS = 2u,
     D3D9_SHADER_SAMP_2D = 2u,
     D3D9_SHADER_SAMP_2D_SHADOW = 6u,
     D3D9_SHADER_PARAM_BIT = 0x80000000u,
@@ -2358,12 +2378,38 @@ enum {
     D3D9_SHADER_WRITEMASK_MASK = 0x000F0000u,
     D3D9_SHADER_WRITEMASK_X = 0x00010000u,
     D3D9_SHADER_WRITEMASK_ALL = 0x000F0000u,
+    D3D9_SHADER_SWIZZLE_SHIFT = 16u,
+    D3D9_SHADER_SWIZZLE_MASK = 0x00FF0000u,
+    D3D9_SHADER_SWIZZLE_NONE = 0xE4u,
+    D3D9_SHADER_SWIZZLE_WWWW = 0xFFu,
     D3D9_SHADER_MAX_VS_INPUTS = 16u,
 };
 
 static uint32_t vmsvga3d_d3d9_shader_reg_type(uint32_t token)
 {
     return ((token >> 28) & 0x7u) | (((token >> 11) & 0x3u) << 3);
+}
+
+static bool vmsvga3d_d3d9_shader_swizzle_is_replicate(uint32_t swiz)
+{
+    return swiz == 0x00u || swiz == 0x55u || swiz == 0xAAu || swiz == 0xFFu;
+}
+
+static bool vmsvga3d_d3d9_shader_op_is_scalar_src(uint32_t op)
+{
+    return op == D3D9_SHADER_OP_RCP || op == D3D9_SHADER_OP_RSQ ||
+           op == D3D9_SHADER_OP_EXP || op == D3D9_SHADER_OP_LOG ||
+           op == D3D9_SHADER_OP_EXPP || op == D3D9_SHADER_OP_LOGP;
+}
+
+static bool vmsvga3d_d3d9_shader_op_is_componentwise(uint32_t op)
+{
+    return op == D3D9_SHADER_OP_MOV || op == D3D9_SHADER_OP_ADD ||
+           op == D3D9_SHADER_OP_SUB || op == D3D9_SHADER_OP_MAD ||
+           op == D3D9_SHADER_OP_MUL || op == D3D9_SHADER_OP_MIN ||
+           op == D3D9_SHADER_OP_MAX || op == D3D9_SHADER_OP_SLT ||
+           op == D3D9_SHADER_OP_SGE || op == D3D9_SHADER_OP_LRP ||
+           op == D3D9_SHADER_OP_FRC;
 }
 
 static void vmsvga3d_d3d8_reg_semantic(uint32_t reg, uint32_t *usage,
@@ -2710,6 +2756,7 @@ bool vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
         uint32_t op = inst & 0xFFFFu;
         uint32_t param_count;
         uint32_t k;
+        bool dst_is_scalar_rastout = false;
 
         if (op == D3D9_SHADER_OP_COMMENT) {
             uint32_t comment_dwords = (inst >> 16) & 0x7FFFu;
@@ -2777,16 +2824,60 @@ bool vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
         for (k = 0; k < param_count; k++) {
             uint32_t tok = src[pos + 1u + k];
 
-            if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX && major == 1u) {
-                if (k == 0u &&
-                    vmsvga3d_d3d9_shader_reg_type(tok) ==
-                        D3D9_SHADER_REG_ADDR) {
-                    uint32_t mask = tok & D3D9_SHADER_WRITEMASK_MASK;
-                    if (mask == 0u || mask == D3D9_SHADER_WRITEMASK_ALL) {
-                        tok = (tok & ~D3D9_SHADER_WRITEMASK_MASK) |
-                              D3D9_SHADER_WRITEMASK_X;
+            if (stage == VMSVGA3D_D3D9_SHADER_STAGE_VERTEX && major <= 2u) {
+                uint32_t reg_type = vmsvga3d_d3d9_shader_reg_type(tok);
+                uint32_t reg_num = tok & 0x7FFu;
+
+                if (k == 0u) {
+                    if (major == 1u && reg_type == D3D9_SHADER_REG_ADDR) {
+                        uint32_t mask = tok & D3D9_SHADER_WRITEMASK_MASK;
+                        if (mask == 0u || mask == D3D9_SHADER_WRITEMASK_ALL) {
+                            tok = (tok & ~D3D9_SHADER_WRITEMASK_MASK) |
+                                  D3D9_SHADER_WRITEMASK_X;
+                        }
+                    } else if (reg_type == D3D9_SHADER_REG_RASTOUT &&
+                               (reg_num == D3D9_SHADER_RASTOUT_FOG ||
+                                reg_num == D3D9_SHADER_RASTOUT_PTS)) {
+                        /*
+                         * D3D8 vs_1_x wrote scalar oFog.x / oPts.x with
+                         * WRITEMASK_X (0x1), whereas D3D9 rejects explicit
+                         * write masks on oFog / oPts and requires
+                         * WRITEMASK_ALL (0xF).
+                         */
+                        dst_is_scalar_rastout = true;
+                        if ((tok & D3D9_SHADER_WRITEMASK_MASK) !=
+                            D3D9_SHADER_WRITEMASK_ALL) {
+                            tok = (tok & ~D3D9_SHADER_WRITEMASK_MASK) |
+                                  D3D9_SHADER_WRITEMASK_ALL;
+                        }
+                    }
+                } else if (reg_type != D3D9_SHADER_REG_ADDR) {
+                    uint32_t swiz = (tok & D3D9_SHADER_SWIZZLE_MASK) >>
+                                    D3D9_SHADER_SWIZZLE_SHIFT;
+
+                    if (major == 1u && k == 1u &&
+                        vmsvga3d_d3d9_shader_op_is_scalar_src(op) &&
+                        swiz == D3D9_SHADER_SWIZZLE_NONE) {
+                        /*
+                         * D3D8 scalar ops (rcp/rsq/exp/expp/log/logp) with
+                         * default .xyzw swizzle read .w; D3D9 requires an
+                         * explicit replicate swizzle.
+                         */
+                        tok = (tok & ~D3D9_SHADER_SWIZZLE_MASK) |
+                              (D3D9_SHADER_SWIZZLE_WWWW <<
+                               D3D9_SHADER_SWIZZLE_SHIFT);
+                    } else if (dst_is_scalar_rastout &&
+                               vmsvga3d_d3d9_shader_op_is_componentwise(op) &&
+                               !vmsvga3d_d3d9_shader_swizzle_is_replicate(
+                                   swiz)) {
+                        uint32_t lane0 = swiz & 0x3u;
+                        uint32_t rep = lane0 | (lane0 << 2) | (lane0 << 4) |
+                                       (lane0 << 6);
+                        tok = (tok & ~D3D9_SHADER_SWIZZLE_MASK) |
+                              (rep << D3D9_SHADER_SWIZZLE_SHIFT);
                     }
                 }
+
                 dst[out_len++] = tok;
 
                 /*
@@ -2794,7 +2885,8 @@ bool vmsvga3d_d3d9_normalize_legacy_shader_bytecode(
                  * a0.x with no follow-up address token.  Strip any SM2-style
                  * trailing SVGA3DREG_ADDR token if present.
                  */
-                if (k >= 1u && (tok & D3D9_SHADER_RELADDR_BIT) != 0u &&
+                if (major == 1u && k >= 1u &&
+                    (tok & D3D9_SHADER_RELADDR_BIT) != 0u &&
                     k + 1u < param_count &&
                     vmsvga3d_d3d9_shader_reg_type(src[pos + 1u + k + 1u]) ==
                         D3D9_SHADER_REG_ADDR) {
@@ -4473,11 +4565,11 @@ static bool vmsvga3d_dxvk_apply_context_shaders(
                                 fprintf(stderr, "\n");
                             }
                             vmsvga3d_dxvk_trace_shader_bytecode(
-                                "raw", shader->bytecode, src_dwords, 256u);
+                                "raw", shader->bytecode, src_dwords, 512u);
                             if (norm_tried && normalized != NULL &&
                                 norm_dwords != 0u) {
                                 vmsvga3d_dxvk_trace_shader_bytecode(
-                                    "norm", normalized, norm_dwords, 64u);
+                                    "norm", normalized, norm_dwords, 512u);
                             }
                         }
                         g_free(normalized);

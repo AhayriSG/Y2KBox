@@ -1443,3 +1443,34 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   vertex declaration semantics, and bytecode DWORDs.
 - Verified standalone compilation and 5 unit tests via `gcc -Wall -Wextra -Werror`;
   full CI build and owner XP guest verification remain outstanding.
+
+### Session 67 — 2026-11-22 — Gemini (AI Studio)
+#### Hitman 2: Silent Assassin (D3D8) `shid=9` `oFog.x` write mask rejection (`D3DERR_INVALIDCALL`)
+- Disassembled the failing `vs_1_1` skinning vertex shader (`shid=9`, 268 DWORDs)
+  captured by Session 66's diagnostic dump (`raw_hr=0x8876086c`, `norm_tried=0`):
+  - The VMware guest driver had already emitted all 6 `dcl_*` input declarations
+    (`v0..v5`) and `vs_1_1` version/instruction encoding, so Session 66's
+    normalizer produced identical output (`norm_tried=0`).
+  - Instruction 51 (`raw[201..204] = 0x00000005 0xc0010001 0x80000000 0xa055005f`,
+    `mul oFog.x, r0.xxxx, c95.yyyy`) encoded `oFog` (`D3DSPR_RASTOUT`, reg 1)
+    with D3D8's `.x` write mask (`0x00010000`). Direct3D 9 `CreateVertexShader()`
+    forbids explicit write masks on scalar rasterizer outputs (`oFog`/`oPts`) and
+    requires `D3DSP_WRITEMASK_ALL` (`0x000F0000`, i.e., `0xc00f0001` / `0xc00f0002`),
+    rejecting `0xc0010001` with `D3DERR_INVALIDCALL`.
+- Extended `vmsvga3d_d3d9_normalize_legacy_shader_bytecode()` in
+  `hw/display/vmware_vga_vgpu9.c`:
+  - Normalizes `D3DSPR_RASTOUT` `oFog` (reg 1) and `oPts` (reg 2) destination
+    write masks to `D3DSP_WRITEMASK_ALL` (`0x000F0000`) for `vs_1_x` / `vs_2_x`.
+  - Normalizes non-replicate source swizzles on component-wise instructions
+    writing to `oFog` / `oPts` by replicating lane 0 (preserving D3D8 `.x`
+    semantics without touching vector-reduction ops like `dp3`/`dp4`).
+  - Normalizes D3D8 `vs_1_x` scalar ops (`rcp`, `rsq`, `exp`, `log`, `expp`,
+    `logp`) with default `0xE4` (`xyzw`) source swizzle to `.wwww` (`0xFF`),
+    matching D3D8 hardware semantics and D3D9's replicate-swizzle requirement.
+- Increased `vmsvga3d_dxvk_trace_shader_bytecode()` dump limits in
+  `vmsvga3d_dxvk_apply_context_shaders()` from `256`/`64` DWORDs to `512`/`512`
+  DWORDs so shaders like `shid=9` (268 DWORDs) are never truncated on failure.
+- Verified standalone compilation (`gcc -Wall -Wextra -Werror -Wdeclaration-after-statement`)
+  and 4 unit tests covering `shid=9` (`raw[202]`: `0xc0010001` -> `0xc00f0001`,
+  idempotent), `oPts`/swizzle fixups, scalar op swizzles, and `vs_1_0` regression;
+  full Linux/Windows CI build and owner XP guest verification remain outstanding.
