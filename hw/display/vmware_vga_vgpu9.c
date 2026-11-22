@@ -4709,6 +4709,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     uint64_t perf_layout_start = 0;
     uint64_t perf_state_start = 0;
     uint64_t perf_submit_start = 0;
+    uint64_t perf_tail_start = 0;
+    uint64_t perf_tail_phase_start = 0;
 
     if (s == NULL || !vmsvga3d_dxvk_ready(s->dxvk) || s->svga3d == NULL ||
         vertex_decls == NULL || ranges == NULL || vertex_decl_count == 0 ||
@@ -5116,6 +5118,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     success = true;
 
 out:
+    perf_tail_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TOTAL);
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TOTAL,
                         perf_total_start);
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_LAYOUT,
@@ -5125,6 +5129,8 @@ out:
     qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_SUBMIT,
                         perf_submit_start);
     if (trace && !success) {
+        perf_tail_phase_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
         if (failure_range == UINT32_MAX) {
             fprintf(stderr,
                     "VMVGA-D3D9-DRAW fail cid=%u stage=%s\n",
@@ -5135,31 +5141,59 @@ out:
                     cid, failure_range,
                     failure_stage != NULL ? failure_stage : "unknown");
         }
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE,
+                            perf_tail_phase_start);
     }
 
     if (scene_started) {
         if (trace) {
+            perf_tail_phase_start = qemu_perf_stats_begin(
+                QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
             fprintf(stderr,
                     "VMVGA-D3D9-DRAW cleanup cid=%u forced-end-scene\n",
                     cid);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE,
+                                perf_tail_phase_start);
         }
+        perf_tail_phase_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_END_SCENE);
         (void)vmsvga3d_dxvk_end_scene(s->dxvk);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_END_SCENE,
+                            perf_tail_phase_start);
     }
 
+    perf_tail_phase_start = qemu_perf_stats_begin(
+        QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_STATE);
     if (success) {
         context->legacy_full_replay = false;
         s->svga3d->active_legacy_context_id = cid;
     } else {
         context->legacy_full_replay = true;
         s->svga3d->active_legacy_context_id = SVGA3D_INVALID_ID;
-        if (!vmsvga3d_dxvk_reset_state(s->dxvk) && trace) {
+        perf_tail_phase_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_RESET_STATE);
+        {
+            bool reset_ok = vmsvga3d_dxvk_reset_state(s->dxvk);
+
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_RESET_STATE,
+                                perf_tail_phase_start);
+            if (!reset_ok && trace) {
+                perf_tail_phase_start = qemu_perf_stats_begin(
+                    QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
             fprintf(stderr,
                     "VMVGA-D3D9-DRAW fail cid=%u stage=reset-state-after\n",
                     cid);
+                qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE,
+                                    perf_tail_phase_start);
+            }
         }
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_STATE,
+                        perf_tail_phase_start);
 
     if (trace && success) {
+        perf_tail_phase_start = qemu_perf_stats_begin(
+            QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE);
         fprintf(stderr,
                 "VMVGA-D3D9-DRAW result=OK cid=%u ranges=%u streams=%u "
                 "rt0=%u:%u:%u depth=%u:%u:%u vs=%u ps=%u\n",
@@ -5174,7 +5208,11 @@ out:
                                       SVGA3D_SHADERTYPE_MIN],
                 context->bound_shader[SVGA3D_SHADERTYPE_PS -
                                       SVGA3D_SHADERTYPE_MIN]);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TRACE,
+                            perf_tail_phase_start);
     }
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_TAIL_TOTAL,
+                        perf_tail_start);
 
     return success ? VMSVGA3D_D3D9_ACCEL_COMPLETE
                    : VMSVGA3D_D3D9_ACCEL_FAILED;
