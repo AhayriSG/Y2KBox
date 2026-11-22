@@ -338,11 +338,12 @@ interval across Y2KBox, without continuously generating diagnostic output.
   diagnostic capability but does not itself start continuous output.
 * Use the existing SDL host-hotkey modifier chord and add **Ctrl+Alt+L** to toggle
   capture; consume the key so it is not sent to the guest.
-* On activation, redirect stderr to `y2kbox-log.log` and enable general
-  performance counters, VMVGA local diagnostics, VMPort GuestRPC diagnostics,
-  and the relevant VMVGA/VMPort/vdagent trace events. On stop, disable those
-  diagnostic sources and restore original stderr. The VM keeps running. The first
-  activation truncates the file; later intervals append. Do not emit routine
+* On activation, create a new timestamped `y2kbox-log-YYYYMMDD-HHMMSS.log`
+  file (adding a numeric suffix on collisions), redirect stderr to it, and enable
+  general performance counters, VMVGA local diagnostics, VMPort GuestRPC
+  diagnostics, and the relevant VMVGA/VMPort/vdagent trace events. On stop,
+  disable those diagnostic sources and restore original stderr. The VM keeps
+  running. Never append sessions or overwrite an existing capture. Do not emit routine
   capture start/stop markers or diagnostic output to the console while inactive.
 * Show generic diagnostic-logging availability and active state in the SDL title
   only when debug mode is enabled. Report actual file/descriptor errors, not
