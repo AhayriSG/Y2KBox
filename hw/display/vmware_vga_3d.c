@@ -16197,7 +16197,7 @@ static bool vmsvga3d_screen_target_direct_format_compatible(
 }
 
 static VMSVGA3DDxvkScreenReadbackPollResult
-vmsvga3d_screen_target_async_poll_present_live(
+vmsvga3d_screen_target_async_poll_present_impl(
     struct vmsvga_state_s *s, VMSVGA3DSurface *surface,
     bool d3d9_resident, bool d3d11_resident, bool wait,
     bool allow_inactive, bool exact_sequence, uint64_t min_sequence,
@@ -16343,6 +16343,25 @@ vmsvga3d_screen_target_async_poll_present_live(
     }
 
     return VMSVGA3D_DXVK_SCREEN_READBACK_POLL_READY;
+}
+
+static VMSVGA3DDxvkScreenReadbackPollResult
+vmsvga3d_screen_target_async_poll_present_live(
+    struct vmsvga_state_s *s, VMSVGA3DSurface *surface,
+    bool d3d9_resident, bool d3d11_resident, bool wait,
+    bool allow_inactive, bool exact_sequence, uint64_t min_sequence,
+    uint64_t *sequence_out)
+{
+    uint64_t perf_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_POLL);
+    VMSVGA3DDxvkScreenReadbackPollResult result =
+        vmsvga3d_screen_target_async_poll_present_impl(
+            s, surface, d3d9_resident, d3d11_resident, wait,
+            allow_inactive, exact_sequence, min_sequence, sequence_out);
+
+    qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_ASYNC_POLL,
+                        perf_start_ns);
+    return result;
 }
 
 static VMSVGA3DDxvkScreenReadbackSubmitResult
@@ -17220,11 +17239,18 @@ static bool vmsvga3d_screen_target_flush_live(struct vmsvga_state_s *s)
         return true;
     }
 
-    if (!vmsvga3d_screen_target_retired_snapshot_service_live(
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_RETIRE);
+        bool retired_ok = vmsvga3d_screen_target_retired_snapshot_service_live(
             s, false, VMSVGA3D_SCREEN_TARGET_RETIRE_REFRESH_MAX_ENTRIES,
             VMSVGA3D_SCREEN_TARGET_RETIRE_REFRESH_MAX_BYTES,
-            &retired_pending)) {
-        return false;
+            &retired_pending);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_RETIRE,
+                            perf_start_ns);
+        if (!retired_ok) {
+            return false;
+        }
     }
     if (retired_pending) {
         return true;
@@ -17246,7 +17272,11 @@ static bool vmsvga3d_screen_target_flush_live(struct vmsvga_state_s *s)
         }
         if (s->screen_frontend_deferred_frames >=
             VMSVGA3D_SCREEN_FRONTEND_DEFERRED_MAX_FRAMES) {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_QUIESCE);
             bool quiesced = vmsvga3d_screen_target_quiesce_live(s);
+            qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_QUIESCE,
+                                perf_start_ns);
 
             if (quiesced && s->svga3d != NULL &&
                 !s->svga3d->screen_target_frontend_commit_pending) {
@@ -17282,7 +17312,15 @@ static bool vmsvga3d_screen_target_flush_live(struct vmsvga_state_s *s)
         s->screen_frontend_deferred_frames = 0;
     }
 
-    return vmsvga3d_screen_target_flush_live_mode(s, true, false, false);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_SCREEN_TARGET_FLUSH_MODE);
+        bool result =
+            vmsvga3d_screen_target_flush_live_mode(s, true, false, false);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_SCREEN_TARGET_FLUSH_MODE,
+                            perf_start_ns);
+        return result;
+    }
 }
 
 static bool vmsvga3d_screen_target_quiesce_yieldable_live(
