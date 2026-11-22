@@ -12873,9 +12873,20 @@ bool vmsvga3d_dxvk_surface_readback_rects(
          * allocation, hashing, row scan, or extra GPU transfer is performed
          * when debug tracing is disabled. */
         if (!VMVGA_TRACE_LOCAL_MASTER_ENABLED()) {
-            if (!vmsvga3d_dxvk_surface_readback_level(
-                    dxvk, surface, level, data, row_pitch, source_height)) {
-                goto out;
+            {
+                uint64_t perf_start_ns =
+                    qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_FULL_SURFACE);
+                bool readback_ok = vmsvga3d_dxvk_surface_readback_level(
+                    dxvk, surface, level, data, row_pitch, source_height);
+
+                qemu_perf_stats_record_work(
+                    QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
+                    (uint64_t)source_width * source_height);
+                qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_FULL_SURFACE,
+                                    perf_start_ns);
+                if (!readback_ok) {
+                    goto out;
+                }
             }
 
             if (secondary_data != NULL) {
@@ -13104,18 +13115,37 @@ bool vmsvga3d_dxvk_surface_readback_rects(
             .bottom = source_rect->bottom - (int32_t)batch_top,
         };
 
-        result = stretch_rect(
-            dxvk->d3d9_device, source_surface, source_rect,
-            surface->d3d9_readback_render_target, &destination_rect,
-            VMSVGA3D_DXVK_D3DTEXF_NONE);
+        {
+            uint64_t perf_start_ns =
+                qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_STRETCH_RECT);
+            result = stretch_rect(
+                dxvk->d3d9_device, source_surface, source_rect,
+                surface->d3d9_readback_render_target, &destination_rect,
+                VMSVGA3D_DXVK_D3DTEXF_NONE);
+            qemu_perf_stats_record_work(
+                QEMU_PERF_DXVK_READBACK_STRETCH_RECT,
+                (uint64_t)(source_rect->right - source_rect->left) *
+                (uint32_t)(source_rect->bottom - source_rect->top));
+            qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_STRETCH_RECT,
+                                perf_start_ns);
+        }
         if (!vmsvga3d_dxvk_succeeded(result)) {
             goto out;
         }
     }
 
-    result = get_render_target_data(
-        dxvk->d3d9_device, surface->d3d9_readback_render_target,
-        surface->d3d9_readback_staging);
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA);
+        result = get_render_target_data(
+            dxvk->d3d9_device, surface->d3d9_readback_render_target,
+            surface->d3d9_readback_staging);
+        qemu_perf_stats_record_work(
+            QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA,
+            (uint64_t)batch_width * batch_height);
+        qemu_perf_stats_end(
+            QEMU_PERF_DXVK_READBACK_GET_RENDER_TARGET_DATA, perf_start_ns);
+    }
     if (!vmsvga3d_dxvk_succeeded(result) ||
         !vmsvga3d_dxvk_get_method(
             surface->d3d9_readback_staging,
@@ -13128,6 +13158,8 @@ bool vmsvga3d_dxvk_surface_readback_rects(
         goto out;
     }
 
+    uint64_t lock_copy_start_ns =
+        qemu_perf_stats_begin(QEMU_PERF_DXVK_READBACK_LOCK_COPY);
     result = lock_rect(surface->d3d9_readback_staging, &locked, NULL,
                        VMSVGA3D_DXVK_D3DLOCK_READONLY);
     if (!vmsvga3d_dxvk_succeeded(result) || locked.bits == NULL ||
@@ -13174,6 +13206,11 @@ bool vmsvga3d_dxvk_surface_readback_rects(
     }
 
     result = unlock_rect(surface->d3d9_readback_staging);
+    qemu_perf_stats_record_work(
+        QEMU_PERF_DXVK_READBACK_LOCK_COPY,
+        (uint64_t)batch_width * batch_height);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_READBACK_LOCK_COPY,
+                        lock_copy_start_ns);
     locked_staging = false;
     success = vmsvga3d_dxvk_succeeded(result);
     if (success) {
