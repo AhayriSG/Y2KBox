@@ -687,3 +687,33 @@ CI polling was performed. Validate Linux and Windows CI, then run equivalence
 verification without Ctrl+Alt+L and a separate performance capture with
 verification unset. Do not change the default until both equivalence and
 representative XP gameplay pass.
+
+
+### T13e checkpoint (2026-11-22): ordered-tree FlatView is now default
+
+The tree-based renderer in `system/memory.c` is now unconditional; the
+`Y2KBOX_FLATVIEW_BUILDER` selector and failed batched renderer were removed.
+The legacy renderer remains solely as the reference for the opt-in
+`Y2KBOX_FLATVIEW_VERIFY=1` comparison, which checks both pre- and
+post-simplification output. The owner's topology equivalence check passed.
+
+Owner-side gameplay validation:
+- Joint Operations: no noticeable 1-3 second freezes or matching audio
+  interruptions.
+- FIFA 2003: major improvement; occasional ~1 s hitches remain.
+- F1 Challenge '99-'02: scene-transition stalls improved; crowded starting
+  grids still produce sustained slideshow-like performance until other cars
+  leave view.
+
+The tree capture recorded 1.713 s topology generation across 795 generations,
+versus 17.965 s in the earlier batched capture. GART map commits: 1.508 s
+across 138 operations; unmap commits: 0.235 s across 159 operations. The
+captures are not a perfectly controlled A/B, but operation counts match.
+No local build/test or CI polling was performed. Windows/Linux CI validation
+is still required; do not claim it passed. Keep `Y2KBOX_FLATVIEW_VERIFY`
+unset for normal performance runs. The old `Y2KBOX_FLATVIEW_BUILDER=tree`
+launcher setting is now harmless but unnecessary.
+
+Next work after CI: profile FIFA's residual one-second hitches and F1's
+crowded-grid sustained slowdown independently. Do not assume shader compilation
+or TCG is responsible for either without targeted evidence.
