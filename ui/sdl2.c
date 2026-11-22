@@ -246,7 +246,7 @@ static const char *sdl_fullscreen_hotkey(void)
 #endif
 }
 
-static bool sdl_vmvga_debug_enabled(Object **vmvga)
+static bool sdl_debug_mode_enabled(Object **vmvga)
 {
     *vmvga = object_resolve_path_type("", "vmvga", NULL);
     return *vmvga && object_property_get_bool(*vmvga, "debug", NULL);
@@ -275,7 +275,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
     int flags;
     int saved_errno;
 
-    if (!sdl_vmvga_debug_enabled(&vmvga)) {
+    if (!sdl_debug_mode_enabled(&vmvga)) {
         return;
     }
 
@@ -294,9 +294,9 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
 #ifdef O_BINARY
         flags |= O_BINARY;
 #endif
-        fd = g_open("vmvga_freeze.log", flags, 0666);
+        fd = g_open("y2kbox-log.log", flags, 0666);
         if (fd < 0) {
-            error_report("Could not open vmvga_freeze.log: %s",
+            error_report("Could not open y2kbox-log.log: %s",
                          strerror(errno));
             return;
         }
@@ -305,7 +305,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         if (dup2(fd, STDERR_FILENO) < 0) {
             saved_errno = errno;
             g_close(fd, NULL);
-            error_report("Could not redirect stderr to vmvga_freeze.log: %s",
+            error_report("Could not redirect stderr to y2kbox-log.log: %s",
                          strerror(saved_errno));
             return;
         }
@@ -353,7 +353,7 @@ static void sdl_update_caption(struct sdl2_console *scon)
     const char *hotkey = sdl_log_capture_hotkey();
     const char *fullscreen_hotkey = sdl_fullscreen_hotkey();
     Object *vmvga;
-    bool debug_available = sdl_vmvga_debug_enabled(&vmvga);
+    bool debug_available = sdl_debug_mode_enabled(&vmvga);
 
     if (!runstate_is_running()) {
         status = " [Stopped]";
@@ -385,10 +385,10 @@ static void sdl_update_caption(struct sdl2_console *scon)
 
     if (debug_available && sdl_log_capture_enabled) {
         snprintf(log_status, sizeof(log_status),
-                 " - VMVGA log recording (%s to stop)", hotkey);
+                 " - Diagnostic logging (%s to stop)", hotkey);
     } else if (debug_available) {
         snprintf(log_status, sizeof(log_status),
-                 " - %s to start VMVGA log", hotkey);
+                 " - %s to start diagnostic logging", hotkey);
     }
 
     if (qemu_name) {
