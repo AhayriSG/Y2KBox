@@ -341,9 +341,12 @@ interval across Y2KBox, without continuously generating diagnostic output.
 * On activation, create a new timestamped `y2kbox-log-YYYYMMDD-HHMMSS.log`
   file (adding a numeric suffix on collisions), redirect stderr to it, and enable
   general performance counters, VMVGA local diagnostics, VMPort GuestRPC
-  diagnostics, and the relevant VMVGA/VMPort/vdagent trace events. On stop,
-  disable those diagnostic sources and restore original stderr. The VM keeps
-  running. Never append sessions or overwrite an existing capture. Do not emit routine
+  diagnostics, and the relevant VMVGA/VMPort/vdagent trace events. Reset all
+  `Y2KBOX-PERF` counters and timing baselines at capture start; report only that
+  interval's measurements when stopping. This resets diagnostic statistics only,
+  not the VM or guest. On stop, disable those diagnostic sources and restore
+  original stderr. The VM keeps running. Never append sessions or overwrite an
+  existing capture. Do not emit routine
   capture start/stop markers or diagnostic output to the console while inactive.
 * Show generic diagnostic-logging availability and active state in the SDL title
   only when debug mode is enabled. Report actual file/descriptor errors, not
