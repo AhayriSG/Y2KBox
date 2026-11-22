@@ -6461,6 +6461,17 @@ static bool vmsvga3d_clear_depth_stencil_image(
                 continue;
             }
 
+            {
+                QemuPerfStat pixel_stat = clear_depth && clear_stencil
+                    ? QEMU_PERF_VMVGA_CLEAR_DEPTH_STENCIL_PIXELS
+                    : clear_depth
+                        ? QEMU_PERF_VMVGA_CLEAR_DEPTH_ONLY_PIXELS
+                        : QEMU_PERF_VMVGA_CLEAR_STENCIL_ONLY_PIXELS;
+
+                qemu_perf_stats_record_work(
+                    pixel_stat, (uint64_t)rect.w * rect.h);
+            }
+
             for (y = 0; y < rect.h; y++) {
                 uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
                                (uint64_t)rect.x * bytes;
