@@ -1803,3 +1803,21 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   `WORKLOAD_ACTIVE_SESSION.md`, and `WORKLOG_INDEX.md`. No QEMU build,
   benchmark, functional test, or CI polling was performed for this
   documentation-only policy update.
+
+
+## Session 87 — Clarify fixed guest targets and XP memory limits
+
+- Validated the 32-bit XP address-space explanation against Microsoft
+  documentation: the default 2 GiB user / 2 GiB kernel split is virtual address
+  space per process/system, not a partition of installed physical RAM.
+- Documented XP Professional's /3GB caveat and the requirement for the
+  executable's LARGEADDRESSAWARE flag, including the kernel-resource tradeoff.
+  Avoided claiming that additional RAM is automatically dedicated to file cache
+  or that it guarantees reduced game stutter.
+- Confirmed the project advertises SVGA3D vertex shader version 3.0
+  (SVGA3DVSVERSION_30 = 7) and pixel shader version 3.0
+  (SVGA3DPSVERSION_30 = 13); documented Direct3D 9.0c / Shader Model 3.0 as
+  the guest-facing graphics ceiling, distinct from host rendering APIs.
+- Updated README.md and recorded the possible future 4 GiB GUI option in
+  HANDOFF.md as a consideration, not a current feature or committed plan.
+  Documentation-only change; no build, benchmark, or CI polling was performed.
