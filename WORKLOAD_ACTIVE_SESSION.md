@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 93–102).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 94–103).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is active.** Mesa's SVGA Gallium driver translates OpenGL operations into SVGA3D commands; the host dispatcher accepts some legacy commands such as DRAW_PRIMITIVES, but its legacy capability profile is documented as D3D9-oriented. Compare the exact Mesa GL 2.1 command/state/capability needs against current handlers. An XP-side probe is now prepared at `xp/tools/glprobe.c`: it reproduces COD1's id Tech 3 `GLW_ChoosePFD` filters/best-match logic, reports rejection reasons for the 32/24/8 and 32/24/0 attempts, tests strict and software-allowed selection, then checks WGL context creation and GL strings. Next: owner runs it in XP and returns the complete output.
+4. **T25 guest OpenGL investigation is active.** Mesa's VGPU9 path reports GLSL 1.20, requires SVGA hardware version WS8_B1 and VS/PS 3.0; Y2KBox advertises those baseline versions and has handlers for the core legacy commands. This is promising protocol overlap, not proof of complete GL state semantics. Review candidates include line stipple and logic operations. An XP-side probe is prepared at `xp/tools/glprobe.c`, reproducing COD1's id Tech 3 `GLW_ChoosePFD` filters/best-match logic and checking WGL context creation/GL strings. First quick test: launch COD1 with `+set r_allowSoftwareGL 1` to see whether generic software formats get past selection; then run the probe to identify the installed XP driver's actual PFD/ICD behavior. VMware Workstation Player 15 documentation says OpenGL apps in XP guests use software emulation, but exact VMware Tools 10.0.12 behavior remains to be verified.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -38,11 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 93 — Move QEMU base and license provenance into the README FAQ
-- Removed the upstream QEMU base/version and GPL-2.0 notice from the Fixed target area.
-- Added a dedicated FAQ answer identifying upstream QEMU 11.1.90, linking the exact base commit, and noting the unchanged GPL-2.0 license with `COPYING` and `LICENSE` references.
-- Documentation-only; no build, benchmark, functional test, or CI polling.
 
 ### Session 94 — Reconcile agent guidance and stale handoff instructions
 - Re-audited all 16 Markdown files; no malicious prompt injection or unrelated-repository redirection found.
@@ -93,3 +88,8 @@
 - Identified COD1's GLW_ChoosePFD routine as the custom id Tech 3 PFD enumerator, not Windows ChoosePixelFormat. It rejects generic formats by default, requires RGBA/window/OpenGL/double-buffer flags, at least 15 depth bits, and at least 4 stencil bits when stencil is requested.
 - Added xp/tools/glprobe.c and its README. It mirrors the game's filtering/best-match logic for 32/24/8 and 32/24/0, explains per-format rejections, compares software-allowed selection, and tests WGL context creation plus GL vendor/renderer/version.
 - T25 now points to the probe. Next is an owner-run XP capture; the utility has not been compiled or run. No QEMU build, guest test, benchmark, or CI polling.
+
+### Session 103 — Match Mesa's VGPU9 baseline and identify the COD1 software fallback
+- Mesa VGPU9 reports GLSL 1.20 and requires SVGA hardware version WS8_B1 plus VS/PS 3.0. Y2KBox advertises WS8_B1 and SM3.0 and implements handlers for the core legacy SVGA3D command family; semantic/capability completeness remains unproven.
+- VMware Workstation Player 15 documentation says OpenGL apps in XP guests run in software-emulation mode. Added a COD1 test with +set r_allowSoftwareGL 1 to allow generic formats and see whether software OpenGL can get past pixel-format selection.
+- T25 updated with protocol matching, candidate state gaps, and the software fallback test. No QEMU build, standalone probe compile/run, guest test, benchmark, or CI polling.
