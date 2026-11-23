@@ -116,7 +116,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   `d3d9.dll`/`d3d11.dll` host backends. XP boot is owner-verified. CI builds and
   smoke checks validate integration; remaining VMware driver, D3D8/DirectDraw,
   and per-game compatibility work is tracked in T11 and active investigations.
-* T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Further x87 expansion is PAUSED pending T13e's scene-stall diagnosis; the existing guarded fast paths and differential test remain.
+* T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Further x87 expansion remains PAUSED; retain the existing guarded fast paths and differential test, and revisit only if representative profiling justifies more work.
 * T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
   HMAT, VIOT, VMGENID, VMCLOCK, ERST, ACPI CPU/memory hotplug (T01 removes them).
@@ -425,12 +425,12 @@ idempotent (`git checkout` touched files first).
 * **XP is explicitly supported:** README table: Windows XP / Server 2003 -> SVGA driver 12.01.08 from VMware
   Tools 10.0.12 (`https://packages.vmware.com/tools/frozen/windows/winPreVista.iso`; also Win2000 11.09.01).
   Other rows (Vista 8.16.01, 7/8 8.17.03, 10/11 9.17.11, 95/98/ME 10.7.0) are not our concern.
-* **TCG Ring-3 backdoor exemption (T09 draft implemented):** `gen_check_io` -> `HELPER(check_io)`
+* **TCG Ring-3 backdoor exemption (T09 integration implemented):** `gen_check_io` -> `HELPER(check_io)`
   (`target/i386/tcg/system/seg_helper.c`) now exempts `0x5658` and `0x5659` (`size <= 4`) when
   `vmport_tcg_backdoor_enabled` is true (`hw/i386/vmport.c`). Verified on CI via `xp/bench/vmport_ring3_test.asm`
-  (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`); still needs real XP driver
-  verification in T08.
-* **Host-side 3D backends (T10 draft implemented):**
+  (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`); still needs real XP driver and application compatibility
+  verification under T11.
+* **Host-side 3D backends (T10 integration implemented):**
   * **Linux:** `hw/display/vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
     or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols if `--enable-sdl` already
     loaded SDL2 (`RTLD_NOLOAD`). `vmware_vga_dxvk.c` searches `<exec_dir>/`, `<exec_dir>/lib/`, then system paths,
