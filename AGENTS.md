@@ -18,6 +18,20 @@ runtime is TCG-only. VMVGA is the sole display/3D path.
 If sources conflict, do not silently choose the convenient version. Check current
 code and the latest owner decision, then correct the stale document.
 
+## Cross-agent continuity
+
+The owner may switch between Claude, Gemini, Codex, or another coding agent
+sequentially as sessions expire or tasks change. This is a supported normal
+workflow: treat `AGENTS.md`, `HANDOFF.md`, `TASKS.md`,
+`WORKLOAD_ACTIVE_SESSION.md`, and `WORKLOG.md` as the shared durable state.
+Do not assume another provider's private conversation or runtime memory is
+available. On takeover, resume from the recorded task status and exact
+`Resume here:` instruction; do not repeat completed work or full onboarding
+unless the repository state is genuinely unclear. Before handing off, record
+all meaningful progress and the next action using the checkpoint procedure.
+The default owner workflow is one active agent at a time; concurrent agents
+must explicitly coordinate task claims and serialize writes to `main`.
+
 ## Fresh-session onboarding (token-efficient)
 
 For a genuinely new agent runtime/sandbox:
