@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 77–86).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 78–87).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 77 — x87 TCG bottleneck overhaul
-- vCPU profiling found x87 helpers and softfloat consumed more than half of samples, with additional cost from exception-flag merging, redundant loads, a lost FST fast path, zero handling, helper_fpop, and missing TCG_CALL_NO_RWG annotations.
-- Implemented in-place host-x87 arithmetic with lazy status synchronization and softfloat fallback, restored FST m32/m64 fast paths, optimized exact integer loads and zero operands, inlined stack/move/sign operations, and added TCG call annotations. Changes retained an `XPQEMU_NO_HX87=1` kill switch for bit-exact A/B comparison.
-- Owner validation after Session 77 reported F1 Challenge rising from 8.7 FPS to 16.0 FPS average in the dry Albert Park capture, with no low-FPS collapse seconds. The x87 changes were validated by Linux/Windows CI and the differential test.
-- New hotspots shifted toward PIO/BQL contention and TB lookup; do not assume the x87 work alone explains later workload behavior.
 
 ### Session 78 — PIO/BQL, TB lookup, and x87 cleanup
 - Removed BQL acquisition for no-op ISA port 0x80 and buffered stderr during Ctrl+Alt+L capture, eliminating a large number of single-byte Windows WriteFile calls. Added capture-only PIO-port counters.
@@ -93,3 +87,8 @@
 - Owner approved Gemini 4 Neon for relevant, bounded performance benchmarks and controlled A/B experiments, including the established `xp/bench/run.sh` and `xp/bench/perf.py` workflows.
 - The exception remains specific to Gemini 4 Neon; other Gemini models, Claude, Codex, and other agents still need explicit authorization.
 - Updated the shared policy, Gemini entrypoint, handoff, task workflow, and continuity records. No build, benchmark, functional test, or CI polling was performed.
+
+### Session 87 — Clarify fixed guest targets and XP memory limits
+- README now explains that the current 2048 MiB setting is a Y2KBox product default, not XP's physical RAM ceiling; a future 4 GiB GUI option is only a possibility.
+- Clarified the 32-bit XP 2 GiB/2 GiB virtual-address split, /3GB plus LARGEADDRESSAWARE requirements and kernel tradeoff, and why extra RAM may help the OS without guaranteeing game access or reduced stutter.
+- Documented the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling, confirmed against the project's advertised SVGA3D caps. Updated HANDOFF's durable RAM note. No build, benchmark, or CI polling was performed.
