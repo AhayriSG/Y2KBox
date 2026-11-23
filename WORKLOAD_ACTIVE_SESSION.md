@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 82–91).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 83–92).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 82 — Make coding-agent historical reads selective
-- Replaced full-history onboarding with a layered read: current handoff/task state, the rolling summary, and a topic index; open only relevant worklog sessions.
-- Added `WORKLOG_INDEX.md` as a topic-to-session navigation map. The full archive remains append-only and is never a default context dump.
-- The full Session 71 record remains in `WORKLOG.md`; it only aged out of the rolling summary when Session 81 entered the ten-session window.
-
 
 ### Session 83 — Consolidate agent guidance and repair project continuity docs
 - Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
@@ -98,3 +92,9 @@
   and retained the preservation-practicality discussion as a closing entry.
 - Clarified HANDOFF's durable vCPU rationale. Documentation-only; no QEMU build,
   benchmark, functional test, or CI polling.
+
+### Session 92 — Close T09 integration; keep XP acceptance owner-run
+- T09's qemu-vmvga integration and Linux/Windows CI checks are complete; its task status is DONE.
+- VMware Tools/driver, 2D/display, D3D API, and game compatibility checks remain in the separate owner-run XP guest validation checklist, not as unfinished agent work.
+- HANDOFF wording now distinguishes completed T09 integration from ongoing human acceptance. T10 remains separately paused for its own validation scope.
+- Documentation-only update; no source changes, local build, benchmark, guest test, or CI polling.
