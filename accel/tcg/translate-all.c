@@ -631,7 +631,10 @@ void tcg_flush_jmp_cache(CPUState *cpu)
         return;
     }
 
-    for (int i = 0; i < TB_JMP_CACHE_SIZE; i++) {
-        qatomic_set(&jc->array[i].tb, NULL);
-    }
+    /*
+     * Bump the generation counter instead of scanning all TB_JMP_CACHE_SIZE
+     * slots.  CF_PCREL invalidations call tcg_flush_jmp_cache frequently, and
+     * O(1) generation bumping avoids evicting L1/L2 cache lines.
+     */
+    qatomic_inc_fetch(&jc->gen);
 }

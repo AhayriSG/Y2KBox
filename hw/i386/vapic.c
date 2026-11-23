@@ -16,6 +16,7 @@
 #include "system/cpus.h"
 #include "system/hw_accel.h"
 #include "system/kvm.h"
+#include "system/tcg.h"
 #include "system/whpx.h"
 #include "system/runstate.h"
 #include "system/address-spaces.h"
@@ -292,11 +293,140 @@ instruction_ok:
     return 0;
 }
 
+/*
+ * Under TCG, kvmvapic.bin places the writable vapic TPR state (offset 0x300)
+ * on the same 4 KiB page as the executable VAPIC handlers (0x0c0..0x2d8).
+ * Every guest KfRaiseIrql/KfLowerIrql write or apic_sync_vapic update then
+ * triggers TCG self-modifying-code page invalidation and recompiles the
+ * VAPIC TBs thousands of times per second.
+ *
+ * Since all references to the vapic area live in the ROM fixup table and the
+ * original 8 KiB vapic buffer spans into the next 4 KiB page, compute a
+ * page-aligned shift that moves the writable vapic area strictly off the code
+ * page while remaining inside the mapped ROM region.
+ */
+static uint32_t vapic_tcg_compute_shift(VAPICROMState *s, CPUState *cs,
+                                        hwaddr paddr, uint32_t rom_state_vaddr,
+                                        uint32_t old_vaddr, uint32_t fixup_end,
+                                        uint32_t old_vapic_vaddr,
+                                        uint32_t old_vapic_size)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    hwaddr rom_paddr = paddr & ROM_BLOCK_MASK;
+    hwaddr code_end_paddr, old_vapic_paddr, new_vapic_paddr;
+    uint32_t base_delta, shift, new_vapic_size, new_vapic_vaddr;
+    size_t min_vapic_size;
+    TranslateForDebugResult tres;
+
+    if (!tcg_enabled() || s->rom_size == 0) {
+        return 0;
+    }
+    if (fixup_end <= old_vaddr || old_vapic_vaddr < fixup_end) {
+        return 0;
+    }
+
+    code_end_paddr = paddr + (fixup_end - old_vaddr);
+    old_vapic_paddr = paddr + (old_vapic_vaddr - old_vaddr);
+    if (((code_end_paddr - 1) & TARGET_PAGE_MASK) !=
+        (old_vapic_paddr & TARGET_PAGE_MASK)) {
+        /* Already on a separate page from the executable handlers. */
+        return 0;
+    }
+
+    new_vapic_paddr = TARGET_PAGE_ALIGN(code_end_paddr);
+    if (new_vapic_paddr <= old_vapic_paddr ||
+        new_vapic_paddr - old_vapic_paddr >= old_vapic_size) {
+        return 0;
+    }
+    shift = (uint32_t)(new_vapic_paddr - old_vapic_paddr);
+    new_vapic_size = old_vapic_size - shift;
+
+    min_vapic_size = ((size_t)MAX(ms->smp.max_cpus, 1U)) << VAPIC_CPU_SHIFT;
+    if (new_vapic_size < min_vapic_size ||
+        new_vapic_paddr + new_vapic_size > rom_paddr + s->rom_size) {
+        return 0;
+    }
+
+    base_delta = rom_state_vaddr - old_vaddr;
+    new_vapic_vaddr = old_vapic_vaddr + base_delta + shift;
+    if (!cpu_translate_for_debug(cs, new_vapic_vaddr, &tres) ||
+        tres.physaddr != new_vapic_paddr) {
+        return 0;
+    }
+    if (!cpu_translate_for_debug(cs, new_vapic_vaddr + min_vapic_size - 1,
+                                 &tres) ||
+        tres.physaddr != new_vapic_paddr + min_vapic_size - 1) {
+        return 0;
+    }
+
+    return shift;
+}
+
+/*
+ * Replace `reenable_vtpr` (`out %al, $0x7e` = 0xe6 0x7e) at the known VAPIC
+ * handler entry points with a 2-byte NOP (`0x66 0x90`) under TCG.
+ *
+ * Upstream vapic_write(case 1) skips NOPing under TCG because env->eip is not
+ * accurate there, leaving Windows XP executing ~50k BQL-locked port 0x7e
+ * writes/sec forever.  Using the physical ROM address and GuestROMState
+ * handler offsets avoids relying on env->eip altogether.
+ */
+static void vapic_nop_reenable_vtpr_at(VAPICROMState *s, uint32_t rom_vaddr,
+                                       uint32_t handler_vaddr,
+                                       uint32_t insn_offset)
+{
+    static const uint8_t nop2[2] = { 0x66, 0x90 };
+    hwaddr rom_end, paddr;
+    uint8_t bytes[2];
+
+    if (!handler_vaddr || handler_vaddr < rom_vaddr) {
+        return;
+    }
+    rom_end = (s->rom_state_paddr & ROM_BLOCK_MASK) + s->rom_size;
+    paddr = s->rom_state_paddr + (handler_vaddr - rom_vaddr) + insn_offset;
+    if (paddr < s->rom_state_paddr || paddr + sizeof(bytes) > rom_end) {
+        return;
+    }
+    physical_memory_read(paddr, bytes, sizeof(bytes));
+    if (bytes[0] == 0xe6 && bytes[1] == 0x7e) {
+        physical_memory_write(paddr, nop2, sizeof(nop2));
+    }
+}
+
+static void vapic_nop_reenable_vtpr(VAPICROMState *s)
+{
+    uint32_t rom_vaddr;
+    size_t i;
+
+    if (!tcg_enabled() || !s->rom_state_paddr || !s->rom_size) {
+        return;
+    }
+
+    rom_vaddr = le32_to_cpu(s->rom_state.vaddr);
+    for (i = 0; i < ARRAY_SIZE(s->rom_state.up.get_tpr); i++) {
+        vapic_nop_reenable_vtpr_at(s, rom_vaddr,
+                                   le32_to_cpu(s->rom_state.up.get_tpr[i]), 0);
+    }
+    vapic_nop_reenable_vtpr_at(s, rom_vaddr,
+                               le32_to_cpu(s->rom_state.up.get_tpr_stack), 0);
+    /* up_set_tpr: pushf (1) + push %eax (1) + push %ebx (1) + out %al, $0x7e */
+    vapic_nop_reenable_vtpr_at(s, rom_vaddr,
+                               le32_to_cpu(s->rom_state.up.set_tpr), 3);
+    /* mp_get_tpr_eax: pushf (1) + cli (1) + out %al, $0x7e */
+    vapic_nop_reenable_vtpr_at(s, rom_vaddr,
+                               le32_to_cpu(s->rom_state.mp.get_tpr[0]), 2);
+    /* mp_set_tpr: pushf + 4*push + cli (6) + out %al, $0x7e */
+    vapic_nop_reenable_vtpr_at(s, rom_vaddr,
+                               le32_to_cpu(s->rom_state.mp.set_tpr), 6);
+}
+
 static int update_rom_mapping(VAPICROMState *s, CPUX86State *env, target_ulong ip)
 {
     CPUState *cs = env_cpu(env);
     hwaddr paddr;
     uint32_t rom_state_vaddr;
+    uint32_t old_vaddr, fixup_start, fixup_end;
+    uint32_t old_vapic_vaddr, old_vapic_size, base_delta, vapic_shift;
     uint32_t pos, patch, offset;
     TranslateForDebugResult tres;
 
@@ -326,20 +456,44 @@ static int update_rom_mapping(VAPICROMState *s, CPUX86State *env, target_ulong i
     s->rom_state_vaddr = rom_state_vaddr;
 
     /* fixup addresses in ROM if needed */
-    if (rom_state_vaddr == le32_to_cpu(s->rom_state.vaddr)) {
+    old_vaddr = le32_to_cpu(s->rom_state.vaddr);
+    if (rom_state_vaddr == old_vaddr) {
         return 0;
     }
-    for (pos = le32_to_cpu(s->rom_state.fixup_start);
-         pos < le32_to_cpu(s->rom_state.fixup_end);
-         pos += 4) {
-        physical_memory_read(paddr + pos - s->rom_state.vaddr,
-                                 &offset, sizeof(offset));
+    fixup_start = le32_to_cpu(s->rom_state.fixup_start);
+    fixup_end = le32_to_cpu(s->rom_state.fixup_end);
+    old_vapic_vaddr = le32_to_cpu(s->rom_state.vapic_vaddr);
+    old_vapic_size = le32_to_cpu(s->rom_state.vapic_size);
+    base_delta = rom_state_vaddr - old_vaddr;
+    vapic_shift = vapic_tcg_compute_shift(s, cs, paddr, rom_state_vaddr,
+                                          old_vaddr, fixup_end,
+                                          old_vapic_vaddr, old_vapic_size);
+
+    for (pos = fixup_start; pos < fixup_end; pos += 4) {
+        uint32_t delta = base_delta;
+        physical_memory_read(paddr + pos - old_vaddr, &offset, sizeof(offset));
         offset = le32_to_cpu(offset);
         physical_memory_read(paddr + offset, &patch, sizeof(patch));
         patch = le32_to_cpu(patch);
-        patch += rom_state_vaddr - le32_to_cpu(s->rom_state.vaddr);
+        if (vapic_shift &&
+            patch >= old_vapic_vaddr &&
+            patch < old_vapic_vaddr + old_vapic_size) {
+            delta += vapic_shift;
+        }
+        patch += delta;
         patch = cpu_to_le32(patch);
         physical_memory_write(paddr + offset, &patch, sizeof(patch));
+    }
+    if (vapic_shift) {
+        uint32_t new_size = old_vapic_size - vapic_shift;
+        uint32_t new_size_le = cpu_to_le32(new_size);
+        hwaddr new_vapic_paddr = paddr + (old_vapic_vaddr - old_vaddr) +
+            vapic_shift;
+        uint8_t *zero = g_malloc0(new_size);
+        physical_memory_write(new_vapic_paddr, zero, new_size);
+        g_free(zero);
+        physical_memory_write(paddr + offsetof(GuestROMState, vapic_size),
+                              &new_size_le, sizeof(new_size_le));
     }
     read_guest_rom_state(s);
     s->vapic_paddr = paddr + le32_to_cpu(s->rom_state.vapic_vaddr) -
@@ -388,6 +542,7 @@ static int vapic_enable(VAPICROMState *s, X86CPU *cpu)
     apic_enable_vapic(cpu->apic_state, vapic_paddr);
 
     s->state = VAPIC_ACTIVE;
+    vapic_nop_reenable_vtpr(s);
 
     return 0;
 }
@@ -722,6 +877,7 @@ static void vapic_write(void *opaque, hwaddr addr, uint64_t data,
         }
 
         if (s->state == VAPIC_ACTIVE) {
+            vapic_nop_reenable_vtpr(s);
             break;
         }
         if (update_rom_mapping(s, env, env->eip) < 0) {
@@ -776,6 +932,7 @@ static void do_vapic_enable(CPUState *cs, run_on_cpu_data data)
                               &enabled, sizeof(enabled));
     apic_enable_vapic(cpu->apic_state, s->vapic_paddr);
     s->state = VAPIC_ACTIVE;
+    vapic_nop_reenable_vtpr(s);
 }
 
 static void vapic_vm_state_change(void *opaque, bool running, RunState state)
