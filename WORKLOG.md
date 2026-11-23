@@ -1921,3 +1921,9 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Retained the distinctions from Wine and game-specific wrappers, the original-hardware maintenance argument, portability/snapshots/backups/repeatability, the goal of minimizing host and guest workarounds, the Direct3D 8.1 / 9.0c target, and the PCSX2 usability comparison.
 - Removed the now-redundant standalone preservation FAQ entry. No other FAQ entries or emulator code were changed.
 - Documentation-only. No build, benchmark, functional test, guest validation, or CI polling was performed.
+
+## Session 98 — Move project-purpose FAQ to the bottom of the README
+
+- Moved the complete “Why build a Windows XP emulator when compatibility layers already exist?” answer to the final position in the README FAQ, after the technical host, logging, QEMU provenance, vCPU, hypervisor API, and guest-memory questions.
+- Preserved the approved merged wording exactly; this is an ordering-only change to the FAQ content.
+- Documentation-only. No emulator source, builds, benchmarks, tests, guest validation, or CI polling were performed.
