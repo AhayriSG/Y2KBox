@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 79–88).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 80–89).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 79 — KVMVAPIC, same-page SMC, and O(1) jump-cache flush
-- Root causes included XP HAL repeatedly issuing TCG-ineffective `out 0x7e`, writable VAPIC data sharing an executable ROM page and triggering SMC/TB churn, and linear jump-cache flushes on invalidation.
-- Patched the TCG VAPIC ROM handlers to NOP the relevant 0x7e writes, relocated writable VAPIC data to a separate page, and changed jump-cache flush to a generation increment (O(1)). Refactored the TB lookup hit path into a zero-frame leaf fast path.
-- Standalone ROM, invalidation/linearizability, and SysV/Windows x64 code-generation checks passed.
-- Owner validation at commit `759cee6` reported F1 Challenge at 32.7 FPS average (steady 30–37 FPS) and CI green on Linux and Windows. Owner considered F1, Joint Operations, and Hitman 2 playable; the primary profiling target shifted to FIFA 2003.
 
 ### Session 80 — FIFA/VMVGA and FlatView BQL stalls
 - FIFA 2003 profiling found BQL starvation: `vmvga.fifo_run` + `vmvga.display_update` held the BQL for 24.90 s (58.3% of a 42.741 s capture). Five hotspots accounted for about 20.6 s: redundant CPU shadow clears before successful GPU clears, 16->32-bit present conversion divisions, FlatView topology rebuild overhead, dynamic-buffer overlap locks on a >64 KiB vertex buffer, and an accidentally unconditional readback trace path.
@@ -92,3 +86,9 @@
 - Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
 - Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
 - Preserved the XP physical-memory, virtual-address, /3GB, LARGEADDRESSAWARE, and workload caveats. Documentation-only; no build, benchmark, functional test, or CI polling.
+
+### Session 89 — Refocus the README introduction on the project identity
+- Replaced the dense opening technical/runtime summary with a concise description of Y2KBox's Windows XP gaming focus and its mid-to-late 2000s PC performance target.
+- Clarified that the project is not chasing modern high-end gaming performance and is not intended to be a cycle-accurate, low-level hardware emulator.
+- Added an appreciative acknowledgment of 86Box and its contributors, without a repetitive closing mission statement.
+- Documentation-only; no build, benchmark, functional test, or CI polling.
