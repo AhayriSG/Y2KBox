@@ -1847,3 +1847,10 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Documentation-only change. No build, benchmark, functional test, or CI
   polling was performed.
 
+## Session 90 — Fix the product target to one vCPU
+
+- Owner approved a strict single-vCPU Windows XP target, not merely a one-vCPU default. The guest target is 32-bit Windows XP, uniprocessor only; multi-vCPU/SMP configurations are unsupported.
+- Set the i440FX PC machine's `max_cpus` to 1 (with `default_cpus` already 1), removed the `-smp` option definition and command-line parser, and updated README's Fixed target to state 32-bit XP and exactly one vCPU.
+- Updated T01 to record the completed CPU restriction and CLI removal, with remaining CLI cleanup scoped to `-m`, `-machine`, and `-cpu`. Updated T14 to keep all thread-pinning measurements on the fixed one-vCPU guest.
+- Reconciled HANDOFF's old experimental two-vCPU option with the new owner decision. Historical two-vCPU boot/test evidence is retained as historical evidence, not current support.
+- Source/documentation changes reviewed statically only. No local build or functional tests were run, and GitHub Actions/Codacy were not polled.
