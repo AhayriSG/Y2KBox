@@ -563,6 +563,11 @@ Shader and post-processing integration
 * **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). Always `git fetch` + `git rebase` before pushing due to parallel agents. Use `git revert` rather than file copies to avoid swapping files like `TASKS.md`/`WORKLOG.md` (verify with `head -1`).
 * **TASKS.md:** Update status to `PAUSED` and add a "Resume here:" note.
 * **WORKLOG.md:** Append what you did, evidence (numbers, commands), and what broke.
+* **Active session summary:** Add a concise matching session entry to
+  `WORKLOAD_ACTIVE_SESSION.md`. The Claude Code `Stop` hook runs
+  `scripts/maintain_active_session.py`, automatically drops entries older than
+  the latest ten, and blocks session exit if the newest worklog session is missing
+  from the summary. Do not manually move or delete old history from `WORKLOG.md`.
 * **Documentation:** Update section 2 and the README table if state changed.
 
 ### 2. Environment & Shell Constraints
