@@ -2,17 +2,19 @@
 
 Files: `HANDOFF.md` (context, rules, design notes) - `TASKS.md` (claimable work queue) -
 `WORKLOAD_ACTIVE_SESSION.md` (latest ten sessions) - `WORKLOG_INDEX.md` (historical navigation) -
-`WORKLOG.md` (append-only chronological archive) - `README.md` (public status table).
+`WORKLOG.md` (append-only chronological archive) - `README.md` (user-facing project overview).
 Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it building).
 
 ## 0. If you are a new AI/human taking over (2 minutes)
 
-1. Read sections 1-2 below, then `TASKS.md`, `WORKLOAD_ACTIVE_SESSION.md`, and
-   `WORKLOG_INDEX.md`. Do not read the entire `WORKLOG.md` by default. Use the
-   index to locate only historical sessions relevant to the task; verify old
-   claims against current source and task/handoff state. Pick an unclaimed task
-   (highest priority first) and claim it directly on `main` (protocol at the top
-   of TASKS.md).
+1. Read `AGENTS.md` first. For onboarding, read only sections 0-3 of this file,
+   the task-heading/status overview in `TASKS.md`, and the complete entry for the
+   task you will claim or continue. Read `WORKLOAD_ACTIVE_SESSION.md` and
+   `WORKLOG_INDEX.md`. Do not read this entire handoff, the entire task archive,
+   or the full `WORKLOG.md` by default. Use the index to open only relevant
+   historical sessions, and verify important old claims against current source
+   and current owner decisions. Claim an unclaimed task (highest priority first)
+   directly on `main` using the protocol at the top of `TASKS.md`.
 2. Do NOT build locally (section 7): the status hook reports whether the latest pushed
    commit passed the checks.
 3. Work directly on `main`, commit small, and push often. Do not create branches or
@@ -94,22 +96,26 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
 * Delete unrelated QEMU code freely as long as the Windows XP-32 guest continues to work
   under Windows TCG and Linux KVM product builds/runtime remain functional. Linux KVM is
   mandatory for the Linux product; Linux TCG is not a supported fallback.
-* Later (not now): own executable + wxWidgets GUI (T12).
+* Later (not now): own SDL2 + Dear ImGui frontend (T12); wxWidgets is a fallback, not a parallel target.
 
 ## 2. Current state snapshot (update when it changes)
 
 * Builds and passes the checks on Linux AND Windows (GitHub Actions, MSYS2 UCRT64) - keep CI green. macOS/BSD code removed (T03 pass 1).
-* Accelerator policy: Linux product builds expose/use KVM only; Windows builds expose/use TCG only. Only i440FX `pc` machines (19 versioned
-  variants still present). Default CPU `xp-p4` (verified in-guest: family 15, SSE2 yes,
-  SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified); 1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. **XP has not been
-  booted yet** (T08, needs an XP ISO).
+* Accelerator policy: Linux product builds expose/use KVM only; Windows builds expose/use TCG only. Only
+  `pc-i440fx-11.2` (alias `pc`) remains. Default CPU `xp-p4` (verified in-guest: family 15,
+  SSE2 yes, SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified);
+  1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. The owner has booted an XP SP3
+  desktop and run XP games; T08's initial boot prerequisite is satisfied. Remaining
+  VMware driver, 3D API, and per-game compatibility work is tracked by T09-T11 and
+  the active T13 investigations.
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
-* **T09 / T10 draft on `main`:** `qemu-vmvga` (`vmvga` SVGA II + SVGA3D, `vmmouse`, `vmport` with TCG Ring-3
-  `0x5658`/`0x5659` backdoor exemption) is wired as the default and only display device, with Linux
-  `dxvk-native` (`SDL2`/`SDL3` sealed-memfd WSI) and Windows `d3d9.dll`/`d3d11.dll` (hidden HWND WSI, WARP
-  fallback, optional DXVK Windows DLLs) host 3D backends. CI builds and smoke checks run on push; in-guest XP
-  driver/3D verification awaits T08/T11.
+* **T09 / T10 integration on `main`:** `qemu-vmvga` (`vmvga` SVGA II + SVGA3D,
+  `vmmouse`, `vmport` with TCG Ring-3 `0x5658`/`0x5659` backdoor exemption) is the
+  default and only display device, with Linux `dxvk-native` and Windows
+  `d3d9.dll`/`d3d11.dll` host backends. XP boot is owner-verified. CI builds and
+  smoke checks validate integration; remaining VMware driver, D3D8/DirectDraw,
+  and per-game compatibility work is tracked in T11 and active investigations.
 * T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Further x87 expansion is PAUSED pending T13e's scene-stall diagnosis; the existing guarded fast paths and differential test remain.
 * T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
@@ -377,10 +383,11 @@ idempotent (`git checkout` touched files first).
   and T13a FST A/B measurements are historical results; they are no longer repeated on every
   artifact build. Keep their benchmark sources/scripts for deliberate manual A/B runs when
   evaluating future performance changes.
-  The workflow detects changed paths first: when every changed file ends in `.md`, Linux and
-  Windows compilation and functional checks still run, but both package steps, packaged-layout
-  smoke tests, and binary artifact uploads are skipped. Any non-Markdown change and manual
-  `workflow_dispatch` run retain normal artifact production. `xp/bench/run.sh` reports raw median
+  The workflow detects changed paths first: when every changed file ends in `.md`, only the
+  lightweight `changes` job runs; Linux and Windows build/test jobs are skipped entirely,
+  so no binaries or artifacts are produced. Any non-Markdown change and manual
+  `workflow_dispatch` run execute the normal Linux and Windows build, functional checks,
+  packaging, packaged-layout smoke tests, and artifact uploads. `xp/bench/run.sh` reports raw median
   wall time without subtracting an empty-loop control. It rejects unexpected QEMU exit statuses,
   timeouts, and stderr output. Normal runs upload `y2kbox-linux-x86_64` and
   `y2kbox-windows-x86_64` (`-L pc-bios`).
@@ -587,7 +594,9 @@ Shader and post-processing integration
   `scripts/maintain_active_session.py`, automatically drops entries older than
   the latest ten, and blocks session exit if the newest worklog session is missing
   from the summary. Do not manually move or delete old history from `WORKLOG.md`.
-* **Documentation:** Update section 2 and the README table if state changed.
+* **Documentation:** Update section 2 when durable current-state facts change. Update the
+  README only when user-facing setup, requirements, or project information changes; it has
+  no task-status table.
 
 ### 2. Environment & Shell Constraints
 * **Shell & Execution:** The sandbox shell is `dash` (no `<(...)`, no `{a,b}` expansion, no `${var:0:7}`). Always run scripts via explicit `bash` execution. Single commands time out at 300 seconds (run long jobs like ninja via `setsid nohup ... &` and poll).
