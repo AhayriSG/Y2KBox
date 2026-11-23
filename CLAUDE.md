@@ -51,7 +51,7 @@ does not, by itself, make it a new session.
 policy is respected by never upstreaming this code; it does not restrict development in this repository.
 
 ## Rules
-1. Claim a task in `TASKS.md` (by pushing) before starting; work on `task/Txx-*` branches; keep `main` building.
+1. Claim a task in `TASKS.md` (by pushing) before starting; work directly on `main`; keep it building.
 2. Never hardcode secrets. `CODACY_API_TOKEN` (and optional `GITHUB_TOKEN`) are read from the environment only.
    `.claude/settings.local.json` and `.env*` are git-ignored; never commit them or paste tokens into files.
 3. Append to `WORKLOG.md` and update `README.md`'s status table / `TASKS.md` status when state changes.
@@ -66,6 +66,9 @@ policy is respected by never upstreaming this code; it does not restrict develop
   `vectest` (`xp/bench/vectest.asm`) and the x87 differential test (`xp/bench/x87cmp.sh`) on **Linux and Windows**. Binary
   packaging, packaged-layout smoke tests, and artifact uploads are skipped when every changed file has the `.md` extension;
   mixed/code changes and manual `workflow_dispatch` runs still produce the normal Linux and Windows artifacts.
+- **Safe checkpoint & budget management:** Never knowingly push broken or internally inconsistent changes to `main`. Before pushing, review the complete diff and run applicable lightweight checks that do not violate the no-local-QEMU-build rule. Do not wait until the execution budget is nearly exhausted: once a coherent, safe unit of work is ready, commit and push it directly to `main`.
+- **Before pausing or ending an incomplete task:** push the latest safe, recoverable state; update `TASKS.md` with the current status and an exact `Resume here:` instruction; append completed work, evidence, and outstanding issues to `WORKLOG.md`; and add the concise session summary to `WORKLOAD_ACTIVE_SESSION.md`. Update `HANDOFF.md` only when a lasting project decision, constraint, or important current-state fact changes. If no safe checkpoint exists, do not push knowingly broken code just to preserve progress; leave the changes unpushed and document the recovery instructions and what remains unverified.
+- **Verification honesty:** Never describe code as tested, compiling, or working unless the corresponding check actually ran and passed. GitHub Actions is the authoritative build and functional verification pipeline.
 - **CI & Codacy feedback loop (never poll after pushing):**
   - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`, also on `SessionStart`
     after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and is silent (0 tokens)
