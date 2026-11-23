@@ -19,7 +19,7 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
    standing authorization for ordinary local configure/build and standard checks;
    all other agents need explicit owner authorization. Gemini 4 Neon also has
    standing authorization for relevant, bounded benchmark/A-B work; all other
-   agents need explicit authorization. The status hook reports pushed CI results.
+   agents need explicit authorization. Claude's configured status hook reports pushed CI/Codacy results on a later prompt; Gemini/Codex sessions must finish without polling and leave result review to the owner or a later session.
 3. Work directly on `main`, commit small, and push often. Do not create branches or
    pull requests. Before every write, fetch the latest `main` and the exact target file;
    verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
@@ -437,7 +437,7 @@ idempotent (`git checkout` touched files first).
         -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d     # "Found 2 cpu(s)", "Booting from ..."
       nasm -fbin xp/bench/vectest.asm -o vectest.img   # run with isa-debug-exit + debugcon, expect "OK"
       xp/bench/x87cmp.sh build 2000                    # all 30 operations identical
-      xp/bench/perf.py QEMU PCBIOS                     # performance (benchmark runs may build locally)
+      xp/bench/perf.py QEMU PCBIOS                     # performance (local build/benchmark execution: Gemini 4 Neon only under standing authorization; every other agent needs explicit owner authorization)
 
 ## 8. 3D research notes
 
@@ -610,7 +610,7 @@ Shader and post-processing integration
 
 ### 1. Session Handoff Protocol (Before Budget Ends)
 * **Never leave `main` broken.**
-* **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). Always `git fetch` + `git rebase` before pushing due to parallel agents. Use `git revert` rather than file copies to avoid swapping files like `TASKS.md`/`WORKLOG.md` (verify with `head -1`).
+* **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). The normal workflow is one active agent at a time with serialized writes. Before every write, fetch the latest `main` and the exact target file; verify both the branch HEAD and target blob SHA still match what was inspected. If either moved, abort, refetch, and reapply to the new content. Do not use a blind fetch/rebase as a substitute for this check. Use `git revert` for reverting commits rather than whole-file restores; verify file identity before shell-based edits.
 * **TASKS.md:** Update status to `PAUSED` and add a "Resume here:" note.
 * **WORKLOG.md:** Append what you did, evidence (numbers, commands), and what broke.
   Keep it as the complete historical record; never prune old sessions.
