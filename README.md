@@ -12,7 +12,7 @@
 A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 **x86-64-v3 (or newer) hosts**, with **Linux KVM required** and **Windows TCG / MTTCG only**. Linux users must enable KVM and have access to `/dev/kvm` before running Y2KBox; there is no supported Linux TCG runtime fallback. TCG performance work is exclusively aimed at Windows.
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
-(qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small SDL2 + Dear ImGui frontend (wxWidgets remains a fallback).
+(qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small SDL2 + Dear ImGui frontend.
 
 **Contributors / coding agents:** start with [AGENTS.md](AGENTS.md), the shared
 repository policy for Claude, Gemini, Codex, and other agents. For a fresh session,
@@ -97,7 +97,7 @@ and select the CD-ROM from the boot menu.
 
 VMware SVGA II 12.01.08 driver that compatible with Windows XP: [VMware Tools 10.0.12](https://packages.vmware.com/tools/frozen/windows/winPreVista.iso) *(Tip: choose **Custom** setup and uncheck everything except the **SVGA Driver** to avoid installing unneeded VMware background services).*
 <br/>- `vmvga` (VMware SVGA II + SVGA3D, with `vgabios-vmware.bin`) is the default display device with **128 MiB framebuffer VRAM** plus a separate **512 MiB 3D surface-memory budget**, and hardware cursor support at full Windows XP hardware acceleration. The framebuffer size is the local VRAM exposed through BAR1; the surface-memory budget is separate and is not additional `dxdiag` dedicated/display memory. The 32-bit Windows XP VMware XPDM driver (`vmx_svga.sys` 12.01.08) reports at most **128 MiB** of adapter VRAM (`SVGA_VRAM_MAX_SIZE`).
-<br/>- Interactive display output uses **SDL** (`-display sdl`; VNC support is disabled, while `-display none` remains for headless checks). A Dear ImGui frontend integrated with SDL2 is planned (T12); wxWidgets remains a fallback.
+<br/>- Interactive display output uses **SDL** (`-display sdl`; VNC support is disabled, while `-display none` remains for headless checks). A Dear ImGui frontend integrated with SDL2 is planned (T12).
 <br/>- On Linux, launch with KVM (`-accel kvm`) and make sure `kvm.enable_vmware_backdoor=1` is enabled on the host kernel module (`qemu-system-i386` warns at startup if `/sys/module/kvm/parameters/enable_vmware_backdoor` is disabled). Linux binaries require the
 usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
