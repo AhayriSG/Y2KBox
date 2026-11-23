@@ -7,8 +7,8 @@ have follow-up subsections under the same number.
 
 ## How to use
 
-1. Establish the current state from `CLAUDE.md`, `HANDOFF.md`, `TASKS.md`, and
-   `WORKLOAD_ACTIVE_SESSION.md`.
+1. Establish the current state from `AGENTS.md`, HANDOFF sections 0-3, the task
+   overview plus selected task entry in `TASKS.md`, and `WORKLOAD_ACTIVE_SESSION.md`.
 2. Find the relevant topic below and open only the corresponding session section(s)
    in `WORKLOG.md`.
 3. Treat old entries as historical evidence. Verify current behavior against
@@ -33,18 +33,18 @@ have follow-up subsections under the same number.
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
 | F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
 | FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81–82 | Documentation changes, benchmark CI cleanup, Markdown-only artifact suppression and build-workflow behavior |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–83 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, and session-continuity automation |
 
 ## Session 81 note
 
-Session 81 changed CI artifact production for Markdown-only commits. Linux and
-Windows configure/build/functional checks still run; only packaging, packaged
-smoke tests, and binary uploads are skipped. See the full Session 81 entry in
-`WORKLOG.md` and the current workflow in `.github/workflows/build.yml`.
+Session 81 changed the workflow so Markdown-only commits run only the lightweight
+change-detection job. Linux and Windows build/test jobs are skipped entirely; no
+artifacts are produced. Any non-Markdown change and manual `workflow_dispatch`
+run the full platform jobs. See `.github/workflows/build.yml`.
 
 ## Session 82 note
 
-Session 82 changes the coding-agent history-reading policy: new sessions read the
-current handoff/task/recent-summary documents and this topic index, then consult
-only relevant sections of the append-only worklog. The full worklog is no longer a
-default context read. See Session 82 in `WORKLOG.md`.
+Session 82 introduced selective historical reads and the topic index. Session 83
+centralized shared instructions in `AGENTS.md`, made Claude/Gemini entrypoints
+thin, and tightened onboarding to selected HANDOFF/TASKS sections. See Sessions
+82-83 in `WORKLOG.md` for the policy evolution.
