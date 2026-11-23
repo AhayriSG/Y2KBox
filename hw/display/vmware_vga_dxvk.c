@@ -16153,7 +16153,7 @@ bool vmsvga3d_dxvk_surface_upload_buffer(
 
 static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t offset,
-    const void *data, uint32_t size)
+    const void *data, uint32_t size, bool discard_full_range)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     VMSVGA3DDxvkBufferLock lock = NULL;
@@ -16189,10 +16189,13 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
                           ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
                           : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_PARTIAL_RANGE;
     /*
-     * DISCARD is safe only when this upload replaces every byte in the
-     * dynamic buffer. Partial guest updates must preserve the untouched data.
+     * DISCARD is safe only for a complete replacement immediately consumed
+     * by a later D3D9 draw. Handoff/eviction flushes pass false so flags=0
+     * also serialize any earlier GPU reads before the resource is released.
      */
-    lock_flags = lock_range_stat == QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
+    lock_flags = discard_full_range &&
+                         lock_range_stat ==
+                             QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
                      ? VMSVGA3D_DXVK_D3DLOCK_DISCARD
                      : 0;
 
@@ -16272,7 +16275,7 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
 
 bool vmsvga3d_dxvk_surface_flush_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
-    const void *data, uint32_t data_size)
+    const void *data, uint32_t data_size, bool discard_full_range)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     uint64_t perf_start;
@@ -16298,7 +16301,8 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
 
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH);
     success = vmsvga3d_dxvk_surface_upload_buffer_range(
-        dxvk, surface, offset, (const uint8_t *)data + offset, size);
+        dxvk, surface, offset, (const uint8_t *)data + offset, size,
+        discard_full_range);
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, perf_start);
     if (success) {
