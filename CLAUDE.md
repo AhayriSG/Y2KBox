@@ -3,7 +3,37 @@
 Y2KBox is a downstream QEMU fork that emulates only 32-bit Windows XP guests (TCG, x86-64-v3 Windows/Linux hosts).
 Context, decisions and design notes: `HANDOFF.md`. Work queue and claim protocol: `TASKS.md`. History: `WORKLOG.md`.
 
+## Repository Analysis and Session Continuity
+
+Distinguish a **new coding-agent session** from another prompt, task, or turn in the
+same running session. A new session means a fresh agent runtime/sandbox without the
+previous session's working context. A new user message or a context-compaction event
+does not, by itself, make it a new session.
+
+- **On the first repository analysis in a genuinely new session:** read this file,
+  `HANDOFF.md`, `TASKS.md`, and `WORKLOAD_ACTIVE_SESSION.md`. Also read
+  `WORKLOG.md` once to establish the project's historical context (the newest
+  entries are at the bottom). If the file is too large for one pass, read it in
+  chunks, prioritizing the latest entries, and use targeted older sections as needed.
+- **On subsequent work in the same session:** do not reread the entire
+  `WORKLOG.md`. Use `WORKLOAD_ACTIVE_SESSION.md` as the compact recent-context
+  entry point, then check the relevant `HANDOFF.md` instructions and `TASKS.md`
+  entries. Reopen only the specific `WORKLOG.md` sections needed to verify a
+  historical implementation, decision, diagnostic result, or commit.
+- **After context compaction in the same session:** recover from
+  `WORKLOAD_ACTIVE_SESSION.md` and the relevant task/handoff sections; do not
+  restart the full-history read merely because context was compacted.
+- **At the end of each work session:** append the complete session record to
+  `WORKLOG.md`, then refresh `WORKLOAD_ACTIVE_SESSION.md` so it summarizes the
+  latest ten worklog sessions. Keep the summary concise and derived from the
+  worklog; never edit, truncate, or replace the append-only history.
+- `WORKLOG.md` remains the historical record, `TASKS.md` remains authoritative
+  for task status/claims, and `HANDOFF.md` remains authoritative for project
+  decisions and operating instructions. If the rolling summary conflicts with
+  one of those sources, verify the source of truth and correct the summary.
+
 ## About the upstream AGENTS.md
+
 `AGENTS.md` / `.claude/rules/agents-md.md` come from upstream QEMU: its policy forbids AI-generated content in
 *upstream QEMU contributions*. Y2KBox is a separate downstream fork that is never submitted upstream, so that
 policy is respected by never upstreaming this code; it does not restrict development in this repository.
