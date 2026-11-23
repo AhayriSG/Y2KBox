@@ -21,12 +21,6 @@
 
 ## Latest ten worklog sessions
 
-### Session 80 — FIFA/VMVGA and FlatView BQL stalls
-- FIFA 2003 profiling found BQL starvation: `vmvga.fifo_run` + `vmvga.display_update` held the BQL for 24.90 s (58.3% of a 42.741 s capture). Five hotspots accounted for about 20.6 s: redundant CPU shadow clears before successful GPU clears, 16->32-bit present conversion divisions, FlatView topology rebuild overhead, dynamic-buffer overlap locks on a >64 KiB vertex buffer, and an accidentally unconditional readback trace path.
-- Implemented: skip CPU shadow clear when native GPU clear succeeds (retain fallback); bit-exact SSE2 and division-free scalar 16->32 conversion; gate deep readback tracing correctly; raise overlapping-buffer full-shadow DISCARD threshold from 64 KiB to 256 KiB; replace the GLib GSequence FlatView builder with ping-pong radix sorting plus a sweep-line/min-heap renderer; skip no-op GART unmap transactions.
-- Standalone checks passed, including exhaustive 65,536-value pixel conversion, clear-path equivalence, and randomized FlatView equivalence against the legacy renderer.
-- At the time Session 80 was appended, full Linux/Windows CI and in-game FIFA/F1 validation were marked pending. The owner subsequently reported both Linux and Windows CI passing. A separate 23.526 s dry-weather capture was also shared: `cpu.exec` count 3,415, total 23.515560 s, max 19.554 ms, 3,164 intervals >1 ms, 1,064 >10 ms, and none >100 ms. The capture's full workload attribution is not reproduced here; consult its diagnostic log before drawing conclusions.
-
 ### Session 81 — Skip binary artifacts for Markdown-only changes
 - Added a fail-safe change detector. Initially, Markdown-only commits still ran Linux/Windows builds and functional checks, but skipped packaging, packaged smoke tests, and artifact uploads.
 - Any non-Markdown change and manual `workflow_dispatch` run retained normal artifact production; missing comparison commits or diff errors conservatively enabled artifacts.
@@ -92,3 +86,9 @@
 - Clarified that the project is not chasing modern high-end gaming performance and is not intended to be a cycle-accurate, low-level hardware emulator.
 - Added an appreciative acknowledgment of 86Box and its contributors, without a repetitive closing mission statement.
 - Documentation-only; no build, benchmark, functional test, or CI polling.
+
+### Session 90 — Fix the product target to one vCPU
+- Owner approved a strict 32-bit Windows XP uniprocessor target: exactly one vCPU, with no multi-vCPU/SMP mode.
+- Set `max_cpus` to 1 and removed QEMU's `-smp` CLI option/parser. README now states the 32-bit guest OS and exact one-vCPU limit.
+- Updated T01, T14, and HANDOFF so future implementation and thread-pinning work preserve the fixed CPU count. Old two-vCPU boot evidence is explicitly historical.
+- Static review only; no local build, functional test, or CI polling.
