@@ -12,17 +12,19 @@
 A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 **x86-64-v3 (or newer) hosts**, with **Linux KVM required** and **Windows TCG / MTTCG only**. Linux users must enable KVM and have access to `/dev/kvm` before running Y2KBox; there is no supported Linux TCG runtime fallback. TCG performance work is exclusively aimed at Windows.
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
-(qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small wxWidgets launcher.
+(qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small SDL2 + Dear ImGui frontend (wxWidgets remains a fallback).
 
-**Contributors / LLMs:** read [HANDOFF.md](HANDOFF.md), [TASKS.md](TASKS.md), and
-[WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md), and
-[WORKLOG_INDEX.md](WORKLOG_INDEX.md) before starting. Follow the session-aware
-reading rules in [CLAUDE.md](CLAUDE.md): a fresh coding-agent session reads the
-rolling summary and topic index, then consults only relevant sections of the
-append-only [WORKLOG.md](WORKLOG.md), not the entire archive by default. At handoff,
-append to the worklog and add the concise new session to the rolling summary. The Claude Code Stop hook automatically trims the summary to the latest ten
-sessions and prevents handoff while it is stale; the full worklog remains append-only.
-Contributors work directly on `main`; coordinate task claims and serialize commits.
+**Contributors / coding agents:** start with [AGENTS.md](AGENTS.md), the shared
+repository policy for Claude, Gemini, Codex, and other agents. For a fresh session,
+read only the onboarding sections of [HANDOFF.md](HANDOFF.md), the task overview and
+relevant entry in [TASKS.md](TASKS.md), [WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md),
+and [WORKLOG_INDEX.md](WORKLOG_INDEX.md). Consult only relevant sections of the
+append-only [WORKLOG.md](WORKLOG.md); never load the full archive by default.
+[CLAUDE.md](CLAUDE.md) and [GEMINI.md](GEMINI.md) are short tool-specific entrypoints.
+At handoff, append the session to the worklog and add its concise summary to the
+rolling ten-session file. The Claude Code Stop hook enforces that summary; it does
+not apply to other agents. Contributors work directly on `main`; coordinate task
+claims and serialize commits.
 
 Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
 (Pentium 4 class), 1 vCPU by default; hosts: Windows and Linux (x86-64-v3 or newer).
@@ -43,8 +45,11 @@ License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 ## Download & Usage
 
-Every green CI run uploads Linux and Windows builds as Actions Artifacts. Open the
-[latest successful run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
+Build-triggering CI runs upload Linux and Windows builds as Actions Artifacts.
+Documentation-only commits that change only `.md` files intentionally skip the
+Linux and Windows jobs entirely, so those runs produce no binaries or artifacts.
+Any non-Markdown change and manual workflow dispatch run the full build and artifact
+pipeline. Open the [latest successful build run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
 and download the artifact for your platform:
 
 - Linux: `qemu-system-i386`, `qemu-img`, `pc-bios/`, and bundled `dxvk-native`
