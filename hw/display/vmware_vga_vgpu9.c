@@ -3210,9 +3210,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_upload_surface_image(
 
     if (vmsvga3d_d3d9_transfer_buffer(&info)) {
         if (level != 0 || size == 0 ||
-            !vmsvga3d_dxvk_surface_upload_buffer_range(
-                s->dxvk, surface->dxvk_surface, offset, image->data + offset,
-                size)) {
+            !vmsvga3d_dxvk_surface_defer_buffer_range(
+                surface->dxvk_surface, offset, size)) {
             return VMSVGA3D_D3D9_ACCEL_FAILED;
         }
         return VMSVGA3D_D3D9_ACCEL_COMPLETE;
@@ -3747,6 +3746,19 @@ static bool vmsvga3d_dxvk_materialize_buffer(
     if (vmsvga3d_dxvk_d3d9_buffer_compatible(
             surface->dxvk_surface, index_buffer,
             (uint32_t)surface->storage_bytes, native_format)) {
+        /*
+         * UPDATE_GB_IMAGE has already applied guest writes to the CPU shadow.
+         * Flush the coalesced dirty span immediately before this draw binds
+         * the resident D3D9 buffer; until this point the native copy is stale.
+         */
+        if (surface->mip_count != 1 || surface->mips == NULL ||
+            surface->mips[0].data == NULL ||
+            surface->mips[0].data_size < surface->storage_bytes ||
+            !vmsvga3d_dxvk_surface_flush_buffer_range(
+                s->dxvk, surface->dxvk_surface, surface->mips[0].data,
+                surface->mips[0].data_size)) {
+            return false;
+        }
         return true;
     }
 
