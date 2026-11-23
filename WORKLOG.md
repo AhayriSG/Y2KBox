@@ -1927,3 +1927,10 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Moved the complete “Why build a Windows XP emulator when compatibility layers already exist?” answer to the final position in the README FAQ, after the technical host, logging, QEMU provenance, vCPU, hypervisor API, and guest-memory questions.
 - Preserved the approved merged wording exactly; this is an ordering-only change to the FAQ content.
 - Documentation-only. No emulator source, builds, benchmarks, tests, guest validation, or CI polling were performed.
+
+## Session 99 — Add guest OpenGL investigation to the task queue
+
+- Corrected the architectural framing: VMware SVGA3D is not inherently a Direct3D-only virtual interface. Mesa's SVGA guest driver demonstrates an OpenGL 2.1 path over the VMware SVGA3D interface, while later configurations support newer OpenGL versions.
+- Distinguished that protocol capability from the Windows XP guest-driver situation. VMware Workstation documentation for XP-era guests describes OpenGL applications as software-emulated; this does not establish that VMware Tools 10.0.12 exposes an accelerated OpenGL ICD in XP.
+- Added T25 to investigate OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum target. The task starts with WGL pixel-format/ICD diagnostics for the Call of Duty 1 failure, audits the SVGA3D guest/host command contract, evaluates an XP-compatible guest ICD path, and requires incremental WGL/OpenGL validation while preserving D3D9.
+- Documentation and task-queue update only. No emulator source changes, local build, benchmark, functional test, guest test, or CI polling was performed.
