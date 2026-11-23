@@ -18,8 +18,13 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
 3. Work directly on `main`, commit small, and push often. Do not create branches or
    pull requests. Before every write, fetch the latest `main` and the exact target file;
    verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
-4. Before you run out of budget: push the current safe state, update TASKS.md
-   (`PAUSED` + "Resume here"), and append to WORKLOG.md (section 10 has the checklist).
+4. Checkpoint proactively; do not wait until the execution budget is nearly exhausted.
+   Push a coherent, safe, recoverable state directly to `main` (never knowingly push
+   broken or internally inconsistent changes), then update `TASKS.md` with the current
+   status and an exact "Resume here:" instruction, append completed work/evidence/
+   outstanding issues to `WORKLOG.md`, and add the concise matching entry to
+   `WORKLOAD_ACTIVE_SESSION.md`. If no safe checkpoint exists, do not push broken
+   changes merely to preserve progress; document the unpushed work and recovery steps.
 Several agents can work in parallel only by coordinating task claims and serializing
 writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate through TASKS.md.
 
@@ -364,6 +369,7 @@ idempotent (`git checkout` touched files first).
 - **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
   (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B performance work). Let GitHub Actions handle compilation, smoke tests and
   binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
+- **Safe checkpoints and verification:** Before every push, review the complete diff and run applicable lightweight checks that do not violate the no-local-QEMU-build rule. Never claim code was tested, compiled, or working unless the corresponding check actually ran and passed; GitHub Actions is the authoritative build/functional verification pipeline. Before pausing an incomplete task, follow the checkpoint and handoff sequence in section 0 above. Update `HANDOFF.md` only for lasting decisions, constraints, or important current-state facts; keep task status in `TASKS.md`, chronological evidence in `WORKLOG.md`, and the concise recent-session context in `WORKLOAD_ACTIVE_SESSION.md`. If there is no safe checkpoint, leave broken/unverified changes unpushed and state exactly what remains to be recovered or verified.
 - **CI pipeline (`.github/workflows/build.yml`):** Linux CI builds the Linux KVM product and runs accelerator-policy,
   functional, x87 differential, packaging, and smoke checks; it does not run TCG performance benchmarks.
   Windows CI builds the TCG product and runs functional checks plus the x87 differential test
