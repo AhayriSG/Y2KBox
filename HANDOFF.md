@@ -366,9 +366,13 @@ idempotent (`git checkout` touched files first).
   and T13a FST A/B measurements are historical results; they are no longer repeated on every
   artifact build. Keep their benchmark sources/scripts for deliberate manual A/B runs when
   evaluating future performance changes.
-  `xp/bench/run.sh` reports raw median wall time without subtracting an empty-loop control. It rejects unexpected
-  QEMU exit statuses, timeouts, and stderr output. Both jobs upload compiled binaries as GitHub Actions artifacts
-  (`y2kbox-linux-x86_64`, `y2kbox-windows-x86_64`; run with `-L pc-bios`).
+  The workflow detects changed paths first: when every changed file ends in `.md`, Linux and
+  Windows compilation and functional checks still run, but both package steps, packaged-layout
+  smoke tests, and binary artifact uploads are skipped. Any non-Markdown change and manual
+  `workflow_dispatch` run retain normal artifact production. `xp/bench/run.sh` reports raw median
+  wall time without subtracting an empty-loop control. It rejects unexpected QEMU exit statuses,
+  timeouts, and stderr output. Normal runs upload `y2kbox-linux-x86_64` and
+  `y2kbox-windows-x86_64` (`-L pc-bios`).
 - **CI & Codacy feedback loop (never poll after pushing):**
   - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`; also runs on
     `SessionStart` after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and
