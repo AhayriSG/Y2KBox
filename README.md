@@ -26,8 +26,41 @@ rolling ten-session file. The Claude Code Stop hook enforces that summary; it do
 not apply to other agents. Contributors work directly on `main`; coordinate task
 claims and serialize commits.
 
-Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
-(Pentium 4 class), 1 vCPU by default; hosts: Windows and Linux (x86-64-v3 or newer).
+## Fixed target
+
+- **Guest memory:** 2048 MiB, assigned automatically; there is no RAM setting in the
+  current build.
+- **Guest CPU:** xp-p4 (Pentium 4 Northwood class), with SSE2 as the maximum exposed
+  instruction set; 1 vCPU by default.
+- **Guest 3D API:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised shader
+  model. Direct3D 10/11 and Shader Model 4.0 or newer are outside the guest-facing
+  graphics target. Host-side rendering may use newer APIs internally.
+- **Host:** Windows or Linux on x86-64-v3 or newer.
+
+### Why the current guest RAM target is 2 GiB
+
+The 2048 MiB default is a Y2KBox product decision, not a hard 2 GiB physical-memory
+limit in 32-bit Windows XP. 32-bit XP can address up to 4 GiB of physical address
+space, although PCI devices and other memory-mapped hardware can reserve part of that
+range, leaving less than 4 GiB available to the guest OS. A future GUI option for
+4 GiB of guest RAM may be considered; it is not available today.
+
+The familiar **2 GiB user / 2 GiB kernel split is virtual address space, not a split
+of installed RAM**. By default, each 32-bit XP process gets up to 2 GiB of user-mode
+virtual address space, while the other 2 GiB is reserved for the system. Installing
+more guest RAM does not by itself increase the address space available to a game.
+
+On supported 32-bit Windows XP Professional installations, the /3GB Boot.ini
+switch can change the split to 3 GiB for user mode and 1 GiB for the kernel. The
+game executable must also have the LARGEADDRESSAWARE flag set to use the extra
+user address space. This is an application-specific option, not a general
+recommendation: reducing kernel virtual address space can affect drivers and other
+system resources, so compatibility must be tested.
+
+More physical RAM can still help Windows keep working data resident, reduce paging,
+and cache file data, depending on the workload. It does not automatically become
+a game-owned extra gigabyte, and it does not guarantee that a game will stop
+stuttering.
 
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
