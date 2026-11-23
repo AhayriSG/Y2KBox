@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 74–83).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 75–84).
 
 ## How to use this file
 
@@ -20,11 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 74 — Close FlatView scene-transition work; classify F1 locks
-- Owner reported Linux and Windows CI passing at `36a12e7e5d9d6d309873e0520a5e05f86e3224a5`; the ordered-tree FlatView renderer and original multi-second scene-transition stall were marked DONE. Residual crowded-grid work remained separate as T13e-F1.
-- A 23.526 s F1 capture showed 38,026 buffer locks / 1.197 s, overwhelmingly small partial flags-zero locks. Deferred updates again had zero merges.
-- The profile did not prove a controlled performance gain or GPU-wait cause. Preserve immediate pre-draw ordering and safe lock semantics.
 
 ### Session 75 — In-flight range tracking and safe DISCARD/NOOVERWRITE selection
 - Root cause of repeated partial Lock synchronization: guest invalidation commands signaled dynamic-buffer DISCARD/rename cycles, but the backend did not track drawn byte ranges in flight.
@@ -77,6 +72,12 @@
 - Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
 - Tightened onboarding to read HANDOFF sections 0-3, the task overview plus only the selected task, the active summary, and the worklog index. Historical details remain available on demand.
 - Aligned documentation with the job-level Markdown-only CI skip introduced in `8ab36ee`, corrected XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. Condensed the T13 task entry from about 20 KB to 4 KB by moving detailed historical evidence back to the indexed worklog. No QEMU source changed and no local QEMU build was run.
+
+### Session 84 — Clarify cross-agent handoff and human validation
+- Confirmed Claude, Gemini, Codex, and other agents use the same durable repo state through `AGENTS.md`, task status, handoff, active summary, and worklog. Sequential agent/provider switching is the normal owner workflow; agents do not share private runtime memory.
+- Removed T08 and T11 as claimable tasks. XP SP3 boot is owner-verified; remaining driver, D3D API, game, visual, and performance acceptance is combined into a manual owner-run checklist in `TASKS.md`. Agents can analyze supplied evidence but cannot certify guest behavior.
+- Updated T09/T10 and HANDOFF references, clarified the separate Hitman 2 capture investigation, and removed wxWidgets from README frontend messaging. SDL2 + Dear ImGui is the clear primary frontend direction.
+- No QEMU source changes, local build, or CI polling.
 
 ## Current investigation / next actions
 
