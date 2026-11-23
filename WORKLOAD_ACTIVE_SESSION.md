@@ -4,8 +4,8 @@
 
 ## How to use this file
 
-- **New coding-agent session / fresh sandbox:** follow `CLAUDE.md` and `HANDOFF.md`; read this summary, then read `WORKLOG.md` once to establish the full project history. The newest entries are at the bottom. Use targeted sections when the full history is too large for one read.
-- **Continuing in the same coding-agent session:** do not reread the entire `WORKLOG.md`. Read this rolling summary for recent context, then consult `HANDOFF.md` and the relevant `TASKS.md` entries. Open only the specific historical worklog sections needed to verify an older decision or result.
+- **New coding-agent session / fresh sandbox:** follow `CLAUDE.md` and `HANDOFF.md`; read this summary and `WORKLOG_INDEX.md`. Do not read the full `WORKLOG.md` by default. Use the index to open only historical sessions relevant to the task, and verify important old claims against current source and task/handoff state.
+- **Continuing in the same coding-agent session:** do not reread onboarding files or the entire `WORKLOG.md` without a reason. Use this rolling summary for recent context, then consult `HANDOFF.md` and relevant `TASKS.md` entries. Open only specific historical sections needed to verify an older decision or result.
 - A new user prompt, task, or turn does **not** by itself make a new coding-agent session. A genuinely new agent runtime/sandbox with no retained working context does. After context compaction in the same runtime, use this summary rather than restarting the full-history read.
 - At the end of each work session, append the session to `WORKLOG.md` first, then refresh this file so it contains exactly the latest ten worklog sessions. Never rewrite or trim `WORKLOG.md`.
 
