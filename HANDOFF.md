@@ -15,8 +15,10 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
    historical sessions, and verify important old claims against current source
    and current owner decisions. Claim an unclaimed task (highest priority first)
    directly on `main` using the protocol at the top of `TASKS.md`.
-2. Do NOT build locally (section 7): the status hook reports whether the latest pushed
-   commit passed the checks.
+2. Follow the model-specific local build policy in section 7: Gemini 4 Neon has
+   standing authorization for ordinary local configure/build and standard checks;
+   all other agents need explicit owner authorization. Benchmarking/A-B work
+   always needs explicit authorization. The status hook reports pushed CI results.
 3. Work directly on `main`, commit small, and push often. Do not create branches or
    pull requests. Before every write, fetch the latest `main` and the exact target file;
    verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
@@ -371,10 +373,21 @@ idempotent (`git checkout` touched files first).
 
 ## 7. Standard Checks & CI Verification (Token-Optimized)
 
-- **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
-  (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B performance work). Let GitHub Actions handle compilation, smoke tests and
-  binary artifact uploads. (Same rule as `CLAUDE.md` section 7 - keep the two in sync.)
-- **Safe checkpoints and verification:** Before every push, review the complete diff and run applicable lightweight checks that do not violate the no-local-QEMU-build rule. Never claim code was tested, compiled, or working unless the corresponding check actually ran and passed; GitHub Actions is the authoritative build/functional verification pipeline. Before pausing an incomplete task, follow the checkpoint and handoff sequence in section 0 above. Update `HANDOFF.md` only for lasting decisions, constraints, or important current-state facts; keep task status in `TASKS.md`, chronological evidence in `WORKLOG.md`, and the concise recent-session context in `WORKLOAD_ACTIVE_SESSION.md`. If there is no safe checkpoint, leave broken/unverified changes unpushed and state exactly what remains to be recovered or verified.
+- **Local build policy (model-specific):** Gemini 4 Neon has standing owner
+  authorization to run ordinary local QEMU configure/build and relevant standard
+  functional checks in its sandbox while validating its own changes. This does
+  not extend to Gemini CLI generally, other Gemini models, Claude, Codex, or
+  other agents; they must obtain explicit owner authorization before running
+  `./configure`, `make`, or `ninja`. Use the established build configuration
+  and avoid unnecessary clean/full rebuilds. Any agent, including Gemini 4 Neon,
+  must obtain explicit owner authorization before performance benchmarking or
+  A/B work (`xp/bench/run.sh`, `xp/bench/perf.py`, or equivalent).
+- **Verification and reporting:** GitHub Actions remains the authoritative
+  shared Linux/Windows CI result. Local build/test results are supplementary:
+  report the exact configuration, commands, and checks performed, and clearly
+  distinguish local results from CI. Never claim CI passed based on a local
+  build. Review the complete diff and never knowingly push broken or internally
+  inconsistent changes. Before pausing an incomplete task, follow the checkpoint and handoff sequence in section 0 above. Update `HANDOFF.md` only for lasting decisions, constraints, or important current-state facts; keep task status in `TASKS.md`, chronological evidence in `WORKLOG.md`, and the concise recent-session context in `WORKLOAD_ACTIVE_SESSION.md`. If there is no safe checkpoint, leave broken/unverified changes unpushed and state exactly what remains to be recovered or verified.
 - **CI pipeline (`.github/workflows/build.yml`):** Linux CI builds the Linux KVM product and runs accelerator-policy,
   functional, x87 differential, packaging, and smoke checks; it does not run TCG performance benchmarks.
   Windows CI builds the TCG product and runs functional checks plus the x87 differential test
