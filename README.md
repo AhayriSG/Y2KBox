@@ -183,9 +183,15 @@ Y2KBox takes a different approach. It provides an actual Windows XP environment,
 
 The goal is not to replace Wine, wrappers, or community compatibility projects. Those solutions can be excellent choices for individual games. Y2KBox exists for people who want a more complete, self-contained Windows XP environment that they can preserve, configure once, and return to later.
 
+Owning original hardware is only the beginning of preservation. It also means finding working components, maintaining aging hardware, dealing with storage and display quirks, and keeping the whole setup usable on modern systems. Emulation can remove much of that friction while adding conveniences that original hardware never offered: portability, snapshots, easy backups, configurable devices, repeatable environments, and integration with modern workflows.
+
+Y2KBox aims to spare users from having to solve the same compatibility problems over and over inside the guest or on the host. Ideally, they should not need a chain of guest-side wrappers, per-game community patches, or fragile workarounds every time a host operating-system update breaks something. Nor should using the guest require users to modify the host's graphics-driver stack, install opaque kernel drivers, or edit system registries just to get an old game running.
+
 Y2KBox aims to provide a complete **Windows XP experience in a box**: an SSE2-capable x86 environment with VMware SVGA/SVGA3D and the graphics capabilities associated with the era, including **Direct3D 8.1 and Direct3D 9.0c**.
 
 The longer-term vision is to make running this software feel as straightforward as using a modern emulator such as PCSX2: launch it, configure the guest once, and get on with the experience.
+
+The objective is straightforward: make the Windows XP and Y2K-era software experience **portable, maintainable, and accessible**—so preservationists can spend less time repairing the environment and more time preserving, exploring, and enjoying the software itself.
 
 ### Why not make a proprietary hypervisor API mandatory?
 
@@ -219,11 +225,3 @@ More physical RAM can still help Windows keep working data resident, reduce pagi
 and cache file data, depending on the workload. It does not automatically become
 a game-owned extra gigabyte, and it does not guarantee that a game will stop
 stuttering.
-
-### Make preservation practical
-
-People can sometimes buy original hardware cheaply, but owning the machine is only the beginning. It also means finding working components, maintaining aging hardware, dealing with storage and display quirks, and keeping the whole setup usable on modern systems. Emulation can remove much of that friction while adding conveniences that original hardware never offered: portability, snapshots, easy backups, configurable devices, repeatable environments, and integration with modern workflows.
-
-Y2KBox aims to spare users from having to solve the same compatibility problems over and over inside the guest or on the host. Ideally, they should not need a chain of guest-side wrappers, per-game community patches, or fragile workarounds every time a host operating-system update breaks something. Nor should using the guest require users to modify the host's graphics-driver stack, install opaque kernel drivers, or edit system registries just to get an old game running.
-
-The objective is straightforward: make the Windows XP and Y2K-era software experience **portable, maintainable, and accessible**—so preservationists can spend less time repairing the environment and more time preserving, exploring, and enjoying the software itself.
