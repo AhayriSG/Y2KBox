@@ -16394,6 +16394,7 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     (void)data;
     (void)data_size;
     (void)discard_full_range;
+    (void)reason;
     return false;
 #endif
 }
