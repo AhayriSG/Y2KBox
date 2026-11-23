@@ -33,7 +33,7 @@ have follow-up subsections under the same number.
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
 | F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
 | FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81 | Documentation changes, benchmark CI cleanup, Markdown-only artifact suppression and build-workflow behavior |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–82 | Documentation changes, benchmark CI cleanup, Markdown-only artifact suppression and build-workflow behavior |
 
 ## Session 81 note
 
@@ -41,3 +41,10 @@ Session 81 changed CI artifact production for Markdown-only commits. Linux and
 Windows configure/build/functional checks still run; only packaging, packaged
 smoke tests, and binary uploads are skipped. See the full Session 81 entry in
 `WORKLOG.md` and the current workflow in `.github/workflows/build.yml`.
+
+## Session 82 note
+
+Session 82 changes the coding-agent history-reading policy: new sessions read the
+current handoff/task/recent-summary documents and this topic index, then consult
+only relevant sections of the append-only worklog. The full worklog is no longer a
+default context read. See Session 82 in `WORKLOG.md`.
