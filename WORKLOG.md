@@ -1786,3 +1786,20 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Updated `AGENTS.md`, `GEMINI.md`, `HANDOFF.md`, `TASKS.md`, and
   `WORKLOAD_ACTIVE_SESSION.md`. Documentation-only policy change; no QEMU
   build, benchmark, test, or CI polling was performed.
+
+
+## Session 86 — Extend Gemini 4 Neon standing authorization to benchmarks
+
+- Owner approved extending Gemini 4 Neon's existing local-build exception to
+  relevant performance benchmarks and controlled A/B experiments, including
+  the established `xp/bench/run.sh` and `xp/bench/perf.py` workflows.
+- Kept the exception strictly model-specific: Gemini CLI generally, other
+  Gemini models, Claude, Codex, and other agents still require explicit owner
+  authorization before benchmark/A-B work.
+- Added practical safeguards: use established methodology, preserve comparable
+  before/after results and workload/configuration, keep campaigns bounded,
+  avoid unnecessary repetitions, and report exact commands and evidence.
+- Updated `AGENTS.md`, `GEMINI.md`, `HANDOFF.md`, `TASKS.md`,
+  `WORKLOAD_ACTIVE_SESSION.md`, and `WORKLOG_INDEX.md`. No QEMU build,
+  benchmark, functional test, or CI polling was performed for this
+  documentation-only policy update.
