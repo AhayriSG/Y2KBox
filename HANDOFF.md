@@ -17,8 +17,9 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
    directly on `main` using the protocol at the top of `TASKS.md`.
 2. Follow the model-specific local build policy in section 7: Gemini 4 Neon has
    standing authorization for ordinary local configure/build and standard checks;
-   all other agents need explicit owner authorization. Benchmarking/A-B work
-   always needs explicit authorization. The status hook reports pushed CI results.
+   all other agents need explicit owner authorization. Gemini 4 Neon also has
+   standing authorization for relevant, bounded benchmark/A-B work; all other
+   agents need explicit authorization. The status hook reports pushed CI results.
 3. Work directly on `main`, commit small, and push often. Do not create branches or
    pull requests. Before every write, fetch the latest `main` and the exact target file;
    verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
@@ -356,7 +357,7 @@ boot/functional test after pruning - removing `efi-e1000.rom` broke the default 
 
 ## 6. Build and environment
 
-(Reference only: CI builds for you - see section 7. Build locally only for benchmarking / A-B performance work.)
+(Reference only: CI builds for you - see section 7 for Gemini 4 Neon's model-specific local build and benchmark authorizations.)
 
     sudo apt install libfdt-dev libslirp-dev nasm pkg-config   # + glib2/pixman dev, python3
     pip install meson ninja tomli
@@ -379,9 +380,14 @@ idempotent (`git checkout` touched files first).
   not extend to Gemini CLI generally, other Gemini models, Claude, Codex, or
   other agents; they must obtain explicit owner authorization before running
   `./configure`, `make`, or `ninja`. Use the established build configuration
-  and avoid unnecessary clean/full rebuilds. Any agent, including Gemini 4 Neon,
-  must obtain explicit owner authorization before performance benchmarking or
-  A/B work (`xp/bench/run.sh`, `xp/bench/perf.py`, or equivalent).
+  and avoid unnecessary clean/full rebuilds. Gemini 4 Neon also has standing
+  owner authorization for relevant, bounded performance benchmarks and
+  controlled A/B experiments using established scripts/methodology, including
+  `xp/bench/run.sh` and `xp/bench/perf.py`. Preserve comparable before/after
+  evidence, avoid needless repetitions or unnecessarily long campaigns, and
+  report exact commands, workload, configuration, and results. This separate
+  exception applies only to Gemini 4 Neon; all other agents still need explicit
+  owner authorization before benchmarking or A/B work.
 - **Verification and reporting:** GitHub Actions remains the authoritative
   shared Linux/Windows CI result. Local build/test results are supplementary:
   report the exact configuration, commands, and checks performed, and clearly
