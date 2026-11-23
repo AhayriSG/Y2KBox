@@ -42,9 +42,12 @@ claims and serialize commits.
 - **Guest CPU:** xp-p4 (Pentium 4 Northwood class), with SSE2 as the maximum exposed
   instruction set; exactly 1 vCPU (uniprocessor). Multi-vCPU/SMP configurations are not
   supported.
-- **Guest 3D API:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised shader
-  model. Direct3D 10/11 and Shader Model 4.0 or newer are outside the guest-facing
-  graphics target. Host-side rendering may use newer APIs internally.
+- **Guest 3D APIs:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised
+  shader model. OpenGL 1.1 is the baseline target, with OpenGL 2.1 as the maximum
+  target; OpenGL support is under investigation and is not currently implemented.
+  Direct3D 10/11, Shader Model 4.0 or newer, and OpenGL versions newer than 2.1
+  are outside the guest-facing graphics target. Host-side rendering may use
+  newer APIs internally.
 
 
 | Windows XP SP3 Desktop (ACPI PC HAL)<br/>VMware SVGA II (Experimental) | F1 Challenge '99-'02 | Joint Operations: Typhoon Rising 1.4.3.0
