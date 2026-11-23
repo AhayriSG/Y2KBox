@@ -406,6 +406,7 @@ struct vmsvga3d_dxvk_surface_s {
     bool d3d9_buffer_dirty;
     uint32_t d3d9_buffer_dirty_start;
     uint32_t d3d9_buffer_dirty_end;
+    uint32_t d3d9_buffer_dirty_updates;
 
     VMSVGA3DD3D10CreateDesc d3d11_desc;
     void *d3d11_resource;
@@ -3797,6 +3798,7 @@ static void vmsvga3d_dxvk_surface_evict_d3d9(
     surface->d3d9_buffer_dirty = false;
     surface->d3d9_buffer_dirty_start = 0;
     surface->d3d9_buffer_dirty_end = 0;
+    surface->d3d9_buffer_dirty_updates = 0;
 }
 
 static void vmsvga3d_dxvk_surface_evict_d3d11(
@@ -16164,9 +16166,15 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK, perf_start_ns);
 
     if (vmsvga3d_dxvk_succeeded(result)) {
+        if (surface->d3d9_buffer_dirty) {
+            qemu_perf_stats_record_work(
+                QEMU_PERF_DXVK_UPLOAD_BUFFER_DISCARD_SUPERSEDE,
+                surface->d3d9_buffer_dirty_updates);
+        }
         surface->d3d9_buffer_dirty = false;
         surface->d3d9_buffer_dirty_start = 0;
         surface->d3d9_buffer_dirty_end = 0;
+        surface->d3d9_buffer_dirty_updates = 0;
     }
     return vmsvga3d_dxvk_succeeded(result);
 #else
@@ -16298,14 +16306,19 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
     end = offset + size;
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED);
     if (surface->d3d9_buffer_dirty) {
+        qemu_perf_stats_mark(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED_MERGE);
         surface->d3d9_buffer_dirty_start =
             MIN(surface->d3d9_buffer_dirty_start, offset);
         surface->d3d9_buffer_dirty_end =
             MAX(surface->d3d9_buffer_dirty_end, end);
+        if (surface->d3d9_buffer_dirty_updates != UINT32_MAX) {
+            surface->d3d9_buffer_dirty_updates++;
+        }
     } else {
         surface->d3d9_buffer_dirty = true;
         surface->d3d9_buffer_dirty_start = offset;
         surface->d3d9_buffer_dirty_end = end;
+        surface->d3d9_buffer_dirty_updates = 1;
     }
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, perf_start);
@@ -16320,13 +16333,15 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
 
 bool vmsvga3d_dxvk_surface_flush_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
-    const void *data, uint32_t data_size, bool discard_full_range)
+    const void *data, uint32_t data_size, bool discard_full_range,
+    VMSVGA3DDxvkBufferFlushReason reason)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     uint64_t perf_start;
     uint32_t offset;
     uint32_t size;
     bool success;
+    QemuPerfStat reason_stat;
 
     if (surface == NULL) {
         return false;
@@ -16344,6 +16359,18 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
         return false;
     }
 
+    switch (reason) {
+    case VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW:
+        reason_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH_DRAW;
+        break;
+    case VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT:
+        reason_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH_EVICT;
+        break;
+    case VMSVGA3D_DXVK_BUFFER_FLUSH_REPLACE:
+    default:
+        reason_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH_REPLACE;
+        break;
+    }
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH);
     success = vmsvga3d_dxvk_surface_upload_buffer_range(
         dxvk, surface, offset, (const uint8_t *)data + offset, size,
@@ -16351,9 +16378,14 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, perf_start);
     if (success) {
+        qemu_perf_stats_mark(reason_stat);
+        qemu_perf_stats_record_work(
+            QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH_UPDATES,
+            surface->d3d9_buffer_dirty_updates);
         surface->d3d9_buffer_dirty = false;
         surface->d3d9_buffer_dirty_start = 0;
         surface->d3d9_buffer_dirty_end = 0;
+        surface->d3d9_buffer_dirty_updates = 0;
     }
     return success;
 #else
