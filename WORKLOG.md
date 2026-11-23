@@ -1897,3 +1897,11 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Clarified that the manual benchmark reference does not grant general local-build or benchmark permission; the standing exception is Gemini 4 Neon only, and all other agents require explicit owner authorization.
 - Updated the worklog index and rolling active-session summary. Historical worklog entries were left intact.
 - Documentation-only static review. No QEMU source changes, local build, benchmark, functional test, guest test, or CI polling was performed.
+
+
+## Session 95 — Fix optional GitHub token handling in CI status helper
+
+- Fixed `scripts/session_status.sh` so its optional GitHub Personal Access Token is passed to `curl` as one correctly quoted Authorization header argument. The previous parameter-expansion form did not preserve the embedded quoting and could split the header into separate shell arguments.
+- The helper still reads the existing `GITHUB_TOKEN` or `GH_TOKEN` environment variable (or falls back to `gh auth token`); no new token, secret, permission, or authentication setup is required. When no token is available, the request remains unauthenticated as before.
+- The change is limited to Claude's CI-status reporting helper; it does not affect GitHub Actions builds or repository authentication used by coding-agent sandboxes.
+- Static shell review only. No token value was accessed or displayed, no live authenticated API request was made, and no CI polling or QEMU build/test was performed.
