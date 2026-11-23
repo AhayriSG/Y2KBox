@@ -272,16 +272,13 @@ headers, stubs, Meson/Kconfig wiring, and any shared dependencies removed with i
 Do not blindly copy an upstream directory: compare against this fork's QEMU base and
 current XP-only configuration, then restore the smallest complete dependency set.
 
-Resume checkpoint (2026-11-19): The Linux x86 KVM accelerator, x86 backend,
-and PC KVM interrupt/clock integration have been restored with Linux-only Meson
-wiring. Windows remains TCG-only. CI exposed two follow-up dependency issues:
-KVM nested-state migration data was over-pruned with Xen members, and the disabled
-TDX stub imported a Linux-only UAPI header; both were corrected. The next Linux
-build exposed the optional RAPL energy-MSR implementation still present in
-target/i386/kvm/kvm.c even though xp/strip/03-remove-virt-accels.sh intentionally
-removed vmsr_energy.c/.h. Remove that unsupported optional integration and its
-orphaned KVM properties/state; do not remove the core KVM backend. KVM runtime
-validation on a KVM-capable Linux host remains outstanding.
+Restore checkpoint (2026-11-19; historical build issues resolved): The Linux x86
+KVM accelerator, x86 backend, and PC KVM interrupt/clock integration were restored
+with Linux-only Meson wiring. Follow-up CI failures involving over-pruned KVM nested
+state, a Linux-only header in the disabled TDX stub, and stale optional RAPL energy-MSR
+references were addressed; subsequent Linux/Windows CI passed. Windows remains
+TCG-only. The remaining acceptance gap is runtime validation on a KVM-capable Linux
+host; compile-only CI is not sufficient.
 * Linux: compile and ship KVM as the only supported runtime accelerator. The launcher
   must check that `/dev/kvm` exists and is accessible before starting QEMU; if not, show a
   clear actionable error such as: `KVM is required. Enable hardware virtualization/KVM
@@ -293,6 +290,10 @@ validation on a KVM-capable Linux host remains outstanding.
   partially referenced by the restored KVM implementation.
 * Windows: remain TCG/MTTCG-only. Do not restore WHPX or other Windows accelerators.
 * TCG performance work and optimization acceptance are Windows-only.
+* **Resume here:** run the supported Linux product build on a KVM-capable Linux host,
+  confirm `/dev/kvm` access and successful XP guest launch with `-accel kvm`, and
+  record the exact host/kernel/guest result. Do not repeat the completed source
+  restoration or reintroduce the removed optional RAPL integration without new evidence.
 * Preserve the XP machine/device constraints and keep IOMMU, SEV, SGX, TDX, and VFIO
   disabled unless a concrete dependency proves otherwise.
 * DoD: Linux product CI builds with KVM support and reports KVM as the only supported
