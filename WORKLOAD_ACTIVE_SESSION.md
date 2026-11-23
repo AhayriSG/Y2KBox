@@ -1,10 +1,10 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 73–82).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 74–83).
 
 ## How to use this file
 
-- **New coding-agent session / fresh sandbox:** follow `CLAUDE.md` and `HANDOFF.md`; read this summary and `WORKLOG_INDEX.md`. Do not read the full `WORKLOG.md` by default. Use the index to open only historical sessions relevant to the task, and verify important old claims against current source and task/handoff state.
+- **New coding-agent session / fresh sandbox:** follow `AGENTS.md` (canonical shared policy); use `CLAUDE.md` or `GEMINI.md` only for tool-specific integration. Read this summary and `WORKLOG_INDEX.md`, plus only HANDOFF sections 0-3 and the selected task entry in `TASKS.md`. Do not read entire HANDOFF/TASKS/WORKLOG files by default. Use the index for relevant historical sections and verify old claims against current source and owner decisions.
 - **Continuing in the same coding-agent session:** do not reread onboarding files or the entire `WORKLOG.md` without a reason. Use this rolling summary for recent context, then consult `HANDOFF.md` and relevant `TASKS.md` entries. Open only specific historical sections needed to verify an older decision or result.
 - A new user prompt, task, or turn does **not** by itself make a new coding-agent session. A genuinely new agent runtime/sandbox with no retained working context does. After context compaction in the same runtime, use this summary rather than restarting the full-history read.
 - At the end of each work session, append the session to `WORKLOG.md` first, then refresh this file so it contains exactly the latest ten worklog sessions. Never rewrite or trim `WORKLOG.md`.
@@ -16,16 +16,10 @@
 - Y2KBox targets 32-bit Windows XP. Linux product runtime is KVM-only; Windows product runtime is TCG-only. Performance optimization work targets Windows TCG.
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
 - Keep the owner-approved guest/device constraints in `HANDOFF.md`; do not infer that a standalone test or green CI proves in-game correctness.
-- **Build/CI workflow:** follow `CLAUDE.md` and HANDOFF section 7. Do not build locally unless explicitly doing approved benchmarking/A-B work. After pushing, finish the turn; do not poll CI. The status hook reports CI/Codacy results.
+- **Build/CI workflow:** follow `AGENTS.md` and HANDOFF section 7. Do not build locally unless explicitly doing approved benchmarking/A-B work. Markdown-only commits run only the lightweight detector; Linux/Windows build jobs are skipped. After pushing, finish the turn; do not poll CI. The Claude status hook reports CI/Codacy results.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 73 (+ follow-up) — Lock profiling dimensions
-- Added counters separating DISCARD from flags-zero locks and requested lock-size buckets (<=4 KiB, <=64 KiB, <=256 KiB, >256 KiB), while retaining aggregate and vertex/index/full/partial dimensions.
-- Fixed missing local counter declarations after Linux and Windows CI caught the compile error.
-- Owner's later 32.314 s dry F1 capture showed 44,448 deferred updates and 44,448 flushes, zero merges; 44,447 flushes were draw-consumption flushes. Lock time remained dominated by partial-range flags-zero calls. Counter dimensions overlap; do not sum them.
-- `qemu_perf_stats_mark()` reports elapsed time between marks, not time spent inside the operation. Treat flush-draw `total_us` as cadence, not execution cost.
 
 ### Session 74 — Close FlatView scene-transition work; classify F1 locks
 - Owner reported Linux and Windows CI passing at `36a12e7e5d9d6d309873e0520a5e05f86e3224a5`; the ordered-tree FlatView renderer and original multi-second scene-transition stall were marked DONE. Residual crowded-grid work remained separate as T13e-F1.
@@ -69,23 +63,28 @@
 - At the time Session 80 was appended, full Linux/Windows CI and in-game FIFA/F1 validation were marked pending. The owner subsequently reported both Linux and Windows CI passing. A separate 23.526 s dry-weather capture was also shared: `cpu.exec` count 3,415, total 23.515560 s, max 19.554 ms, 3,164 intervals >1 ms, 1,064 >10 ms, and none >100 ms. The capture's full workload attribution is not reproduced here; consult its diagnostic log before drawing conclusions.
 
 ### Session 81 — Skip binary artifacts for Markdown-only changes
-- Added a workflow change-detection job for pushes and pull requests. If every changed path ends in `.md`, Linux and Windows builds and functional checks still run, but package creation, packaged-layout smoke tests, and binary artifact uploads are skipped.
-- Mixed/code changes retain normal artifact production; manual `workflow_dispatch` always produces artifacts. Missing comparison commits or diff errors conservatively enable artifact production.
-- Updated `CLAUDE.md` and `HANDOFF.md`. Static review confirmed both build jobs consume the detection output and all six artifact-only steps are guarded. CI validation is pending; no local QEMU build or CI polling was performed.
+- Added a fail-safe change-detection job for pushes and pull requests. If every changed path ends in `.md`, only the lightweight detector runs; Linux and Windows build/test jobs are skipped entirely.
+- Any non-Markdown change and manual `workflow_dispatch` run execute both platform pipelines and produce normal artifacts. Missing comparison commits or diff errors conservatively trigger full builds.
+- The workflow change itself was verified by triggering full CI because `.github/workflows/build.yml` is a non-Markdown change.
 
 ### Session 82 — Make coding-agent historical reads selective
-- Changed fresh-session onboarding to read the current handoff/task/recent-summary documents and `WORKLOG_INDEX.md`, not the entire append-only `WORKLOG.md` by default.
-- Added a topic-to-session index so agents can retrieve only historical evidence relevant to the active task. Updated `CLAUDE.md`, `HANDOFF.md`, and `README.md` to use the same policy.
-- The full Session 71 record remains in `WORKLOG.md`; it only aged out of the ten-entry rolling summary when Session 81 was added.
-- Documentation-only changes; no QEMU build, tests, or CI run performed.
+- Replaced full-history onboarding with a layered read: current handoff/task state, the rolling summary, and a topic index; open only relevant worklog sessions.
+- Added `WORKLOG_INDEX.md` as a topic-to-session navigation map. The full archive remains append-only and is never a default context dump.
+- The full Session 71 record remains in `WORKLOG.md`; it only aged out of the rolling summary when Session 81 entered the ten-session window.
+
+
+### Session 83 — Consolidate agent guidance and repair project continuity docs
+- Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
+- Tightened onboarding to read HANDOFF sections 0-3, the task overview plus only the selected task, the active summary, and the worklog index. Historical details remain available on demand.
+- Corrected stale CI behavior, XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. No QEMU source changed and no local QEMU build was run.
 
 ## Current investigation / next actions
 
-1. Treat Session 80's implementation as present at the observed `main` HEAD, but verify the current branch and status hook before making further changes.
-2. Obtain the complete owner capture and compare the relevant VMVGA/FlatView/DXVK counters against the Session 80 baseline. Do not infer a performance win from standalone microbenchmarks or CI alone.
-3. Validate FIFA 2003 and F1 Challenge '99-'02 visually and with comparable captures. Keep workload, scene, weather, resolution, and capture duration consistent for A/B comparisons.
-4. If a regression appears, isolate the responsible Session 80 change with targeted evidence; avoid broad reverts.
-5. Update `TASKS.md`, append the next `WORKLOG.md` session, then roll this file forward to the latest ten worklog sessions.
+1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
+2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
+3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
+4. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
+5. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
 ## Key diagnostic interpretation rules
 
