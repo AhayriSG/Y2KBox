@@ -27,8 +27,7 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
    outstanding issues to `WORKLOG.md`, and add the concise matching entry to
    `WORKLOAD_ACTIVE_SESSION.md`. If no safe checkpoint exists, do not push broken
    changes merely to preserve progress; document the unpushed work and recovery steps.
-Several agents can work in parallel only by coordinating task claims and serializing
-writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate through TASKS.md.
+The normal workflow is sequential handoff between agents (for example, Claude to Gemini or Codex); the shared files are the durable continuity record, not a shared live memory. Parallel work is allowed only when deliberately intended, with task claims coordinated and writes to `main` serialized. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate through TASKS.md.
 
 ## 1. Project aim and non-negotiable constraints (owner decisions)
 
@@ -96,7 +95,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
 * Delete unrelated QEMU code freely as long as the Windows XP-32 guest continues to work
   under Windows TCG and Linux KVM product builds/runtime remain functional. Linux KVM is
   mandatory for the Linux product; Linux TCG is not a supported fallback.
-* Later (not now): own SDL2 + Dear ImGui frontend (T12); wxWidgets is a fallback, not a parallel target.
+* Later (not now): own SDL2 + Dear ImGui frontend (T12), with Dear ImGui as the chosen primary UI. Do not start a wxWidgets implementation in parallel; reconsider alternatives only if a concrete blocker emerges.
 
 ## 2. Current state snapshot (update when it changes)
 
@@ -105,9 +104,9 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   `pc-i440fx-11.2` (alias `pc`) remains. Default CPU `xp-p4` (verified in-guest: family 15,
   SSE2 yes, SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified);
   1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. The owner has booted an XP SP3
-  desktop and run XP games; T08's initial boot prerequisite is satisfied. Remaining
-  VMware driver, 3D API, and per-game compatibility work is tracked by T09-T11 and
-  the active T13 investigations.
+  desktop and run XP games. Remaining VMware driver, 3D API, and per-game compatibility
+  checks require owner-run guest validation (see the manual checklist in TASKS.md)
+  alongside the active agent investigations.
 * Source tree 41 MB (upstream 171 MB). 91 enabled device symbols (~247 listed devices).
 * Done: see `WORKLOG.md`. In progress: see `TASKS.md` (CLAIMED/PAUSED).
 * **T09 / T10 integration on `main`:** `qemu-vmvga` (`vmvga` SVGA II + SVGA3D,
@@ -115,7 +114,7 @@ writes to `main`. If two tasks touch `hw/i386/pc*.c` (T01, T05, T06), coordinate
   default and only display device, with Linux `dxvk-native` and Windows
   `d3d9.dll`/`d3d11.dll` host backends. XP boot is owner-verified. CI builds and
   smoke checks validate integration; remaining VMware driver, D3D8/DirectDraw,
-  and per-game compatibility work is tracked in T11 and active investigations.
+  and per-game compatibility require owner-run guest validation (see TASKS.md) and active investigations.
 * T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Further x87 expansion remains PAUSED; retain the existing guarded fast paths and differential test, and revisit only if representative profiling justifies more work.
 * T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
@@ -150,11 +149,11 @@ CPU features inside TCG (AVX2/BMI/etc. already assumed) and pass host resources 
 GPU through our own 3D path.
 
 **Q2 3D method (owner: unsure, then proposed qemu-vmvga).** Decision (updated 2026-11-14):
-**primary = qemu-vmvga (VMware SVGA II + SVGA3D, DXVK backend)**, tasks T09-T11; VBoxVGA 5.2.x
+**primary = qemu-vmvga (VMware SVGA II + SVGA3D, DXVK backend)**, integration tasks T09-T10 plus owner-run validation; VBoxVGA 5.2.x
 (Chromium-based host service) is the frozen alternative, task T16. Reasoning in 8a: an implementation already exists for the same QEMU generation, GPL-2.0-or-later,
 XP explicitly supported, no 100k-line port of legacy VirtualBox/Chromium code. XP now boots in the
 owner's environment; remaining D3D9 acceleration, D3D8/DirectDraw coverage, and Windows-host
-visual correctness are tracked by T11 and must be verified per workload.
+visual correctness require owner-run validation per workload (checklist in TASKS.md).
 
 **Q3 NIC / storage drivers (owner proposed VirtIO as a faster path).** The standard XP
 launch profile now uses **VirtIO Net + VirtIO Block**: `virtio-net-pci` for networking and
@@ -429,7 +428,7 @@ idempotent (`git checkout` touched files first).
   (`target/i386/tcg/system/seg_helper.c`) now exempts `0x5658` and `0x5659` (`size <= 4`) when
   `vmport_tcg_backdoor_enabled` is true (`hw/i386/vmport.c`). Verified on CI via `xp/bench/vmport_ring3_test.asm`
   (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`); still needs real XP driver and application compatibility
-  verification under T11.
+  verification by the owner (see the manual checklist in TASKS.md).
 * **Host-side 3D backends (T10 integration implemented):**
   * **Linux:** `hw/display/vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
     or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols if `--enable-sdl` already
@@ -443,7 +442,7 @@ idempotent (`git checkout` touched files first).
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips 3D backend init when `-display none` is
     active (`display_backend_active == false`) unless Y2KBox debug mode (`-y2kboxdebugmode on`) or `Y2KBOX_3D_HEADLESS` is set.
 * Risks: single small upstream; D3D9 is the ceiling for the XP driver (no DX10+); D3D8 and DirectDraw/D3D7
-  coverage unknown (T11: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
+  coverage unknown (owner-run validation: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
   under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.
 
 ### 8b. ALTERNATIVE (frozen, task T16): VBoxVGA 5.2.x
@@ -624,7 +623,7 @@ Y2KBox has one supported renderer, VMVGA, so its local diagnostic hooks are
 always part of the product. The debug-mode setting is nevertheless separate
 from device declaration: enable it with `-y2kboxdebugmode on` (or explicitly disable it
 with `-y2kboxdebugmode off`), independently of `-device vmvga`. Debug mode defaults off and is the command-line equivalent
-of the future T12 wxWidgets **Debug: On/Off** setting. It enables diagnostic
+of the future T12 SDL2 + Dear ImGui frontend's **Debug: On/Off** setting. It enables diagnostic
 capabilities but does not start continuous output. Do not use
 `-device vmvga,debug=on`; keep device creation and debug configuration separate.
 
