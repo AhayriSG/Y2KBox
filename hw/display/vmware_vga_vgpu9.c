@@ -3654,6 +3654,21 @@ static bool vmsvga3d_dxvk_materialize_surface_ex(
     }
 
     if (before.resident && !compatible) {
+        /* Serialize pending input-buffer updates before materialization can
+         * evict an incompatible D3D9 resource.  Buffer readback itself is a
+         * no-op because the CPU shadow is authoritative. */
+        if ((before.resource_type ==
+                 VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
+             before.resource_type ==
+                 VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER) &&
+            !vmsvga3d_dxvk_surface_flush_buffer_range(
+                s->dxvk, surface->dxvk_surface,
+                surface->mip_count == 1 && surface->mips != NULL
+                    ? surface->mips[0].data : NULL,
+                surface->mip_count == 1 && surface->mips != NULL
+                    ? surface->mips[0].data_size : 0)) {
+            return false;
+        }
         /* Preserve GPU-written RGB contents before changing resource use.
          * Native input-only video simply retains the authoritative shadow. */
         if (vmsvga3d_video_yuv(surface->format) &&
@@ -3808,6 +3823,18 @@ static bool vmsvga3d_dxvk_materialize_buffer(
             compatible = before.resource_type ==
                              VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER &&
                          before.format == plan.primary.format;
+        }
+        if ((before.resource_type ==
+                 VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
+             before.resource_type ==
+                 VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER) &&
+            !vmsvga3d_dxvk_d3d9_buffer_compatible(
+                surface->dxvk_surface, index_buffer,
+                (uint32_t)surface->storage_bytes, native_format) &&
+            !vmsvga3d_dxvk_surface_flush_buffer_range(
+                s->dxvk, surface->dxvk_surface, surface->mips[0].data,
+                surface->mips[0].data_size)) {
+            return false;
         }
     }
 
