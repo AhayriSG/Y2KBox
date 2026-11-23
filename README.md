@@ -9,10 +9,18 @@
 [![License](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/AhayriSG/Y2KBox/blob/main/LICENSE)
 </div>
 
-A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
-**x86-64-v3 (or newer) hosts**, with **Linux KVM required** and **Windows TCG / MTTCG only**. Linux users must enable KVM and have access to `/dev/kvm` before running Y2KBox; there is no supported Linux TCG runtime fallback. TCG performance work is exclusively aimed at Windows.
-Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
-(qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small SDL2 + Dear ImGui frontend.
+Y2KBox is a QEMU fork built to bring back the Windows XP gaming experience, with
+3D acceleration and a performance target inspired by a mid-to-late 2000s PC.
+
+The goal isn't to turn XP into a modern gaming powerhouse running everything at
+1080p and 144 Hz. It's to deliver a reasonably fast, compatible virtual PC that
+can run most games from the Windows XP era with the kind of performance and
+experience you'd expect from the hardware of that time.
+
+Y2KBox also isn't intended to be a cycle-accurate, low-level hardware emulator.
+Projects such as 86Box already serve that cycle-accurate emulation purpose
+exceptionally well for earlier PC eras, thanks to the dedication and talent of
+their contributors.
 
 **Contributors / coding agents:** start with [AGENTS.md](AGENTS.md), the shared
 repository policy for Claude, Gemini, Codex, and other agents. For a fresh session,
