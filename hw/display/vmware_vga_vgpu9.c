@@ -3449,8 +3449,9 @@ static void vmsvga3d_legacy_surface_evict(struct vmsvga_state_s *s,
      * the resource.  Preserve that ordering before any handoff or fallback
      * evicts a buffer with guest writes pending in the CPU shadow.
      */
-    if (!vmsvga3d_dxvk_surface_flush_buffer_range(
-            s != NULL ? s->dxvk : NULL, surface->dxvk_surface,
+    if (s != NULL && vmsvga3d_dxvk_ready(s->dxvk) &&
+        !vmsvga3d_dxvk_surface_flush_buffer_range(
+            s->dxvk, surface->dxvk_surface,
             surface->mip_count == 1 && surface->mips != NULL
                 ? surface->mips[0].data : NULL,
             surface->mip_count == 1 && surface->mips != NULL
