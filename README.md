@@ -18,8 +18,10 @@ Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
 [WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md) before starting. Follow the
 session-aware reading rules in [CLAUDE.md](CLAUDE.md): a fresh coding-agent session
 reads `WORKLOG.md` to establish history; continued work in the same session uses the
-rolling summary and consults only relevant historical worklog sections. Append every
-completed/paused session to [WORKLOG.md](WORKLOG.md) and refresh the rolling summary.
+rolling summary and consults only relevant historical worklog sections. At handoff,
+append to [WORKLOG.md](WORKLOG.md) and add the concise new session to the rolling
+summary. The Claude Code Stop hook automatically trims the summary to the latest ten
+sessions and prevents handoff while it is stale; the full worklog remains append-only.
 Contributors work directly on `main`; coordinate task claims and serialize commits.
 
 Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
