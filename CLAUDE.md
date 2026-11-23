@@ -11,15 +11,22 @@ previous session's working context. A new user message or a context-compaction e
 does not, by itself, make it a new session.
 
 - **On the first repository analysis in a genuinely new session:** read this file,
-  `HANDOFF.md`, `TASKS.md`, and `WORKLOAD_ACTIVE_SESSION.md`. Also read
-  `WORKLOG.md` once to establish the project's historical context (the newest
-  entries are at the bottom). If the file is too large for one pass, read it in
-  chunks, prioritizing the latest entries, and use targeted older sections as needed.
-- **On subsequent work in the same session:** do not reread the entire
-  `WORKLOG.md`. Use `WORKLOAD_ACTIVE_SESSION.md` as the compact recent-context
-  entry point, then check the relevant `HANDOFF.md` instructions and `TASKS.md`
-  entries. Reopen only the specific `WORKLOG.md` sections needed to verify a
-  historical implementation, decision, diagnostic result, or commit.
+  `HANDOFF.md`, `TASKS.md`, and `WORKLOAD_ACTIVE_SESSION.md`. Read
+  `WORKLOG_INDEX.md` for historical navigation. Do **not** read the full
+  `WORKLOG.md` by default: it is the append-only archive, not a mandatory context
+  dump. Use the index to identify relevant session numbers/topics, then open only
+  those sections in `WORKLOG.md` when prior implementation details, experiments,
+  regressions, or decision rationale materially affect the task. If the index does
+  not cover a needed topic, search the worklog headings or targeted terms.
+- **Before changing code:** establish the current state from `HANDOFF.md`,
+  `TASKS.md`, the active-session summary, and the relevant source/tests. Historical
+  entries are evidence, not current truth: verify important claims against current
+  code and current task/handoff status.
+- **On subsequent work in the same session:** do not reread the full
+  `WORKLOG.md` or the onboarding files without a reason. Use the active summary
+  and current task/handoff state; consult targeted historical sections only when
+  needed.
+
 - **After context compaction in the same session:** recover from
   `WORKLOAD_ACTIVE_SESSION.md` and the relevant task/handoff sections; do not
   restart the full-history read merely because context was compacted.
