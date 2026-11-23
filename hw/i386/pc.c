@@ -1007,10 +1007,10 @@ static void pc_machine_class_init(ObjectClass *oc, const void *data)
     mc->smp_props.cache_supported[CACHE_LEVEL_AND_TYPE_L2] = true;
     mc->smp_props.cache_supported[CACHE_LEVEL_AND_TYPE_L3] = true;
     mc->default_ram_id = "pc.ram";
-    /* XP fork: fixed guest memory (2 GiB, entirely below 4 GiB), uniprocessor by default. */
+    /* XP fork: fixed guest memory (2 GiB, entirely below 4 GiB) and one vCPU. */
     mc->default_ram_size = 2 * GiB;
     mc->default_cpus = 1;
-    mc->max_cpus = 2;
+    mc->max_cpus = 1;
     pcmc->default_smbios_ep_type = SMBIOS_ENTRY_POINT_TYPE_AUTO;
 
     object_class_property_add_enum(oc, PC_MACHINE_VMPORT, "OnOffAuto",
