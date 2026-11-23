@@ -63,9 +63,9 @@
 - At the time Session 80 was appended, full Linux/Windows CI and in-game FIFA/F1 validation were marked pending. The owner subsequently reported both Linux and Windows CI passing. A separate 23.526 s dry-weather capture was also shared: `cpu.exec` count 3,415, total 23.515560 s, max 19.554 ms, 3,164 intervals >1 ms, 1,064 >10 ms, and none >100 ms. The capture's full workload attribution is not reproduced here; consult its diagnostic log before drawing conclusions.
 
 ### Session 81 — Skip binary artifacts for Markdown-only changes
-- Added a fail-safe change-detection job for pushes and pull requests. If every changed path ends in `.md`, only the lightweight detector runs; Linux and Windows build/test jobs are skipped entirely.
-- Any non-Markdown change and manual `workflow_dispatch` run execute both platform pipelines and produce normal artifacts. Missing comparison commits or diff errors conservatively trigger full builds.
-- The workflow change itself was verified by triggering full CI because `.github/workflows/build.yml` is a non-Markdown change.
+- Added a fail-safe change detector. Initially, Markdown-only commits still ran Linux/Windows builds and functional checks, but skipped packaging, packaged smoke tests, and artifact uploads.
+- Any non-Markdown change and manual `workflow_dispatch` run retained normal artifact production; missing comparison commits or diff errors conservatively enabled artifacts.
+- The later job-level skip (commit `8ab36ee`, recorded in Session 83) changed the current behavior so Markdown-only commits now run only the detector.
 
 ### Session 82 — Make coding-agent historical reads selective
 - Replaced full-history onboarding with a layered read: current handoff/task state, the rolling summary, and a topic index; open only relevant worklog sessions.
@@ -76,7 +76,7 @@
 ### Session 83 — Consolidate agent guidance and repair project continuity docs
 - Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
 - Tightened onboarding to read HANDOFF sections 0-3, the task overview plus only the selected task, the active summary, and the worklog index. Historical details remain available on demand.
-- Corrected stale CI behavior, XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. Condensed the T13 task entry from about 20 KB to 4 KB by moving detailed historical evidence back to the indexed worklog. No QEMU source changed and no local QEMU build was run.
+- Aligned documentation with the job-level Markdown-only CI skip introduced in `8ab36ee`, corrected XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. Condensed the T13 task entry from about 20 KB to 4 KB by moving detailed historical evidence back to the indexed worklog. No QEMU source changed and no local QEMU build was run.
 
 ## Current investigation / next actions
 
