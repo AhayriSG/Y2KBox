@@ -29,6 +29,21 @@ strict pass, then runs an allow-software pass to show whether generic formats
 are the only available candidates. The game's runtime setting
 r_allowSoftwareGL can affect that distinction.
 
+## Quick COD1 software-rendering test
+
+Before compiling the probe, you can test whether COD1 will accept a generic
+software OpenGL format. Add this startup argument to the game's launch command:
+
+```text
++set r_allowSoftwareGL 1
+```
+
+The id Tech 3 reference renderer defaults this cvar to 0. Setting it to 1
+allows PFD_GENERIC_FORMAT candidates through pixel-format selection. If COD1
+then creates a context, check its GL vendor/renderer/version output: this is a
+software-compatibility test, not evidence of SVGA3D acceleration or OpenGL 2.1.
+Remove the argument to return to the previous behavior.
+
 ## Build in Windows XP
 
 Using Visual C++ with the Windows SDK:
