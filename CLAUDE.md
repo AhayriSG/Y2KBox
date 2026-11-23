@@ -24,9 +24,14 @@ does not, by itself, make it a new session.
   `WORKLOAD_ACTIVE_SESSION.md` and the relevant task/handoff sections; do not
   restart the full-history read merely because context was compacted.
 - **At the end of each work session:** append the complete session record to
-  `WORKLOG.md`, then refresh `WORKLOAD_ACTIVE_SESSION.md` so it summarizes the
-  latest ten worklog sessions. Keep the summary concise and derived from the
-  worklog; never edit, truncate, or replace the append-only history.
+  `WORKLOG.md`, then add a concise corresponding entry to
+  `WORKLOAD_ACTIVE_SESSION.md`. The configured Claude Code `Stop` hook runs
+  `scripts/maintain_active_session.py`: it automatically removes the oldest
+  active-summary entries when the list exceeds ten, and blocks session exit with
+  a clear reminder if the latest worklog session has not been summarized. Thus
+  the agent writes the new summary entry; the hook enforces freshness and rolls
+  the ten-session window forward. Never move, truncate, or rewrite history in
+  `WORKLOG.md`; older sessions already remain there permanently.
 - `WORKLOG.md` remains the historical record, `TASKS.md` remains authoritative
   for task status/claims, and `HANDOFF.md` remains authoritative for project
   decisions and operating instructions. If the rolling summary conflicts with
