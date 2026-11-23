@@ -11,7 +11,8 @@ Different coding agents may take over sequentially; this shared task queue is th
    the branch HEAD and file blob SHA still match what you inspected; if either moved,
    abort that write, fetch again, and reapply the change to the new content. Commit
    and push small, coherent increments. Never force-push. Keep `main` building.
-   (HANDOFF.md section 7: do not build locally or poll CI; the status hook reports it.)
+   (HANDOFF.md section 7: Gemini 4 Neon may build locally; other agents need
+   authorization. Benchmarking/A-B always needs authorization. Do not poll CI.)
 4. When done: set `Status: DONE <date> (commit <hash>)`, add the evidence and
    result to `WORKLOG.md`, and push to `main`. Update `README.md` only if a
    user-facing requirement, setup step, or project fact changed; it has no task table.
