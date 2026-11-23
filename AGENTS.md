@@ -12,8 +12,9 @@ runtime is TCG-only. VMVGA is the sole display/3D path.
 - `WORKLOG_INDEX.md`: navigation to relevant historical evidence.
 - `WORKLOG.md`: append-only chronological record; never load it all by default.
 - Current source and tests: verify implementation claims against these, not just
-  old notes. CI status is reported by the configured agent hook; do not poll it
-  after pushing.
+  old notes. Claude Code's configured status hook reports pushed CI/Codacy results
+  on a later prompt. Other agents must not assume that hook is available; the owner
+  or a later session reviews their pushed results. No agent should poll after pushing.
 
 If sources conflict, do not silently choose the convenient version. Check current
 code and the latest owner decision, then correct the stale document.
