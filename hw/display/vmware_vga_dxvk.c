@@ -16118,6 +16118,8 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     uint64_t perf_range_start_ns;
     QemuPerfStat lock_type_stat;
     QemuPerfStat lock_range_stat;
+    QemuPerfStat lock_flags_stat;
+    QemuPerfStat lock_size_stat;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL || !surface->d3d9_resident ||
         surface->d3d9_resource == NULL || data == NULL || size == 0 ||
@@ -16141,16 +16143,33 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     lock_range_stat = size == surface->d3d9_length
                           ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
                           : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_PARTIAL_RANGE;
+    lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+    lock_size_stat = size <= 4u * 1024u
+                         ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_4K
+                         : size <= 64u * 1024u
+                               ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_64K
+                               : size <= 256u * 1024u
+                                     ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_256K
+                                     : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_GT_256K;
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK);
     perf_type_start_ns = qemu_perf_stats_begin(lock_type_stat);
     perf_range_start_ns = qemu_perf_stats_begin(lock_range_stat);
-    result = lock(surface->d3d9_resource, 0, size, &destination,
-                  VMSVGA3D_DXVK_D3DLOCK_DISCARD);
+    {
+        uint64_t flags_start_ns =
+            qemu_perf_stats_begin(lock_flags_stat);
+        uint64_t size_start_ns = qemu_perf_stats_begin(lock_size_stat);
+        result = lock(surface->d3d9_resource, 0, size, &destination,
+                      VMSVGA3D_DXVK_D3DLOCK_DISCARD);
+        qemu_perf_stats_end(lock_flags_stat, flags_start_ns);
+        qemu_perf_stats_end(lock_size_stat, size_start_ns);
+    }
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK, perf_start_ns);
     qemu_perf_stats_end(lock_type_stat, perf_type_start_ns);
     qemu_perf_stats_end(lock_range_stat, perf_range_start_ns);
     qemu_perf_stats_add_work(lock_type_stat, size);
     qemu_perf_stats_add_work(lock_range_stat, size);
+    qemu_perf_stats_add_work(lock_flags_stat, size);
+    qemu_perf_stats_add_work(lock_size_stat, size);
 
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
         return false;
@@ -16250,16 +16269,35 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
                              QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
                      ? VMSVGA3D_DXVK_D3DLOCK_DISCARD
                      : 0;
+    lock_flags_stat = lock_flags & VMSVGA3D_DXVK_D3DLOCK_DISCARD
+                          ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD
+                          : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FLAGS_ZERO;
+    lock_size_stat = size <= 4u * 1024u
+                         ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_4K
+                         : size <= 64u * 1024u
+                               ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_64K
+                               : size <= 256u * 1024u
+                                     ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_LE_256K
+                                     : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_SIZE_GT_256K;
 
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK);
     perf_type_start_ns = qemu_perf_stats_begin(lock_type_stat);
     perf_range_start_ns = qemu_perf_stats_begin(lock_range_stat);
-    result = lock(surface->d3d9_resource, offset, size, &destination, lock_flags);
+    {
+        uint64_t flags_start_ns =
+            qemu_perf_stats_begin(lock_flags_stat);
+        uint64_t size_start_ns = qemu_perf_stats_begin(lock_size_stat);
+        result = lock(surface->d3d9_resource, offset, size, &destination, lock_flags);
+        qemu_perf_stats_end(lock_flags_stat, flags_start_ns);
+        qemu_perf_stats_end(lock_size_stat, size_start_ns);
+    }
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK, perf_start_ns);
     qemu_perf_stats_end(lock_type_stat, perf_type_start_ns);
     qemu_perf_stats_end(lock_range_stat, perf_range_start_ns);
     qemu_perf_stats_add_work(lock_type_stat, size);
     qemu_perf_stats_add_work(lock_range_stat, size);
+    qemu_perf_stats_add_work(lock_flags_stat, size);
+    qemu_perf_stats_add_work(lock_size_stat, size);
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
         return false;
     }
