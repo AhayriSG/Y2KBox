@@ -76,7 +76,7 @@
 ### Session 83 — Consolidate agent guidance and repair project continuity docs
 - Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
 - Tightened onboarding to read HANDOFF sections 0-3, the task overview plus only the selected task, the active summary, and the worklog index. Historical details remain available on demand.
-- Corrected stale CI behavior, XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. No QEMU source changed and no local QEMU build was run.
+- Corrected stale CI behavior, XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. Condensed the T13 task entry from about 20 KB to 4 KB by moving detailed historical evidence back to the indexed worklog. No QEMU source changed and no local QEMU build was run.
 
 ## Current investigation / next actions
 
