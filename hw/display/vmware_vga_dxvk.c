@@ -16236,6 +16236,8 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     uint64_t perf_range_start_ns;
     QemuPerfStat lock_type_stat;
     QemuPerfStat lock_range_stat;
+    QemuPerfStat lock_flags_stat;
+    QemuPerfStat lock_size_stat;
     uint32_t lock_flags;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL || !surface->d3d9_resident ||
