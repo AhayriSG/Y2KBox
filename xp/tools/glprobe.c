@@ -2,8 +2,11 @@
  * Y2KBox Windows XP WGL / pixel-format diagnostic.
  *
  * Enumerates every pixel format exposed by the current display driver,
- * tests ChoosePixelFormat requests matching the Call of Duty 1 log, and
- * attempts SetPixelFormat + wglCreateContext + wglMakeCurrent for each
+ * reproduces the game's id Tech 3 GLW_ChoosePFD selection algorithm,
+ * compares it with Windows ChoosePixelFormat, and attempts WGL context
+ * creation for selected and enumerated formats.
+ *
+ * The probe attempts SetPixelFormat + wglCreateContext + wglMakeCurrent for each
  * enumerated format on a fresh window/DC.
  *
  * Build with Visual C++:
