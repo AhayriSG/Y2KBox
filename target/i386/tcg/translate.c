@@ -1571,6 +1571,169 @@ static void gen_fpop(void)
     tcg_gen_st_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
 }
 
+static void gen_fpreg_ptr(TCGv_ptr ptr, TCGv_i32 idx)
+{
+    TCGv_i32 off = tcg_temp_new_i32();
+
+    QEMU_BUILD_BUG_ON(sizeof(FPReg) != 16 ||
+                      offsetof(FPReg, d.low) != 0 ||
+                      offsetof(FPReg, d.high) != 8);
+    tcg_gen_shli_i32(off, idx, 4);
+    tcg_gen_ext_i32_ptr(ptr, off);
+    tcg_gen_add_ptr(ptr, tcg_env, ptr);
+}
+
+static void gen_fmov_ST0_STN(int st_index)
+{
+    TCGv_i32 stt, src_idx, high;
+    TCGv_i64 low;
+    TCGv_ptr dst_ptr, src_ptr;
+
+    st_index &= 7;
+    if (st_index == 0) {
+        return;
+    }
+
+    stt = tcg_temp_new_i32();
+    src_idx = tcg_temp_new_i32();
+    high = tcg_temp_new_i32();
+    low = tcg_temp_new_i64();
+    dst_ptr = tcg_temp_new_ptr();
+    src_ptr = tcg_temp_new_ptr();
+
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+    tcg_gen_addi_i32(src_idx, stt, st_index);
+    tcg_gen_andi_i32(src_idx, src_idx, 7);
+    gen_fpreg_ptr(dst_ptr, stt);
+    gen_fpreg_ptr(src_ptr, src_idx);
+
+    tcg_gen_ld_i64(low, src_ptr, offsetof(CPUX86State, fpregs[0].d.low));
+    tcg_gen_ld16u_i32(high, src_ptr, offsetof(CPUX86State, fpregs[0].d.high));
+    tcg_gen_st_i64(low, dst_ptr, offsetof(CPUX86State, fpregs[0].d.low));
+    tcg_gen_st16_i32(high, dst_ptr, offsetof(CPUX86State, fpregs[0].d.high));
+}
+
+static void gen_fmov_STN_ST0(int st_index)
+{
+    TCGv_i32 stt = tcg_temp_new_i32();
+    TCGv_i32 dst_idx = tcg_temp_new_i32();
+    TCGv_ptr tag_ptr = tcg_temp_new_ptr();
+
+    st_index &= 7;
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+    if (st_index != 0) {
+        TCGv_i32 high = tcg_temp_new_i32();
+        TCGv_i64 low = tcg_temp_new_i64();
+        TCGv_ptr src_ptr = tcg_temp_new_ptr();
+        TCGv_ptr dst_ptr = tcg_temp_new_ptr();
+
+        tcg_gen_addi_i32(dst_idx, stt, st_index);
+        tcg_gen_andi_i32(dst_idx, dst_idx, 7);
+        gen_fpreg_ptr(src_ptr, stt);
+        gen_fpreg_ptr(dst_ptr, dst_idx);
+
+        tcg_gen_ld_i64(low, src_ptr, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_ld16u_i32(high, src_ptr, offsetof(CPUX86State, fpregs[0].d.high));
+        tcg_gen_st_i64(low, dst_ptr, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_st16_i32(high, dst_ptr, offsetof(CPUX86State, fpregs[0].d.high));
+    } else {
+        tcg_gen_mov_i32(dst_idx, stt);
+    }
+
+    tcg_gen_ext_i32_ptr(tag_ptr, dst_idx);
+    tcg_gen_add_ptr(tag_ptr, tcg_env, tag_ptr);
+    tcg_gen_st8_i32(tcg_constant_i32(0), tag_ptr, offsetof(CPUX86State, fptags));
+}
+
+static void gen_fxchg_ST0_STN(int st_index)
+{
+    TCGv_i32 stt = tcg_temp_new_i32();
+    TCGv_i32 fpus = tcg_temp_new_i32();
+    TCGv_ptr tag0 = tcg_temp_new_ptr();
+
+    st_index &= 7;
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+
+    if (st_index != 0) {
+        TCGv_i32 oth_idx = tcg_temp_new_i32();
+        TCGv_i32 h0 = tcg_temp_new_i32();
+        TCGv_i32 h1 = tcg_temp_new_i32();
+        TCGv_i64 l0 = tcg_temp_new_i64();
+        TCGv_i64 l1 = tcg_temp_new_i64();
+        TCGv_ptr p0 = tcg_temp_new_ptr();
+        TCGv_ptr p1 = tcg_temp_new_ptr();
+        TCGv_ptr tag1 = tcg_temp_new_ptr();
+
+        tcg_gen_addi_i32(oth_idx, stt, st_index);
+        tcg_gen_andi_i32(oth_idx, oth_idx, 7);
+        gen_fpreg_ptr(p0, stt);
+        gen_fpreg_ptr(p1, oth_idx);
+
+        tcg_gen_ld_i64(l0, p0, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_ld16u_i32(h0, p0, offsetof(CPUX86State, fpregs[0].d.high));
+        tcg_gen_ld_i64(l1, p1, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_ld16u_i32(h1, p1, offsetof(CPUX86State, fpregs[0].d.high));
+
+        tcg_gen_st_i64(l1, p0, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_st16_i32(h1, p0, offsetof(CPUX86State, fpregs[0].d.high));
+        tcg_gen_st_i64(l0, p1, offsetof(CPUX86State, fpregs[0].d.low));
+        tcg_gen_st16_i32(h0, p1, offsetof(CPUX86State, fpregs[0].d.high));
+
+        tcg_gen_ext_i32_ptr(tag1, oth_idx);
+        tcg_gen_add_ptr(tag1, tcg_env, tag1);
+        tcg_gen_st8_i32(tcg_constant_i32(0), tag1,
+                        offsetof(CPUX86State, fptags));
+    }
+
+    tcg_gen_ext_i32_ptr(tag0, stt);
+    tcg_gen_add_ptr(tag0, tcg_env, tag0);
+    tcg_gen_st8_i32(tcg_constant_i32(0), tag0, offsetof(CPUX86State, fptags));
+
+    /* C1 is unconditionally cleared to 0 */
+    tcg_gen_ld16u_i32(fpus, tcg_env, offsetof(CPUX86State, fpus));
+    tcg_gen_andi_i32(fpus, fpus, ~0x0200);
+    tcg_gen_st16_i32(fpus, tcg_env, offsetof(CPUX86State, fpus));
+}
+
+static void gen_fchs_ST0(void)
+{
+    TCGv_i32 stt = tcg_temp_new_i32();
+    TCGv_i32 high = tcg_temp_new_i32();
+    TCGv_ptr ptr = tcg_temp_new_ptr();
+
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+    gen_fpreg_ptr(ptr, stt);
+    tcg_gen_ld16u_i32(high, ptr, offsetof(CPUX86State, fpregs[0].d.high));
+    tcg_gen_xori_i32(high, high, 0x8000);
+    tcg_gen_st16_i32(high, ptr, offsetof(CPUX86State, fpregs[0].d.high));
+}
+
+static void gen_fabs_ST0(void)
+{
+    TCGv_i32 stt = tcg_temp_new_i32();
+    TCGv_i32 high = tcg_temp_new_i32();
+    TCGv_ptr ptr = tcg_temp_new_ptr();
+
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+    gen_fpreg_ptr(ptr, stt);
+    tcg_gen_ld16u_i32(high, ptr, offsetof(CPUX86State, fpregs[0].d.high));
+    tcg_gen_andi_i32(high, high, 0x7fff);
+    tcg_gen_st16_i32(high, ptr, offsetof(CPUX86State, fpregs[0].d.high));
+}
+
+static void gen_fld_const_ST0(uint64_t low, uint16_t high)
+{
+    TCGv_i32 stt = tcg_temp_new_i32();
+    TCGv_ptr ptr = tcg_temp_new_ptr();
+
+    tcg_gen_ld_i32(stt, tcg_env, offsetof(CPUX86State, fpstt));
+    gen_fpreg_ptr(ptr, stt);
+    tcg_gen_st_i64(tcg_constant_i64(low), ptr,
+                   offsetof(CPUX86State, fpregs[0].d.low));
+    tcg_gen_st16_i32(tcg_constant_i32(high), ptr,
+                     offsetof(CPUX86State, fpregs[0].d.high));
+}
+
 static void gen_helper_fp_arith_ST0_FT0(int op)
 {
     switch (op) {
@@ -2200,7 +2363,35 @@ gen_eob(DisasContext *s, int mode)
     } else if (mode == DISAS_JUMP &&
                /* give irqs a chance to happen */
                !inhibit_reset) {
+#ifndef TARGET_X86_64
+        if (tb_cflags(s->base.tb) & CF_NO_GOTO_PTR) {
+            tcg_gen_exit_tb(NULL, 0);
+        } else {
+            TCGv_i32 cs_base32 = tcg_temp_new_i32();
+            TCGv_i32 pc32 = tcg_temp_new_i32();
+            TCGv_i32 hflags = tcg_temp_new_i32();
+            TCGv_i32 eflags = tcg_temp_new_i32();
+            TCGv_i64 pc64 = tcg_temp_new_i64();
+            TCGv_i64 cs_base64 = tcg_temp_new_i64();
+
+            QEMU_BUILD_BUG_ON(sizeof(target_ulong) != 4);
+            tcg_gen_ld_i32(cs_base32, tcg_env,
+                           offsetof(CPUX86State, segs[R_CS].base));
+            tcg_gen_add_i32(pc32, cs_base32, cpu_eip);
+            tcg_gen_extu_i32_i64(pc64, pc32);
+            tcg_gen_extu_i32_i64(cs_base64, cs_base32);
+
+            tcg_gen_ld_i32(hflags, tcg_env, offsetof(CPUX86State, hflags));
+            tcg_gen_ld_i32(eflags, tcg_env, offsetof(CPUX86State, eflags));
+            tcg_gen_andi_i32(eflags, eflags,
+                             IOPL_MASK | TF_MASK | RF_MASK | VM_MASK | AC_MASK);
+            tcg_gen_or_i32(hflags, hflags, eflags);
+
+            tcg_gen_lookup_and_goto_ptr_state(pc64, cs_base64, hflags);
+        }
+#else
         tcg_gen_lookup_and_goto_ptr();
+#endif
     } else {
         tcg_gen_exit_tb(NULL, 0);
     }
@@ -2585,13 +2776,12 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
         switch (op) {
         case 0x08: /* fld sti */
             gen_fpush();
-            gen_helper_fmov_ST0_STN(tcg_env,
-                                    tcg_constant_i32((opreg + 1) & 7));
+            gen_fmov_ST0_STN((opreg + 1) & 7);
             break;
         case 0x09: /* fxchg sti */
         case 0x29: /* fxchg4 sti, undocumented op */
         case 0x39: /* fxchg7 sti, undocumented op */
-            gen_helper_fxchg_ST0_STN(tcg_env, tcg_constant_i32(opreg));
+            gen_fxchg_ST0_STN(opreg);
             break;
         case 0x0a: /* grp d9/2 */
             switch (rm) {
@@ -2611,10 +2801,10 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
         case 0x0c: /* grp d9/4 */
             switch (rm) {
             case 0: /* fchs */
-                gen_helper_fchs_ST0(tcg_env);
+                gen_fchs_ST0();
                 break;
             case 1: /* fabs */
-                gen_helper_fabs_ST0(tcg_env);
+                gen_fabs_ST0();
                 break;
             case 4: /* ftst */
                 gen_helper_fldz_FT0(tcg_env);
@@ -2631,7 +2821,7 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
             switch (rm) {
             case 0:
                 gen_fpush();
-                gen_helper_fld1_ST0(tcg_env);
+                gen_fld_const_ST0(0x8000000000000000ULL, 0x3fff);
                 break;
             case 1:
                 gen_fpush();
@@ -2655,7 +2845,7 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
                 break;
             case 6:
                 gen_fpush();
-                gen_helper_fldz_ST0(tcg_env);
+                gen_fld_const_ST0(0, 0);
                 break;
             default:
                 goto illegal_op;
@@ -2802,7 +2992,7 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
         case 0x0b: /* fstp1 sti, undocumented op */
         case 0x3a: /* fstp8 sti, undocumented op */
         case 0x3b: /* fstp9 sti, undocumented op */
-            gen_helper_fmov_STN_ST0(tcg_env, tcg_constant_i32(opreg));
+            gen_fmov_STN_ST0(opreg);
             if (op != 0x2a) {
                 gen_fpop();
             }
@@ -2860,8 +3050,7 @@ static void gen_x87(DisasContext *s, X86DecodedInsn *decode)
                 op1 = fcmov_cc[op & 3] | (((op >> 3) & 1) ^ 1);
                 l1 = gen_new_label();
                 gen_jcc_noeob(s, op1, l1);
-                gen_helper_fmov_ST0_STN(tcg_env,
-                                        tcg_constant_i32(opreg));
+                gen_fmov_ST0_STN(opreg);
                 gen_set_label(l1);
             }
             break;

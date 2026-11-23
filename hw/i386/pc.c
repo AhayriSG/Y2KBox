@@ -602,6 +602,7 @@ void pc_basic_device_init(struct PCMachineState *pcms,
 
     memory_region_init_io(ioport80_io, OBJECT(pcms), &ioport80_io_ops, NULL,
                           "ioport80", 1);
+    memory_region_enable_lockless_io(ioport80_io);
     memory_region_add_subregion(isa_bus->address_space_io, 0x80, ioport80_io);
 
     memory_region_init_io(ioportF0_io, OBJECT(pcms), &ioportF0_io_ops, NULL,

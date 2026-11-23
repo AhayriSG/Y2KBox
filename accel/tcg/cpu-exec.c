@@ -228,10 +228,25 @@ static TranslationBlock *tb_htable_lookup(CPUState *cpu, TCGTBCPUState s)
  *
  * Returns: an existing translation block or NULL.
  */
+static inline void tb_jmp_cache_store(CPUJumpCache *jc, uint32_t hash,
+                                      TranslationBlock *tb, vaddr pc)
+{
+    CPUJumpCacheEntry *e = &jc->array[hash];
+
+    qatomic_set(&e->tb, NULL);
+    e->tc_ptr = tb->tc.ptr;
+    e->pc = pc;
+    e->cs_base = tb->cs_base;
+    e->flags = tb->flags;
+    e->cflags = tb_cflags(tb);
+    qatomic_set(&e->tb, tb);
+}
+
 static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
 {
     TranslationBlock *tb;
     CPUJumpCache *jc;
+    CPUJumpCacheEntry *e;
     uint32_t hash;
 
     /* we should never be trying to look up an INVALID tb */
@@ -239,13 +254,14 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
 
     hash = tb_jmp_cache_hash_func(s.pc);
     jc = cpu->tb_jmp_cache;
+    e = &jc->array[hash];
 
-    tb = qatomic_read(&jc->array[hash].tb);
+    tb = qatomic_read(&e->tb);
     if (likely(tb &&
-               jc->array[hash].pc == s.pc &&
-               tb->cs_base == s.cs_base &&
-               tb->flags == s.flags &&
-               tb_cflags(tb) == s.cflags)) {
+               e->pc == s.pc &&
+               e->cs_base == s.cs_base &&
+               e->flags == s.flags &&
+               e->cflags == s.cflags)) {
         goto hit;
     }
 
@@ -254,8 +270,7 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
         return NULL;
     }
 
-    jc->array[hash].pc = s.pc;
-    qatomic_set(&jc->array[hash].tb, tb);
+    tb_jmp_cache_store(jc, hash, tb, s.pc);
 
 hit:
     /*
@@ -375,37 +390,74 @@ static inline bool check_for_breakpoints(CPUState *cpu, vaddr pc,
  * If found, return the code pointer.  If not found, return
  * the tcg epilogue so that we return into cpu_tb_exec.
  */
-const void *HELPER(lookup_tb_ptr)(CPUArchState *env)
+static inline const void *lookup_tb_ptr_common(CPUState *cpu, TCGTBCPUState s)
 {
-    CPUState *cpu = env_cpu(env);
     TranslationBlock *tb;
+    CPUJumpCache *jc;
+    CPUJumpCacheEntry *e;
+    uint32_t hash;
 
     /*
      * By definition we've just finished a TB, so I/O is OK.
      * Avoid the possibility of calling cpu_io_recompile() if
-     * a page table walk triggered by tb_lookup() calling
+     * a page table walk triggered by tb_htable_lookup() calling
      * probe_access_internal() happens to touch an MMIO device.
      * The next TB, if we chain to it, will clear the flag again.
      */
     cpu->neg.can_do_io = true;
 
-    TCGTBCPUState s = cpu->cc->tcg_ops->get_tb_cpu_state(cpu);
     s.cflags = curr_cflags(cpu);
 
-    if (check_for_breakpoints(cpu, s.pc, &s.cflags)) {
+    if (unlikely(check_for_breakpoints(cpu, s.pc, &s.cflags))) {
         cpu_loop_exit(cpu);
     }
 
-    tb = tb_lookup(cpu, s);
+    /* we should never be trying to look up an INVALID tb */
+    tcg_debug_assert(!(s.cflags & CF_INVALID));
+
+    hash = tb_jmp_cache_hash_func(s.pc);
+    jc = cpu->tb_jmp_cache;
+    e = &jc->array[hash];
+    tb = qatomic_read(&e->tb);
+    if (likely(tb &&
+               e->pc == s.pc &&
+               e->cs_base == s.cs_base &&
+               e->flags == s.flags &&
+               e->cflags == s.cflags)) {
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
+            log_cpu_exec(s.pc, cpu, tb);
+        }
+        return e->tc_ptr;
+    }
+
+    tb = tb_htable_lookup(cpu, s);
     if (tb == NULL) {
         return tcg_code_gen_epilogue;
     }
 
-    if (qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC)) {
+    tb_jmp_cache_store(jc, hash, tb, s.pc);
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
         log_cpu_exec(s.pc, cpu, tb);
     }
 
     return tb->tc.ptr;
+}
+
+const void *HELPER(lookup_tb_ptr)(CPUArchState *env)
+{
+    CPUState *cpu = env_cpu(env);
+
+    return lookup_tb_ptr_common(cpu, cpu->cc->tcg_ops->get_tb_cpu_state(cpu));
+}
+
+const void *HELPER(lookup_tb_ptr_state)(CPUArchState *env, uint64_t pc,
+                                        uint64_t cs_base, uint32_t flags)
+{
+    CPUState *cpu = env_cpu(env);
+    TCGTBCPUState s = { .pc = pc, .cs_base = cs_base, .flags = flags };
+
+    return lookup_tb_ptr_common(cpu, s);
 }
 
 /* Return the current PC from CPU, which may be cached in TB. */
@@ -1001,8 +1053,7 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
                  */
                 h = tb_jmp_cache_hash_func(s.pc);
                 jc = cpu->tb_jmp_cache;
-                jc->array[h].pc = s.pc;
-                qatomic_set(&jc->array[h].tb, tb);
+                tb_jmp_cache_store(jc, h, tb, s.pc);
             }
 
 #ifndef CONFIG_USER_ONLY

@@ -5,6 +5,16 @@
 #include "qemu/perf-stats.h"
 
 #define QEMU_PERF_COMMAND_MAX 4096
+#define QEMU_PERF_PIO_SLOTS 64
+#define QEMU_PERF_PIO_TOP 16
+
+typedef struct QemuPerfPioCounter {
+    uint32_t key;       /* bit 31 = occupied, bit 0 = is_write, bits 1..16 = port */
+    uint64_t count;
+    uint64_t total_ns;
+    uint64_t max_ns;
+    uint64_t over_1ms;
+} QemuPerfPioCounter;
 
 typedef struct QemuPerfStatCounter {
     uint64_t count;
@@ -20,6 +30,7 @@ typedef struct QemuPerfStatCounter {
 static QemuPerfStatCounter perf_stats[QEMU_PERF_STAT__MAX];
 static QemuPerfStatCounter perf_command_stats[QEMU_PERF_COMMAND_MAX];
 static const char *perf_command_names[QEMU_PERF_COMMAND_MAX];
+static QemuPerfPioCounter perf_pio_stats[QEMU_PERF_PIO_SLOTS];
 static bool perf_stats_enabled;
 static uint64_t perf_stats_start_ns;
 static uint64_t perf_stats_last_mark_ns[QEMU_PERF_STAT__MAX];
@@ -223,6 +234,13 @@ void qemu_perf_stats_start(void)
         qatomic_set(&perf_command_stats[i].over_100ms, 0);
         qatomic_set(&perf_command_names[i], NULL);
     }
+    for (i = 0; i < QEMU_PERF_PIO_SLOTS; i++) {
+        qatomic_set(&perf_pio_stats[i].key, 0);
+        qatomic_set(&perf_pio_stats[i].count, 0);
+        qatomic_set(&perf_pio_stats[i].total_ns, 0);
+        qatomic_set(&perf_pio_stats[i].max_ns, 0);
+        qatomic_set(&perf_pio_stats[i].over_1ms, 0);
+    }
     perf_stats_start_ns = g_get_monotonic_time() * 1000;
     qatomic_set(&perf_stats_enabled, true);
     if (perf_vcpu_profile_start_hook) {
@@ -288,6 +306,56 @@ void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns)
     }
 
     qemu_perf_stats_record(stat, g_get_monotonic_time() * 1000 - start_ns);
+}
+
+void qemu_perf_stats_pio_end(uint32_t port, bool is_write, uint64_t start_ns)
+{
+    uint64_t elapsed_ns;
+    uint32_t key;
+    unsigned idx, step;
+
+    if (!start_ns) {
+        return;
+    }
+
+    elapsed_ns = g_get_monotonic_time() * 1000 - start_ns;
+    qemu_perf_stats_record(is_write ? QEMU_PERF_TCG_PIO_OUT
+                                    : QEMU_PERF_TCG_PIO_IN,
+                           elapsed_ns);
+
+    key = 0x80000000u | ((port & 0xffffu) << 1) | (is_write ? 1u : 0u);
+    idx = ((port * 2654435761u) ^ (is_write ? 0x5au : 0u)) &
+          (QEMU_PERF_PIO_SLOTS - 1);
+    for (step = 0; step < QEMU_PERF_PIO_SLOTS; step++) {
+        QemuPerfPioCounter *slot = &perf_pio_stats[idx];
+        uint32_t cur = qatomic_read(&slot->key);
+
+        if (cur == 0) {
+            cur = qatomic_cmpxchg(&slot->key, 0, key);
+            if (cur == 0) {
+                cur = key;
+            }
+        }
+        if (cur == key) {
+            uint64_t prev;
+
+            qatomic_inc(&slot->count);
+            qatomic_add(&slot->total_ns, elapsed_ns);
+            if (elapsed_ns >= 1000000) {
+                qatomic_inc(&slot->over_1ms);
+            }
+            prev = qatomic_read(&slot->max_ns);
+            while (elapsed_ns > prev) {
+                uint64_t obs = qatomic_cmpxchg(&slot->max_ns, prev, elapsed_ns);
+                if (obs == prev) {
+                    break;
+                }
+                prev = obs;
+            }
+            return;
+        }
+        idx = (idx + 1) & (QEMU_PERF_PIO_SLOTS - 1);
+    }
 }
 
 void qemu_perf_stats_command_end(uint32_t command_id,
@@ -406,6 +474,53 @@ void qemu_perf_stats_stop(void)
                 qatomic_read(&counter->over_10ms),
                 qatomic_read(&counter->over_100ms));
     }
+    {
+        QemuPerfPioCounter top[QEMU_PERF_PIO_SLOTS];
+        int n = 0, j;
+
+        for (i = 0; i < QEMU_PERF_PIO_SLOTS; i++) {
+            uint32_t k = qatomic_read(&perf_pio_stats[i].key);
+            uint64_t c = qatomic_read(&perf_pio_stats[i].count);
+            if (k != 0 && c != 0) {
+                top[n].key = k;
+                top[n].count = c;
+                top[n].total_ns = qatomic_read(&perf_pio_stats[i].total_ns);
+                top[n].max_ns = qatomic_read(&perf_pio_stats[i].max_ns);
+                top[n].over_1ms = qatomic_read(&perf_pio_stats[i].over_1ms);
+                n++;
+            }
+        }
+        for (i = 0; i < n; i++) {
+            int best = i;
+            for (j = i + 1; j < n; j++) {
+                if (top[j].total_ns > top[best].total_ns) {
+                    best = j;
+                }
+            }
+            if (best != i) {
+                QemuPerfPioCounter tmp = top[i];
+                top[i] = top[best];
+                top[best] = tmp;
+            }
+        }
+        if (n > QEMU_PERF_PIO_TOP) {
+            n = QEMU_PERF_PIO_TOP;
+        }
+        for (i = 0; i < n; i++) {
+            uint32_t port = (top[i].key >> 1) & 0xffffu;
+            bool is_write = (top[i].key & 1u) != 0;
+            fprintf(stderr,
+                    "Y2KBOX-PERF pio_port=0x%04x dir=%s count=%" PRIu64
+                    " total_us=%" PRIu64 " max_us=%" PRIu64
+                    " over_1ms=%" PRIu64 "\n",
+                    port, is_write ? "out" : "in",
+                    top[i].count,
+                    top[i].total_ns / 1000,
+                    top[i].max_ns / 1000,
+                    top[i].over_1ms);
+        }
+    }
+
     fprintf(stderr, "Y2KBOX-PERF note=category_times_overlap_do_not_sum\n");
     if (perf_vcpu_profile_stop_hook) {
         perf_vcpu_profile_stop_hook();

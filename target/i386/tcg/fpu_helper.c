@@ -276,6 +276,26 @@ void x86_hx87_sync_sw(CPUX86State *env)
     }
 }
 
+static inline void x86_hx87_peek_sw(CPUX86State *env)
+{
+    if (hx87.sw_dirty && hx87.owner == env) {
+        if (likely(hx87.epoch == qatomic_read(&hx87_epoch))) {
+            uint16_t sw;
+            asm volatile("fnstsw %0" : "=a"(sw));
+            fpu_set_exception(env, sw & 0x3f);
+            /*
+             * Keep hx87.sw_dirty = true: host SW exception bits are sticky and
+             * idempotent under OR into env->fpus, so leaving sw_dirty set
+             * avoids a cold hx87_prepare_slow() call on the very next FP op in
+             * tight fmul/fcom/fnstsw/sahf loops. Guest flag clears/loads still
+             * clear sw_dirty via x86_hx87_flags_changed().
+             */
+        } else {
+            hx87.sw_dirty = false;
+        }
+    }
+}
+
 static __attribute__((noinline, cold)) void
 hx87_prepare_slow(CPUX86State *env, uint16_t want, unsigned ep)
 {
@@ -1508,7 +1528,7 @@ void HELPER(fldz_FT0)(CPUX86State *env)
 
 uint32_t HELPER(fnstsw)(CPUX86State *env)
 {
-    x86_hx87_sync_sw(env);
+    x86_hx87_peek_sw(env);
     return (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
 }
 

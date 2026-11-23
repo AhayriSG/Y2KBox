@@ -12,22 +12,29 @@
 #include "qemu/rcu.h"
 #include "exec/cpu-common.h"
 
-#define TB_JMP_CACHE_BITS 12
+#define TB_JMP_CACHE_BITS 14
 #define TB_JMP_CACHE_SIZE (1 << TB_JMP_CACHE_BITS)
 
 /*
  * Invalidated in parallel; all accesses to 'tb' must be atomic.
  * A valid entry is read/written by a single CPU, therefore there is
- * no need for qatomic_rcu_read() and pc is always consistent with a
- * non-NULL value of 'tb'.  Strictly speaking pc is only needed for
- * CF_PCREL, but it's used always for simplicity.
+ * no need for qatomic_rcu_read() and the cached TB metadata fields
+ * (tc_ptr, pc, cs_base, flags, cflags) are always consistent with a
+ * non-NULL value of 'tb'. Caching them inline avoids chasing a cold
+ * TranslationBlock pointer on every jump-cache hit.
  */
+typedef struct CPUJumpCacheEntry {
+    TranslationBlock *tb;
+    const void *tc_ptr;
+    vaddr pc;
+    uint64_t cs_base;
+    uint32_t flags;
+    uint32_t cflags;
+} CPUJumpCacheEntry;
+
 typedef struct CPUJumpCache {
     struct rcu_head rcu;
-    struct {
-        TranslationBlock *tb;
-        vaddr pc;
-    } array[TB_JMP_CACHE_SIZE];
+    CPUJumpCacheEntry array[TB_JMP_CACHE_SIZE];
 } CPUJumpCache;
 
 #endif /* ACCEL_TCG_TB_JMP_CACHE_H */

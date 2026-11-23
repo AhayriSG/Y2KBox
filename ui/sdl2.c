@@ -334,8 +334,16 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         }
         g_close(fd, NULL);
         g_free(filename);
+        /*
+         * Buffer stderr while capturing to a file so Windows MinGW stdio
+         * does not issue a 1-byte WriteFile syscall per character while
+         * holding the BQL inside VMVGA-SYNC logging.
+         */
+        setvbuf(stderr, NULL, _IOFBF, 65536);
 
         if (!object_property_set_bool(vmvga, "debug-log", true, &err)) {
+            fflush(stderr);
+            setvbuf(stderr, NULL, _IONBF, 0);
             dup2(sdl_log_capture_saved_stderr, STDERR_FILENO);
             error_report_err(err);
             return;
@@ -351,8 +359,11 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         }
         sdl_set_debug_trace(false);
         qemu_perf_stats_stop();
+        fflush(stderr);
+        setvbuf(stderr, NULL, _IONBF, 0);
         if (dup2(sdl_log_capture_saved_stderr, STDERR_FILENO) < 0) {
             saved_errno = errno;
+            setvbuf(stderr, NULL, _IOFBF, 65536);
             object_property_set_bool(vmvga, "debug-log", true, NULL);
             sdl_set_debug_trace(true);
             qemu_perf_stats_start();

@@ -15,7 +15,7 @@ boot:
     mov sp, 0x7000
     mov [drive], dl
     mov ah, 2
-    mov al, 7
+    mov al, 15
     mov ch, 0
     mov cl, 2
     mov dh, 0
@@ -49,7 +49,7 @@ main:
     mov dword [CHK], 0x811C9DC5
     mov dword [TRIAL], TRIALS
     mov di, CHKS
-    mov cx, 32
+    mov cx, 64
     mov eax, 0x811C9DC5
     rep stosd
 .trial:
@@ -131,6 +131,83 @@ main:
     DOOP {fxch st1}
     DOOP {fcom st1}
     DOOP {fucom st1}
+    DOOP {fsubr qword [OP64]}
+    DOOP {fdivr qword [OP64]}
+    DOOP {fmul dword [OP32]}
+    DOOP {fsub dword [OP32]}
+    DOOP {fdiv dword [OP32]}
+    DOOP {fcom qword [OP64]}
+    DOOP {fcom dword [OP32]}
+    DOOP {fild dword [OP32]}
+    DOOP {fiadd dword [OP32]}
+    DOOP {fld st1}
+    DOOP {fst st1}
+    DOOP {fld1}
+    DOOP {fldz}
+
+    ; fcomi st0, st1 (capture EFLAGS CF|PF|ZF in RES+24)
+    mov di, RES
+    mov cx, 12
+    xor eax, eax
+    rep stosd
+    fninit
+    fldcw [CWV]
+    fld tword [OPB]
+    fld tword [OPA]
+    fcomi st0, st1
+    pushfd
+    pop eax
+    and eax, 0x45
+    mov [RES+24], eax
+    fnstsw [RES+20]
+    fstp tword [RES]
+    fstp tword [RES+10]
+    mov word [MIXP], CHKS + 4*opn
+    call mix
+%assign opn opn+1
+
+    ; fucomi st0, st1 (capture EFLAGS CF|PF|ZF in RES+24)
+    mov di, RES
+    mov cx, 12
+    xor eax, eax
+    rep stosd
+    fninit
+    fldcw [CWV]
+    fld tword [OPB]
+    fld tword [OPA]
+    fucomi st0, st1
+    pushfd
+    pop eax
+    and eax, 0x45
+    mov [RES+24], eax
+    fnstsw [RES+20]
+    fstp tword [RES]
+    fstp tword [RES+10]
+    mov word [MIXP], CHKS + 4*opn
+    call mix
+%assign opn opn+1
+
+    ; chained lazy-SW + fnstsw peek + fnclex + next FP op
+    mov di, RES
+    mov cx, 12
+    xor eax, eax
+    rep stosd
+    fninit
+    fldcw [CWV]
+    fld tword [OPB]
+    fld tword [OPA]
+    fmul st0, st1
+    fnstsw [RES+20]
+    fadd qword [OP64]
+    fnstsw [RES+22]
+    fnclex
+    fsub dword [OP32]
+    fnstsw [RES+24]
+    fstp tword [RES]
+    fstp tword [RES+10]
+    mov word [MIXP], CHKS + 4*opn
+    call mix
+%assign opn opn+1
 
     inc word [CWI]
     cmp word [CWI], 12
@@ -156,7 +233,7 @@ main:
     mov al, 10
     out dx, al
     add di, 4
-    cmp di, 120
+    cmp di, 4*opn
     jb .pl
     mov dx, 0xf4
     xor al, al
@@ -209,6 +286,8 @@ genx80:                           ; writes a random 80-bit value at [bx]
     je .edbl_lo
     cmp ax, 6
     je .e3fff
+    cmp ax, 7
+    je .ezero
     ; mid range: 0x3FFF +- up to 255
     and cx, 0x80FF
     mov ax, cx
@@ -244,6 +323,11 @@ genx80:                           ; writes a random 80-bit value at [bx]
 .e3fff: mov ax, cx
       and ax, 0x8000
       or  ax, 0x3FFF
+      jmp .st
+.ezero: mov dword [bx], 0
+      mov dword [bx+4], 0
+      mov ax, cx
+      and ax, 0x8000
 .st:
     mov [bx+8], ax
     ret
@@ -265,4 +349,4 @@ cwtab:
     dw 0x003F, 0x043F, 0x083F, 0x0C3F
     dw 0x023F, 0x063F, 0x0A3F, 0x0E3F
     dw 0x033F, 0x073F, 0x0B3F, 0x0F3F
-times 4096-($-$$) db 0
+times 8192-($-$$) db 0

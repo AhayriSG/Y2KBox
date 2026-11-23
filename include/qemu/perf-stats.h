@@ -171,6 +171,7 @@ void qemu_perf_stats_start(void);
 void qemu_perf_stats_stop(void);
 uint64_t qemu_perf_stats_begin(QemuPerfStat stat);
 void qemu_perf_stats_end(QemuPerfStat stat, uint64_t start_ns);
+void qemu_perf_stats_pio_end(uint32_t port, bool is_write, uint64_t start_ns);
 void qemu_perf_stats_mark(QemuPerfStat stat);
 void qemu_perf_stats_add_work(QemuPerfStat stat, uint64_t amount);
 void qemu_perf_stats_record_work(QemuPerfStat stat, uint64_t amount);

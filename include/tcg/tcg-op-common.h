@@ -99,6 +99,8 @@ void tcg_gen_goto_tb(unsigned idx);
  * this op is equivalent to calling tcg_gen_exit_tb() with 0 as the argument.
  */
 void tcg_gen_lookup_and_goto_ptr(void);
+void tcg_gen_lookup_and_goto_ptr_state(TCGv_i64 pc, TCGv_i64 cs_base,
+                                       TCGv_i32 flags);
 
 void tcg_gen_plugin_cb(unsigned from);
 QEMU_ARG_NONNULL
