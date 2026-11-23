@@ -1,13 +1,18 @@
 # Y2KBox handoff  -  READ THIS FIRST
 
 Files: `HANDOFF.md` (context, rules, design notes) - `TASKS.md` (claimable work queue) -
-`WORKLOG.md` (what was done, chronologically) - `README.md` (public status table).
+`WORKLOAD_ACTIVE_SESSION.md` (latest ten sessions) - `WORKLOG_INDEX.md` (historical navigation) -
+`WORKLOG.md` (append-only chronological archive) - `README.md` (public status table).
 Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it building).
 
 ## 0. If you are a new AI/human taking over (2 minutes)
 
-1. Read sections 1-2 below, then `TASKS.md`. Pick an unclaimed task (highest priority
-   first) and claim it directly on `main` (protocol at the top of TASKS.md).
+1. Read sections 1-2 below, then `TASKS.md`, `WORKLOAD_ACTIVE_SESSION.md`, and
+   `WORKLOG_INDEX.md`. Do not read the entire `WORKLOG.md` by default. Use the
+   index to locate only historical sessions relevant to the task; verify old
+   claims against current source and task/handoff state. Pick an unclaimed task
+   (highest priority first) and claim it directly on `main` (protocol at the top
+   of TASKS.md).
 2. Do NOT build locally (section 7): the status hook reports whether the latest pushed
    commit passed the checks.
 3. Work directly on `main`, commit small, and push often. Do not create branches or
@@ -567,6 +572,10 @@ Shader and post-processing integration
 * **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). Always `git fetch` + `git rebase` before pushing due to parallel agents. Use `git revert` rather than file copies to avoid swapping files like `TASKS.md`/`WORKLOG.md` (verify with `head -1`).
 * **TASKS.md:** Update status to `PAUSED` and add a "Resume here:" note.
 * **WORKLOG.md:** Append what you did, evidence (numbers, commands), and what broke.
+  Keep it as the complete historical record; never prune old sessions.
+* **WORKLOG_INDEX.md:** Add or adjust topic-to-session pointers when the work
+  introduces a substantial new area or makes an existing mapping useful to update.
+  This is navigation only; do not duplicate session summaries.
 * **Active session summary:** Add a concise matching session entry to
   `WORKLOAD_ACTIVE_SESSION.md`. The Claude Code `Stop` hook runs
   `scripts/maintain_active_session.py`, automatically drops entries older than
