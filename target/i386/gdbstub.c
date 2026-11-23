@@ -183,6 +183,9 @@ int x86_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
         case IDX_FP_REGS + 8:
             return gdb_get_reg32(mem_buf, env->fpuc);
         case IDX_FP_REGS + 9:
+            if (tcg_enabled()) {
+                x86_hx87_sync_sw(env);
+            }
             return gdb_get_reg32(mem_buf, (env->fpus & ~0x3800) |
                                           (env->fpstt & 0x7) << 11);
         case IDX_FP_REGS + 10:
@@ -344,6 +347,9 @@ int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
             tmp = ldl_p(mem_buf);
             env->fpstt = (tmp >> 11) & 7;
             env->fpus = tmp & ~0x3800;
+            if (tcg_enabled()) {
+                x86_hx87_flags_changed();
+            }
             return 4;
         case IDX_FP_REGS + 10: /* ftag */
             return 4;

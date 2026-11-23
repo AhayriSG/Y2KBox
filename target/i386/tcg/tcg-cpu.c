@@ -46,6 +46,7 @@ static void x86_cpu_exec_exit(CPUState *cs)
     X86CPU *cpu = X86_CPU(cs);
     CPUX86State *env = &cpu->env;
 
+    x86_hx87_sync_sw(env);
     env->eflags = cpu_compute_eflags(env);
     cpu->eflags_in_tcg = false;
 }

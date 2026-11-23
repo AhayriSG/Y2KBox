@@ -220,22 +220,30 @@ static void merge_exception_flags(CPUX86State *env, int old_flags)
 
 
 /*
- * XP fork (T13a): host x87 fast path.
+ * XP fork (T13a / T13e-F1): host x87 fast path.
  *
- * x86-64 hosts have a real x87 unit with exactly the guest's semantics, so for NORMAL FINITE operands we run
- * add/sub/mul/div/sqrt on it (precision and rounding taken from the guest control word, all host exceptions
- * masked) instead of softfloat (~24 ns -> ~3 ns). Zero, denormal, NaN, infinity and unnormal operands, any
- * guest-unmasked exception, and the reserved precision value use the unchanged softfloat path.
+ * x86-64 hosts have a real x87 unit with exactly the guest's semantics, so for
+ * normal finite and +/-0.0 operands (non-zero normal divisor for division) we
+ * run add/sub/mul/div/sqrt and normal float32/float64 stores directly in-place
+ * on &ST(i) instead of softfloat. Denormal, NaN, infinity and unnormal inputs,
+ * division by zero, out-of-range stores, any guest-unmasked exception, and the
+ * reserved precision value fall back to cold softfloat helpers.
  *
- * Exception flags: host SW flags are sticky. They are merged into the guest SW (union), so the host flags are
- * always a subset of the guest's. Whenever the guest clears/loads its exception flags (fnclex, fninit, fldenv,
- * frstor, fxrstor, reset, vmstate load) x86_hx87_flags_changed() bumps a global epoch and every host thread
- * runs the (slow, ~60 ns) fnclex lazily the next time it uses the fast path. Do not call fnclex per operation.
+ * Exception flags: host SW flags (bits 0..5) are sticky and accumulate across
+ * fast-path ops while all guest exceptions are masked (fpuc & 0x3f == 0x3f).
+ * Instead of running fnstsw + fpu_set_exception after every operation, we mark
+ * hx87.sw_dirty = true and merge host SW lazily at guest-observable sync points
+ * (fnstsw, fldcw, fwait, fstenv/fsave, fxsave/xsave, cpu_exec_exit, vmstate,
+ * gdbstub, or owner switch). Whenever the guest clears/loads its exception
+ * flags (fnclex, fninit, fldenv, frstor, fxrstor, reset, vmstate load),
+ * x86_hx87_flags_changed() clears hx87.sw_dirty and bumps hx87_epoch so host
+ * threads discard stale bits and run fnclex lazily on next fast-path entry.
  */
 typedef struct HostX87 {
     CPUX86State *owner;     /* guest CPU whose flags the host SW currently tracks */
     unsigned epoch;
     uint16_t cw;            /* host control word currently loaded */
+    bool sw_dirty;          /* host SW has exception bits not yet merged into owner->fpus */
 } HostX87;
 
 static __thread HostX87 hx87 = { .cw = 0x37f };
@@ -244,25 +252,39 @@ static bool hx87_off;           /* XPQEMU_NO_HX87=1 disables the fast path (A/B 
 
 static void __attribute__((constructor)) hx87_init(void)
 {
+    QEMU_BUILD_BUG_ON(offsetof(floatx80, low) != 0 ||
+                      offsetof(floatx80, high) != 8);
     hx87_off = getenv("XPQEMU_NO_HX87") != NULL;
 }
 
 void x86_hx87_flags_changed(void)
 {
+    hx87.sw_dirty = false;
     qatomic_inc(&hx87_epoch);
 }
 
-static inline bool hx87_prepare(CPUX86State *env)
+void x86_hx87_sync_sw(CPUX86State *env)
 {
-    uint16_t want;
-    unsigned ep;
-
-    if (hx87_off || (env->fpuc & 0x3f) != 0x3f || (env->fpuc & 0x300) == 0x100) {
-        return false;                       /* unmasked exception or reserved precision: softfloat */
+    if (likely(!hx87.sw_dirty) || hx87.owner != env) {
+        return;
     }
-    want = (env->fpuc & 0xf00) | 0x3f;
-    ep = qatomic_read(&hx87_epoch);
+    hx87.sw_dirty = false;
+    if (hx87.epoch == qatomic_read(&hx87_epoch)) {
+        uint16_t sw;
+        asm volatile("fnstsw %0" : "=a"(sw));
+        fpu_set_exception(env, sw & 0x3f);
+    }
+}
+
+static __attribute__((noinline, cold)) void
+hx87_prepare_slow(CPUX86State *env, uint16_t want, unsigned ep)
+{
     if (hx87.owner != env || hx87.epoch != ep) {
+        if (hx87.sw_dirty && hx87.owner != NULL && hx87.epoch == ep) {
+            uint16_t sw;
+            asm volatile("fnstsw %0" : "=a"(sw));
+            fpu_set_exception(hx87.owner, sw & 0x3f);
+        }
         asm volatile("fnclex");
         hx87.owner = env;
         hx87.epoch = ep;
@@ -270,6 +292,24 @@ static inline bool hx87_prepare(CPUX86State *env)
     if (hx87.cw != want) {
         asm volatile("fldcw %0" : : "m"(want));
         hx87.cw = want;
+    }
+    hx87.sw_dirty = true;
+}
+
+static inline bool hx87_prepare(CPUX86State *env)
+{
+    uint16_t fpuc = env->fpuc;
+    uint16_t want;
+    unsigned ep;
+
+    if (unlikely(hx87_off || (fpuc & 0x3f) != 0x3f || (fpuc & 0x300) == 0x100)) {
+        return false;                       /* unmasked exception or reserved precision: softfloat */
+    }
+    want = (fpuc & 0xf00) | 0x3f;
+    ep = qatomic_read(&hx87_epoch);
+    if (unlikely(hx87.owner != env || hx87.epoch != ep ||
+                 hx87.cw != want || !hx87.sw_dirty)) {
+        hx87_prepare_slow(env, want, ep);
     }
     return true;
 }
@@ -281,87 +321,43 @@ static inline bool fx_normal(floatx80 v)
     return e != 0 && e != 0x7fff && (v.low >> 63);
 }
 
-enum { HX_ADD, HX_SUB, HX_MUL, HX_DIV };
-
-typedef struct __attribute__((packed)) { uint64_t m; uint16_t se; } HxRaw;
-
-static inline bool hx87_arith(CPUX86State *env, int op, floatx80 a, floatx80 b, floatx80 *res)
+static inline bool fx_normal_or_zero(floatx80 v)
 {
-    HxRaw tmp;
-    uint16_t sw;
+    uint16_t e = v.high & 0x7fff;
 
-    if (!fx_normal(a) || !fx_normal(b) || !hx87_prepare(env)) {
-        return false;
-    }
-    switch (op) {
-    case HX_ADD:
-        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfadd %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
-                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
-        break;
-    case HX_SUB:
-        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfsub %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
-                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
-        break;
-    case HX_MUL:
-        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfmul %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
-                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
-        break;
-    default:
-        asm volatile("fldt %[b]\n\tfldt %[a]\n\tfdiv %%st(1), %%st\n\tfnstsw %%ax\n\tfstpt %[r]\n\tfstp %%st(0)"
-                     : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a), [b] "m"(b) : "st", "st(1)");
-        break;
-    }
-    res->low = tmp.m;
-    res->high = tmp.se;
-    fpu_set_exception(env, sw & 0x3f);
-    return true;
+    return (e != 0 && e != 0x7fff && (v.low >> 63)) ||
+           (e == 0 && v.low == 0);
 }
 
-static inline bool hx87_sqrt(CPUX86State *env, floatx80 a, floatx80 *res)
+static inline bool fx_f64_normal(uint64_t i)
 {
-    HxRaw tmp;
-    uint16_t sw;
+    uint32_t e = (i >> 52) & 0x7ff;
 
-    if (!fx_normal(a) || (a.high & 0x8000) || !hx87_prepare(env)) {
-        return false;
-    }
-    asm volatile("fldt %[a]\n\tfsqrt\n\tfnstsw %%ax\n\tfstpt %[r]"
-                 : [r] "=m"(tmp), "=a"(sw) : [a] "m"(a) : "st");
-    res->low = tmp.m;
-    res->high = tmp.se;
-    fpu_set_exception(env, sw & 0x3f);
-    return true;
+    return e != 0 && e != 0x7ff;
 }
 
-static inline floatx80 fx_add(CPUX86State *env, floatx80 a, floatx80 b)
+static inline bool fx_f64_noz(uint64_t i)
 {
-    floatx80 r;
-    return hx87_arith(env, HX_ADD, a, b, &r) ? r : floatx80_add(a, b, &env->fp_status);
+    uint32_t e = (i >> 52) & 0x7ff;
+
+    return (e != 0 && e != 0x7ff) || (i << 1) == 0;
 }
 
-static inline floatx80 fx_sub(CPUX86State *env, floatx80 a, floatx80 b)
+static inline bool fx_f32_normal(uint32_t i)
 {
-    floatx80 r;
-    return hx87_arith(env, HX_SUB, a, b, &r) ? r : floatx80_sub(a, b, &env->fp_status);
+    uint32_t e = (i >> 23) & 0xff;
+
+    return e != 0 && e != 0xff;
 }
 
-static inline floatx80 fx_mul(CPUX86State *env, floatx80 a, floatx80 b)
+static inline bool fx_f32_noz(uint32_t i)
 {
-    floatx80 r;
-    return hx87_arith(env, HX_MUL, a, b, &r) ? r : floatx80_mul(a, b, &env->fp_status);
+    uint32_t e = (i >> 23) & 0xff;
+
+    return (e != 0 && e != 0xff) || (i << 1) == 0;
 }
 
-static inline floatx80 fx_div(CPUX86State *env, floatx80 a, floatx80 b)
-{
-    floatx80 r;
-    return hx87_arith(env, HX_DIV, a, b, &r) ? r : floatx80_div(a, b, &env->fp_status);
-}
-
-static inline floatx80 fx_sqrt(CPUX86State *env, floatx80 a)
-{
-    floatx80 r;
-    return hx87_sqrt(env, a, &r) ? r : floatx80_sqrt(a, &env->fp_status);
-}
+enum { HX_ADD, HX_SUB, HX_SUBR, HX_MUL, HX_DIV, HX_DIVR };
 
 /*
  * Real x87 loads (fld m32/m64) are exact: precision control affects arithmetic only. Upstream's
@@ -393,48 +389,302 @@ static floatx80 fx_exact_conv32(CPUX86State *env, float32 f)
 }
 
 /* exact, flag-free conversions for normal and zero inputs (integer only) */
-static inline floatx80 fx_ld64(CPUX86State *env, uint64_t i, float64 f)
+static inline floatx80 fx_ld64_noz(uint64_t i)
 {
     uint32_t e = (i >> 52) & 0x7ff;
     floatx80 r;
 
-    if (!hx87_off && e != 0 && e != 0x7ff) {
+    if (likely(e != 0)) {
         r.low = (1ULL << 63) | ((i & 0xfffffffffffffULL) << 11);
         r.high = ((i >> 63) << 15) | (e - 1023 + 16383);
-        return r;
-    }
-    if (!hx87_off && (i << 1) == 0) {
+    } else {
         r.low = 0;
         r.high = (i >> 63) << 15;
-        return r;
     }
-    return fx_exact_conv64(env, f);
+    return r;
 }
 
-static inline floatx80 fx_ld32(CPUX86State *env, uint32_t i, float32 f)
+static inline floatx80 fx_ld32_noz(uint32_t i)
 {
     uint32_t e = (i >> 23) & 0xff;
     floatx80 r;
 
-    if (!hx87_off && e != 0 && e != 0xff) {
+    if (likely(e != 0)) {
         r.low = (1ULL << 63) | ((uint64_t)(i & 0x7fffff) << 40);
         r.high = ((i >> 31) << 15) | (e - 127 + 16383);
-        return r;
-    }
-    if (!hx87_off && (i << 1) == 0) {
+    } else {
         r.low = 0;
         r.high = (i >> 31) << 15;
-        return r;
     }
-    return fx_exact_conv32(env, f);
+    return r;
 }
 
-static inline floatx80 helper_fdiv(CPUX86State *env, floatx80 a, floatx80 b)
+static inline floatx80 fx_from_i32(int32_t val)
+{
+    floatx80 r;
+    uint32_t neg;
+    uint32_t mag;
+    int lz;
+
+    if (val == 0) {
+        r.low = 0;
+        r.high = 0;
+        return r;
+    }
+    neg = (uint32_t)val >> 31;
+    mag = neg ? (0U - (uint32_t)val) : (uint32_t)val;
+    lz = __builtin_clz(mag);
+    r.low = (uint64_t)mag << (lz + 32);
+    r.high = (neg << 15) | (uint16_t)(16383 + 31 - lz);
+    return r;
+}
+
+static __attribute__((noinline, cold)) void
+fx_arith_slow(CPUX86State *env, int op, floatx80 *res,
+              const floatx80 *a, const floatx80 *b)
 {
     int old_flags = save_exception_flags(env);
-    floatx80 ret = fx_div(env, a, b);
+    floatx80 va = *a;
+    floatx80 vb = *b;
+
+    switch (op) {
+    case HX_ADD:
+        *res = floatx80_add(va, vb, &env->fp_status);
+        break;
+    case HX_SUB:
+        *res = floatx80_sub(va, vb, &env->fp_status);
+        break;
+    case HX_MUL:
+        *res = floatx80_mul(va, vb, &env->fp_status);
+        break;
+    default:
+        *res = floatx80_div(va, vb, &env->fp_status);
+        break;
+    }
     merge_exception_flags(env, old_flags);
-    return ret;
+}
+
+static inline void fx_arith_do(CPUX86State *env, int op, floatx80 *res,
+                               const floatx80 *a, const floatx80 *b)
+{
+    bool ok = (op == HX_DIV)
+        ? (fx_normal_or_zero(*a) && fx_normal(*b))
+        : (fx_normal_or_zero(*a) && fx_normal_or_zero(*b));
+
+    if (likely(ok && hx87_prepare(env))) {
+        switch (op) {
+        case HX_ADD:
+            asm volatile("fldt %[b]\n\tfldt %[a]\n\tfaddp %%st, %%st(1)\n\tfstpt %[r]"
+                         : [r] "=m"(*res) : [a] "m"(*a), [b] "m"(*b) : "st", "st(1)");
+            break;
+        case HX_SUB:
+            asm volatile("fldt %[b]\n\tfldt %[a]\n\tfsubp %%st, %%st(1)\n\tfstpt %[r]"
+                         : [r] "=m"(*res) : [a] "m"(*a), [b] "m"(*b) : "st", "st(1)");
+            break;
+        case HX_MUL:
+            asm volatile("fldt %[b]\n\tfldt %[a]\n\tfmulp %%st, %%st(1)\n\tfstpt %[r]"
+                         : [r] "=m"(*res) : [a] "m"(*a), [b] "m"(*b) : "st", "st(1)");
+            break;
+        default:
+            asm volatile("fldt %[b]\n\tfldt %[a]\n\tfdivp %%st, %%st(1)\n\tfstpt %[r]"
+                         : [r] "=m"(*res) : [a] "m"(*a), [b] "m"(*b) : "st", "st(1)");
+            break;
+        }
+        return;
+    }
+    fx_arith_slow(env, op, res, a, b);
+}
+
+static __attribute__((noinline, cold)) void
+fx_arith_m64_slow(CPUX86State *env, int op, uint64_t val)
+{
+    int old_flags = save_exception_flags(env);
+    union {
+        float64 f;
+        uint64_t i;
+    } u;
+    floatx80 b;
+    floatx80 *a = &ST0;
+
+    u.i = val;
+    b = fx_exact_conv64(env, u.f);
+    switch (op) {
+    case HX_ADD:
+        *a = floatx80_add(*a, b, &env->fp_status);
+        break;
+    case HX_SUB:
+        *a = floatx80_sub(*a, b, &env->fp_status);
+        break;
+    case HX_SUBR:
+        *a = floatx80_sub(b, *a, &env->fp_status);
+        break;
+    case HX_MUL:
+        *a = floatx80_mul(*a, b, &env->fp_status);
+        break;
+    case HX_DIV:
+        *a = floatx80_div(*a, b, &env->fp_status);
+        break;
+    default:
+        *a = floatx80_div(b, *a, &env->fp_status);
+        break;
+    }
+    merge_exception_flags(env, old_flags);
+}
+
+static inline void fx_arith_m64(CPUX86State *env, int op, uint64_t val)
+{
+    floatx80 *a = &ST0;
+    bool ok;
+
+    if (op == HX_DIV) {
+        ok = fx_normal_or_zero(*a) && fx_f64_normal(val);
+    } else if (op == HX_DIVR) {
+        ok = fx_normal(*a) && fx_f64_noz(val);
+    } else {
+        ok = fx_normal_or_zero(*a) && fx_f64_noz(val);
+    }
+
+    if (likely(ok && hx87_prepare(env))) {
+        switch (op) {
+        case HX_ADD:
+            asm volatile("fldt %[a]\n\tfaddl %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_SUB:
+            asm volatile("fldt %[a]\n\tfsubl %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_SUBR:
+            asm volatile("fldt %[a]\n\tfsubrl %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_MUL:
+            asm volatile("fldt %[a]\n\tfmull %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_DIV:
+            asm volatile("fldt %[a]\n\tfdivl %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        default:
+            asm volatile("fldt %[a]\n\tfdivrl %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        }
+        return;
+    }
+    fx_arith_m64_slow(env, op, val);
+}
+
+static __attribute__((noinline, cold)) void
+fx_arith_m32_slow(CPUX86State *env, int op, uint32_t val)
+{
+    int old_flags = save_exception_flags(env);
+    union {
+        float32 f;
+        uint32_t i;
+    } u;
+    floatx80 b;
+    floatx80 *a = &ST0;
+
+    u.i = val;
+    b = fx_exact_conv32(env, u.f);
+    switch (op) {
+    case HX_ADD:
+        *a = floatx80_add(*a, b, &env->fp_status);
+        break;
+    case HX_SUB:
+        *a = floatx80_sub(*a, b, &env->fp_status);
+        break;
+    case HX_SUBR:
+        *a = floatx80_sub(b, *a, &env->fp_status);
+        break;
+    case HX_MUL:
+        *a = floatx80_mul(*a, b, &env->fp_status);
+        break;
+    case HX_DIV:
+        *a = floatx80_div(*a, b, &env->fp_status);
+        break;
+    default:
+        *a = floatx80_div(b, *a, &env->fp_status);
+        break;
+    }
+    merge_exception_flags(env, old_flags);
+}
+
+static inline void fx_arith_m32(CPUX86State *env, int op, uint32_t val)
+{
+    floatx80 *a = &ST0;
+    bool ok;
+
+    if (op == HX_DIV) {
+        ok = fx_normal_or_zero(*a) && fx_f32_normal(val);
+    } else if (op == HX_DIVR) {
+        ok = fx_normal(*a) && fx_f32_noz(val);
+    } else {
+        ok = fx_normal_or_zero(*a) && fx_f32_noz(val);
+    }
+
+    if (likely(ok && hx87_prepare(env))) {
+        switch (op) {
+        case HX_ADD:
+            asm volatile("fldt %[a]\n\tfadds %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_SUB:
+            asm volatile("fldt %[a]\n\tfsubs %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_SUBR:
+            asm volatile("fldt %[a]\n\tfsubrs %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_MUL:
+            asm volatile("fldt %[a]\n\tfmuls %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        case HX_DIV:
+            asm volatile("fldt %[a]\n\tfdivs %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        default:
+            asm volatile("fldt %[a]\n\tfdivrs %[b]\n\tfstpt %[a]"
+                         : [a] "+m"(*a) : [b] "m"(val) : "st");
+            break;
+        }
+        return;
+    }
+    fx_arith_m32_slow(env, op, val);
+}
+
+static inline FloatRelation fx_cmp_noz_fast(floatx80 a, floatx80 b)
+{
+    uint16_t ae = a.high & 0x7fff;
+    uint16_t be = b.high & 0x7fff;
+    uint16_t as;
+    uint16_t bs;
+
+    if (ae == 0 && be == 0) {
+        return float_relation_equal;
+    }
+    as = a.high >> 15;
+    bs = b.high >> 15;
+    if (ae == 0) {
+        return bs ? float_relation_greater : float_relation_less;
+    }
+    if (be == 0) {
+        return as ? float_relation_less : float_relation_greater;
+    }
+    if (as != bs) {
+        return as ? float_relation_less : float_relation_greater;
+    }
+    if (ae != be) {
+        return ((ae > be) ^ as) ? float_relation_greater : float_relation_less;
+    }
+    if (a.low != b.low) {
+        return ((a.low > b.low) ^ as) ? float_relation_greater : float_relation_less;
+    }
+    return float_relation_equal;
 }
 
 static void fpu_raise_exception(CPUX86State *env, uintptr_t retaddr)
@@ -449,7 +699,8 @@ static void fpu_raise_exception(CPUX86State *env, uintptr_t retaddr)
 #endif
 }
 
-void HELPER(flds_FT0)(CPUX86State *env, uint32_t val)
+static __attribute__((noinline, cold)) void
+fx_flds_FT0_slow(CPUX86State *env, uint32_t val)
 {
     int old_flags = save_exception_flags(env);
     union {
@@ -458,60 +709,40 @@ void HELPER(flds_FT0)(CPUX86State *env, uint32_t val)
     } u;
 
     u.i = val;
-    FT0 = fx_ld32(env, u.i, u.f);
+    FT0 = fx_exact_conv32(env, u.f);
+    merge_exception_flags(env, old_flags);
+}
+
+void HELPER(flds_FT0)(CPUX86State *env, uint32_t val)
+{
+    if (likely(!hx87_off && fx_f32_noz(val))) {
+        FT0 = fx_ld32_noz(val);
+        return;
+    }
+    fx_flds_FT0_slow(env, val);
+}
+
+static __attribute__((noinline, cold)) void
+fx_fldl_FT0_slow(CPUX86State *env, uint64_t val)
+{
+    int old_flags = save_exception_flags(env);
+    union {
+        float64 f;
+        uint64_t i;
+    } u;
+
+    u.i = val;
+    FT0 = fx_exact_conv64(env, u.f);
     merge_exception_flags(env, old_flags);
 }
 
 void HELPER(fldl_FT0)(CPUX86State *env, uint64_t val)
 {
-    int old_flags = save_exception_flags(env);
-    union {
-        float64 f;
-        uint64_t i;
-    } u;
-
-    u.i = val;
-    FT0 = fx_ld64(env, u.i, u.f);
-    merge_exception_flags(env, old_flags);
-}
-
-void HELPER(fildl_FT0)(CPUX86State *env, int32_t val)
-{
-    FT0 = int32_to_floatx80(val, &env->fp_status);
-}
-
-void HELPER(flds_ST0)(CPUX86State *env, uint32_t val)
-{
-    int old_flags = save_exception_flags(env);
-    int new_fpstt;
-    union {
-        float32 f;
-        uint32_t i;
-    } u;
-
-    new_fpstt = (env->fpstt - 1) & 7;
-    u.i = val;
-    env->fpregs[new_fpstt].d = fx_ld32(env, u.i, u.f);
-    env->fpstt = new_fpstt;
-    env->fptags[new_fpstt] = 0; /* validate stack entry */
-    merge_exception_flags(env, old_flags);
-}
-
-void HELPER(fldl_ST0)(CPUX86State *env, uint64_t val)
-{
-    int old_flags = save_exception_flags(env);
-    int new_fpstt;
-    union {
-        float64 f;
-        uint64_t i;
-    } u;
-
-    new_fpstt = (env->fpstt - 1) & 7;
-    u.i = val;
-    env->fpregs[new_fpstt].d = fx_ld64(env, u.i, u.f);
-    env->fpstt = new_fpstt;
-    env->fptags[new_fpstt] = 0; /* validate stack entry */
-    merge_exception_flags(env, old_flags);
+    if (likely(!hx87_off && fx_f64_noz(val))) {
+        FT0 = fx_ld64_noz(val);
+        return;
+    }
+    fx_fldl_FT0_slow(env, val);
 }
 
 static FloatX80RoundPrec tmp_maximise_precision(float_status *st)
@@ -521,12 +752,87 @@ static FloatX80RoundPrec tmp_maximise_precision(float_status *st)
     return old;
 }
 
+void HELPER(fildl_FT0)(CPUX86State *env, int32_t val)
+{
+    if (likely(!hx87_off)) {
+        FT0 = fx_from_i32(val);
+        return;
+    }
+    FloatX80RoundPrec old = tmp_maximise_precision(&env->fp_status);
+    FT0 = int32_to_floatx80(val, &env->fp_status);
+    set_floatx80_rounding_precision(old, &env->fp_status);
+}
+
+static __attribute__((noinline, cold)) void
+fx_flds_ST0_slow(CPUX86State *env, uint32_t val)
+{
+    int old_flags = save_exception_flags(env);
+    int new_fpstt = (env->fpstt - 1) & 7;
+    union {
+        float32 f;
+        uint32_t i;
+    } u;
+
+    u.i = val;
+    env->fpregs[new_fpstt].d = fx_exact_conv32(env, u.f);
+    env->fpstt = new_fpstt;
+    env->fptags[new_fpstt] = 0; /* validate stack entry */
+    merge_exception_flags(env, old_flags);
+}
+
+void HELPER(flds_ST0)(CPUX86State *env, uint32_t val)
+{
+    if (likely(!hx87_off && fx_f32_noz(val))) {
+        int new_fpstt = (env->fpstt - 1) & 7;
+        env->fpregs[new_fpstt].d = fx_ld32_noz(val);
+        env->fpstt = new_fpstt;
+        env->fptags[new_fpstt] = 0; /* validate stack entry */
+        return;
+    }
+    fx_flds_ST0_slow(env, val);
+}
+
+static __attribute__((noinline, cold)) void
+fx_fldl_ST0_slow(CPUX86State *env, uint64_t val)
+{
+    int old_flags = save_exception_flags(env);
+    int new_fpstt = (env->fpstt - 1) & 7;
+    union {
+        float64 f;
+        uint64_t i;
+    } u;
+
+    u.i = val;
+    env->fpregs[new_fpstt].d = fx_exact_conv64(env, u.f);
+    env->fpstt = new_fpstt;
+    env->fptags[new_fpstt] = 0; /* validate stack entry */
+    merge_exception_flags(env, old_flags);
+}
+
+void HELPER(fldl_ST0)(CPUX86State *env, uint64_t val)
+{
+    if (likely(!hx87_off && fx_f64_noz(val))) {
+        int new_fpstt = (env->fpstt - 1) & 7;
+        env->fpregs[new_fpstt].d = fx_ld64_noz(val);
+        env->fpstt = new_fpstt;
+        env->fptags[new_fpstt] = 0; /* validate stack entry */
+        return;
+    }
+    fx_fldl_ST0_slow(env, val);
+}
+
 void HELPER(fildl_ST0)(CPUX86State *env, int32_t val)
 {
-    int new_fpstt;
+    int new_fpstt = (env->fpstt - 1) & 7;
+
+    if (likely(!hx87_off)) {
+        env->fpregs[new_fpstt].d = fx_from_i32(val);
+        env->fpstt = new_fpstt;
+        env->fptags[new_fpstt] = 0; /* validate stack entry */
+        return;
+    }
     FloatX80RoundPrec old = tmp_maximise_precision(&env->fp_status);
 
-    new_fpstt = (env->fpstt - 1) & 7;
     env->fpregs[new_fpstt].d = int32_to_floatx80(val, &env->fp_status);
     env->fpstt = new_fpstt;
     env->fptags[new_fpstt] = 0; /* validate stack entry */
@@ -547,7 +853,8 @@ void HELPER(fildll_ST0)(CPUX86State *env, int64_t val)
     set_floatx80_rounding_precision(old, &env->fp_status);
 }
 
-uint32_t HELPER(fsts_ST0)(CPUX86State *env)
+static __attribute__((noinline, cold)) uint32_t
+fx_store32_slow(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
     union {
@@ -560,7 +867,29 @@ uint32_t HELPER(fsts_ST0)(CPUX86State *env)
     return u.i;
 }
 
-uint64_t HELPER(fstl_ST0)(CPUX86State *env)
+uint32_t HELPER(fsts_ST0)(CPUX86State *env)
+{
+    const floatx80 *p = &ST0;
+    uint16_t e = p->high & 0x7fff;
+
+    if (likely(!hx87_off)) {
+        /* Unbiased exponent in [-126, 126]: normal float32, no overflow/underflow possible */
+        if (likely((uint32_t)(e - 16257) <= (16509 - 16257) &&
+                   (p->low >> 63) && hx87_prepare(env))) {
+            uint32_t r;
+            asm volatile("fldt %[a]\n\tfstps %[r]"
+                         : [r] "=m"(r) : [a] "m"(*p) : "st");
+            return r;
+        }
+        if (e == 0 && p->low == 0) {
+            return (uint32_t)(p->high & 0x8000) << 16;
+        }
+    }
+    return fx_store32_slow(env);
+}
+
+static __attribute__((noinline, cold)) uint64_t
+fx_store64_slow(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
     union {
@@ -571,6 +900,27 @@ uint64_t HELPER(fstl_ST0)(CPUX86State *env)
     u.f = floatx80_to_float64(ST0, &env->fp_status);
     merge_exception_flags(env, old_flags);
     return u.i;
+}
+
+uint64_t HELPER(fstl_ST0)(CPUX86State *env)
+{
+    const floatx80 *p = &ST0;
+    uint16_t e = p->high & 0x7fff;
+
+    if (likely(!hx87_off)) {
+        /* Unbiased exponent in [-1022, 1022]: normal float64, no overflow/underflow possible */
+        if (likely((uint32_t)(e - 15361) <= (17405 - 15361) &&
+                   (p->low >> 63) && hx87_prepare(env))) {
+            uint64_t r;
+            asm volatile("fldt %[a]\n\tfstpl %[r]"
+                         : [r] "=m"(r) : [a] "m"(*p) : "st");
+            return r;
+        }
+        if (e == 0 && p->low == 0) {
+            return (uint64_t)(p->high & 0x8000) << 48;
+        }
+    }
+    return fx_store64_slow(env);
 }
 
 int32_t HELPER(fist_ST0)(CPUX86State *env)
@@ -742,137 +1092,328 @@ void HELPER(fxchg_ST0_STN)(CPUX86State *env, int st_index)
 /* FPU operations */
 
 static const int fcom_ccval[4] = {0x0100, 0x4000, 0x0000, 0x4500};
+static const int fcomi_ccval[4] = {CC_C, CC_Z, 0, CC_Z | CC_P | CC_C};
 
-void HELPER(fcom_ST0_FT0)(CPUX86State *env)
+static __attribute__((noinline, cold)) void
+fx_fcom_slow(CPUX86State *env, floatx80 a, floatx80 b, bool quiet)
 {
     int old_flags = save_exception_flags(env);
-    FloatRelation ret;
+    FloatRelation ret = quiet ? floatx80_compare_quiet(a, b, &env->fp_status)
+                              : floatx80_compare(a, b, &env->fp_status);
 
-    ret = floatx80_compare(ST0, FT0, &env->fp_status);
     /* C1 is unconditionally cleared to 0 */
     env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
     merge_exception_flags(env, old_flags);
+}
+
+static __attribute__((noinline, cold)) void
+fx_fcomi_slow(CPUX86State *env, floatx80 a, floatx80 b, bool quiet)
+{
+    int old_flags = save_exception_flags(env);
+    FloatRelation ret = quiet ? floatx80_compare_quiet(a, b, &env->fp_status)
+                              : floatx80_compare(a, b, &env->fp_status);
+
+    /* OF, SF, and AF are unconditionally cleared to 0 */
+    CC_SRC = fcomi_ccval[ret + 1];
+    CC_OP = CC_OP_EFLAGS;
+    merge_exception_flags(env, old_flags);
+}
+
+static inline void fx_fcom_do(CPUX86State *env, floatx80 a, floatx80 b, bool quiet)
+{
+    if (likely(!hx87_off && fx_normal_or_zero(a) && fx_normal_or_zero(b))) {
+        FloatRelation ret = fx_cmp_noz_fast(a, b);
+        env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
+        return;
+    }
+    fx_fcom_slow(env, a, b, quiet);
+}
+
+static inline void fx_fcomi_do(CPUX86State *env, floatx80 a, floatx80 b, bool quiet)
+{
+    if (likely(!hx87_off && fx_normal_or_zero(a) && fx_normal_or_zero(b))) {
+        FloatRelation ret = fx_cmp_noz_fast(a, b);
+        CC_SRC = fcomi_ccval[ret + 1];
+        CC_OP = CC_OP_EFLAGS;
+        return;
+    }
+    fx_fcomi_slow(env, a, b, quiet);
+}
+
+void HELPER(fcom_ST0_FT0)(CPUX86State *env)
+{
+    fx_fcom_do(env, ST0, FT0, false);
 }
 
 void HELPER(fucom_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    FloatRelation ret;
-
-    ret = floatx80_compare_quiet(ST0, FT0, &env->fp_status);
-    /* C1 is unconditionally cleared to 0 */
-    env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
-    merge_exception_flags(env, old_flags);
+    fx_fcom_do(env, ST0, FT0, true);
 }
-
-static const int fcomi_ccval[4] = {CC_C, CC_Z, 0, CC_Z | CC_P | CC_C};
 
 void HELPER(fcomi_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    FloatRelation ret;
-
-    ret = floatx80_compare(ST0, FT0, &env->fp_status);
-    /* OF, SF, and AF are unconditionally cleared to 0 */
-    CC_SRC = fcomi_ccval[ret + 1];
-    CC_OP = CC_OP_EFLAGS;
-    merge_exception_flags(env, old_flags);
+    fx_fcomi_do(env, ST0, FT0, false);
 }
 
 void HELPER(fucomi_ST0_FT0)(CPUX86State *env)
 {
+    fx_fcomi_do(env, ST0, FT0, true);
+}
+
+void HELPER(fcom_ST0_STN)(CPUX86State *env, int st_index)
+{
+    fx_fcom_do(env, ST0, ST(st_index), false);
+}
+
+void HELPER(fucom_ST0_STN)(CPUX86State *env, int st_index)
+{
+    fx_fcom_do(env, ST0, ST(st_index), true);
+}
+
+void HELPER(fcomi_ST0_STN)(CPUX86State *env, int st_index)
+{
+    fx_fcomi_do(env, ST0, ST(st_index), false);
+}
+
+void HELPER(fucomi_ST0_STN)(CPUX86State *env, int st_index)
+{
+    fx_fcomi_do(env, ST0, ST(st_index), true);
+}
+
+static __attribute__((noinline, cold)) void
+fx_fcoms_slow(CPUX86State *env, uint32_t val)
+{
     int old_flags = save_exception_flags(env);
+    union {
+        float32 f;
+        uint32_t i;
+    } u;
+    floatx80 b;
     FloatRelation ret;
 
-    ret = floatx80_compare_quiet(ST0, FT0, &env->fp_status);
-    /* OF, SF, and AF are unconditionally cleared to 0 */
-    CC_SRC = fcomi_ccval[ret + 1];
-    CC_OP = CC_OP_EFLAGS;
+    u.i = val;
+    b = fx_exact_conv32(env, u.f);
+    ret = floatx80_compare(ST0, b, &env->fp_status);
+    env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
     merge_exception_flags(env, old_flags);
+}
+
+void HELPER(fcoms_ST0)(CPUX86State *env, uint32_t val)
+{
+    floatx80 a = ST0;
+
+    if (likely(!hx87_off && fx_normal_or_zero(a) && fx_f32_noz(val))) {
+        FloatRelation ret = fx_cmp_noz_fast(a, fx_ld32_noz(val));
+        env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
+        return;
+    }
+    fx_fcoms_slow(env, val);
+}
+
+static __attribute__((noinline, cold)) void
+fx_fcoml_slow(CPUX86State *env, uint64_t val)
+{
+    int old_flags = save_exception_flags(env);
+    union {
+        float64 f;
+        uint64_t i;
+    } u;
+    floatx80 b;
+    FloatRelation ret;
+
+    u.i = val;
+    b = fx_exact_conv64(env, u.f);
+    ret = floatx80_compare(ST0, b, &env->fp_status);
+    env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
+    merge_exception_flags(env, old_flags);
+}
+
+void HELPER(fcoml_ST0)(CPUX86State *env, uint64_t val)
+{
+    floatx80 a = ST0;
+
+    if (likely(!hx87_off && fx_normal_or_zero(a) && fx_f64_noz(val))) {
+        FloatRelation ret = fx_cmp_noz_fast(a, fx_ld64_noz(val));
+        env->fpus = (env->fpus & ~0x4700) | fcom_ccval[ret + 1];
+        return;
+    }
+    fx_fcoml_slow(env, val);
 }
 
 void HELPER(fadd_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    ST0 = fx_add(env, ST0, FT0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_ADD, p, p, &FT0);
 }
 
 void HELPER(fmul_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    ST0 = fx_mul(env, ST0, FT0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_MUL, p, p, &FT0);
 }
 
 void HELPER(fsub_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    ST0 = fx_sub(env, ST0, FT0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_SUB, p, p, &FT0);
 }
 
 void HELPER(fsubr_ST0_FT0)(CPUX86State *env)
 {
-    int old_flags = save_exception_flags(env);
-    ST0 = fx_sub(env, FT0, ST0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_SUB, p, &FT0, p);
 }
 
 void HELPER(fdiv_ST0_FT0)(CPUX86State *env)
 {
-    ST0 = helper_fdiv(env, ST0, FT0);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_DIV, p, p, &FT0);
 }
 
 void HELPER(fdivr_ST0_FT0)(CPUX86State *env)
 {
-    ST0 = helper_fdiv(env, FT0, ST0);
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_DIV, p, &FT0, p);
+}
+
+/* fused fp operations between ST0 and STN */
+
+void HELPER(fadd_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_ADD, p, p, &ST(st_index));
+}
+
+void HELPER(fmul_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_MUL, p, p, &ST(st_index));
+}
+
+void HELPER(fsub_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_SUB, p, p, &ST(st_index));
+}
+
+void HELPER(fsubr_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_SUB, p, &ST(st_index), p);
+}
+
+void HELPER(fdiv_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_DIV, p, p, &ST(st_index));
+}
+
+void HELPER(fdivr_ST0_STN)(CPUX86State *env, int st_index)
+{
+    floatx80 *p = &ST0;
+    fx_arith_do(env, HX_DIV, p, &ST(st_index), p);
+}
+
+/* fused fp operations between ST0 and float32 memory operand */
+
+void HELPER(fadds_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_ADD, val);
+}
+
+void HELPER(fmuls_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_MUL, val);
+}
+
+void HELPER(fsubs_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_SUB, val);
+}
+
+void HELPER(fsubrs_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_SUBR, val);
+}
+
+void HELPER(fdivs_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_DIV, val);
+}
+
+void HELPER(fdivrs_ST0)(CPUX86State *env, uint32_t val)
+{
+    fx_arith_m32(env, HX_DIVR, val);
+}
+
+/* fused fp operations between ST0 and float64 memory operand */
+
+void HELPER(faddl_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_ADD, val);
+}
+
+void HELPER(fmull_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_MUL, val);
+}
+
+void HELPER(fsubl_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_SUB, val);
+}
+
+void HELPER(fsubrl_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_SUBR, val);
+}
+
+void HELPER(fdivl_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_DIV, val);
+}
+
+void HELPER(fdivrl_ST0)(CPUX86State *env, uint64_t val)
+{
+    fx_arith_m64(env, HX_DIVR, val);
 }
 
 /* fp operations between STN and ST0 */
 
 void HELPER(fadd_STN_ST0)(CPUX86State *env, int st_index)
 {
-    int old_flags = save_exception_flags(env);
-    ST(st_index) = fx_add(env, ST(st_index), ST0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_ADD, p, p, &ST0);
 }
 
 void HELPER(fmul_STN_ST0)(CPUX86State *env, int st_index)
 {
-    int old_flags = save_exception_flags(env);
-    ST(st_index) = fx_mul(env, ST(st_index), ST0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_MUL, p, p, &ST0);
 }
 
 void HELPER(fsub_STN_ST0)(CPUX86State *env, int st_index)
 {
-    int old_flags = save_exception_flags(env);
-    ST(st_index) = fx_sub(env, ST(st_index), ST0);
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_SUB, p, p, &ST0);
 }
 
 void HELPER(fsubr_STN_ST0)(CPUX86State *env, int st_index)
 {
-    int old_flags = save_exception_flags(env);
-    ST(st_index) = fx_sub(env, ST0, ST(st_index));
-    merge_exception_flags(env, old_flags);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_SUB, p, &ST0, p);
 }
 
 void HELPER(fdiv_STN_ST0)(CPUX86State *env, int st_index)
 {
-    floatx80 *p;
-
-    p = &ST(st_index);
-    *p = helper_fdiv(env, *p, ST0);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_DIV, p, p, &ST0);
 }
 
 void HELPER(fdivr_STN_ST0)(CPUX86State *env, int st_index)
 {
-    floatx80 *p;
-
-    p = &ST(st_index);
-    *p = helper_fdiv(env, ST0, *p);
+    floatx80 *p = &ST(st_index);
+    fx_arith_do(env, HX_DIV, p, &ST0, p);
 }
 
 /* misc FPU operations */
@@ -967,6 +1508,7 @@ void HELPER(fldz_FT0)(CPUX86State *env)
 
 uint32_t HELPER(fnstsw)(CPUX86State *env)
 {
+    x86_hx87_sync_sw(env);
     return (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
 }
 
@@ -1013,6 +1555,7 @@ void update_fp_status(CPUX86State *env)
 
 void HELPER(fldcw)(CPUX86State *env, uint32_t val)
 {
+    x86_hx87_sync_sw(env);
     cpu_set_fpuc(env, val);
 }
 
@@ -1024,6 +1567,7 @@ void HELPER(fclex)(CPUX86State *env)
 
 void HELPER(fwait)(CPUX86State *env)
 {
+    x86_hx87_sync_sw(env);
     if (env->fpus & FPUS_SE) {
         fpu_raise_exception(env, GETPC());
     }
@@ -2524,15 +3068,32 @@ void HELPER(fyl2x)(CPUX86State *env)
     merge_exception_flags(env, old_flags);
 }
 
-void HELPER(fsqrt)(CPUX86State *env)
+static __attribute__((noinline, cold)) void fx_sqrt_slow(CPUX86State *env)
 {
     int old_flags = save_exception_flags(env);
     if (floatx80_is_neg(ST0)) {
         env->fpus &= ~0x4700;  /* (C3,C2,C1,C0) <-- 0000 */
         env->fpus |= 0x400;
     }
-    ST0 = fx_sqrt(env, ST0);
+    ST0 = floatx80_sqrt(ST0, &env->fp_status);
     merge_exception_flags(env, old_flags);
+}
+
+void HELPER(fsqrt)(CPUX86State *env)
+{
+    floatx80 *p = &ST0;
+
+    if (likely(!hx87_off)) {
+        if (likely(fx_normal(*p) && !(p->high & 0x8000) && hx87_prepare(env))) {
+            asm volatile("fldt %[a]\n\tfsqrt\n\tfstpt %[a]"
+                         : [a] "+m"(*p) : : "st");
+            return;
+        }
+        if (p->high == 0 && p->low == 0) {
+            return;
+        }
+    }
+    fx_sqrt_slow(env);
 }
 
 void HELPER(fsincos)(CPUX86State *env)
@@ -2676,6 +3237,7 @@ static void do_fstenv(X86Access *ac, target_ulong ptr, int data32)
     uint64_t mant;
     CPU_LDoubleU tmp;
 
+    x86_hx87_sync_sw(env);
     fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
     fptag = 0;
     for (i = 7; i >= 0; i--) {
@@ -2825,6 +3387,7 @@ static void do_xsave_fpu(X86Access *ac, target_ulong ptr)
     int fpus, fptag, i;
     target_ulong addr;
 
+    x86_hx87_sync_sw(env);
     fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
     fptag = 0;
     for (i = 0; i < 8; i++) {
