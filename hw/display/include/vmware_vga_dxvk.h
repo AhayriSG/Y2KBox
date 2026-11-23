@@ -635,7 +635,7 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
     VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size);
 bool vmsvga3d_dxvk_surface_flush_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
-    const void *data, uint32_t data_size);
+    const void *data, uint32_t data_size, bool discard_full_range);
 bool vmsvga3d_dxvk_d3d9_legacy_present_copy(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *source,
     uint32_t source_level, uint32_t width, uint32_t height, uint32_t format,
