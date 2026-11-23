@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 85–94).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 86–95).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 85 — Model-specific local build authorization
-- Added standing owner authorization for Gemini 4 Neon to run ordinary local QEMU configure/build and relevant standard functional checks while validating its own changes.
-- Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Benchmarking/A-B authorization was still restricted at the time of this session.
-- GitHub Actions remains authoritative; local results must report exact commands/configuration and remain distinct from CI status. Updated shared agent guidance, Gemini entrypoint, handoff, task workflow, and worklog/index. No build, benchmark, or CI polling was performed.
-
 
 ## Current investigation / next actions
 
@@ -99,3 +93,9 @@
 - Scoped CI/Codacy status-hook reporting to Claude; other agents leave post-push review to the owner or a later session and do not poll.
 - Replaced obsolete fetch/rebase advice with per-write verification of latest `main` HEAD and exact target blob SHA; clarified Gemini 4 Neon-only standing local build/benchmark authorization.
 - Updated the worklog index; historical worklog entries remain append-only. Documentation-only; no builds, tests, benchmarks, guest validation, or CI polling.
+
+ 
+### Session 95 — Fix optional GitHub token handling in CI status helper
+- Corrected `scripts/session_status.sh` to pass an existing `GITHUB_TOKEN` or `GH_TOKEN` as one properly quoted Authorization header argument to `curl`.
+- No change to sandbox GitHub authentication, token setup, permissions, or GitHub Actions; this only improves Claude's optional CI-status API requests.
+- Static review only; no token was read/displayed, no authenticated request or CI polling was performed, and no QEMU build/test was run.
