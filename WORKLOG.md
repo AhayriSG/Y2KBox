@@ -1559,3 +1559,13 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 
 
 - CI follow-up: the first instrumentation commit omitted the two local `QemuPerfStat` declarations in `vmsvga3d_dxvk_surface_upload_buffer_range()`; both Linux and Windows correctly rejected the same compile error. Added `lock_flags_stat` and `lock_size_stat` beside the existing lock-stat declarations in commit `d2f2f61`. This is a compile-only correction; no behavior or counter semantics changed. Owner should rerun both CI jobs. No local build or CI polling was performed (HANDOFF section 7).
+
+
+## Session 74 - Close FlatView scene-transition task; analyze F1 Lock profile
+
+- Owner reports both Linux and Windows CI passed on main at source commit `36a12e7e5d9d6d309873e0520a5e05f86e3224a5`. This closes the CI gate for the ordered-tree FlatView renderer and the original T13e multi-second scene-transition stall. Updated T13e to DONE; retained the residual F1 crowded-grid work as the separate P0 T13e-F1 task. The reported three-game validation remains owner-reported; CI is build validation, not a substitute for gameplay testing.
+- Owner supplied a 23.526 s F1 Challenge '99-'02 performance capture. Buffer Lock: 38,026 calls / 1.196517 s total; partial-range: 35,802 / 1.168472 s; full-range: 2,224 / 28.529 ms. Copy: 38.072 ms; unlock: 11.939 ms.
+- Lock request-size distribution: <=4 KiB 32,517 calls / 927.045 ms; >4 KiB to 64 KiB 5,320 / 264.498 ms; >64 KiB to 256 KiB 185 / 0.667 ms; >256 KiB four / 0.011 ms. Flags-zero partial-range Locks account for 1.163806 s; DISCARD full-range Locks account for 28.196 ms. The flag and size categories overlap aggregate counters and must not be summed. No individual Lock exceeded 1 ms; the aggregate cost is call-volume driven, especially small partial-range Locks.
+- Deferred update/flush counts: 35,806/35,806, zero merges; 35,805 flushes were draw-consumption flushes, with zero eviction/replacement flushes. This reinforces that the guest update/draw interleaving leaves no natural deferred-merge window. Do not delay guest-visible updates or broaden batching.
+- `dxvk.upload_buffer_flush_draw.total_us=22.744288 s` is a cadence/interval measurement from `qemu_perf_stats_mark()`, not time spent executing flushes. No controlled A/B improvement or visual/gameplay validation is implied by this capture.
+- Next: investigate per-update D3D9 Lock synchronization using the same repeatable dry Albert Park workload. Preserve immediate pre-draw ordering and existing lock-mode safety; do not introduce NOOVERWRITE, manual ring offsets, or delayed batching without explicit in-flight lifetime/range tracking. No local build or CI polling was performed by ChatGPT.
