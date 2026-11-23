@@ -50,7 +50,7 @@ Documentation-only commits that change only `.md` files intentionally skip the
 Linux and Windows jobs entirely, so those runs produce no binaries or artifacts.
 Any non-Markdown change and manual workflow dispatch run the full build and artifact
 pipeline. Open the [latest successful build run](https://github.com/AhayriSG/Y2KBox/actions/workflows/build.yml)
-and download the artifact for your platform:
+and choose the latest successful run where the Linux and Windows jobs completed (a Markdown-only run shows those jobs as skipped), then download the artifact for your platform:
 
 - Linux: `qemu-system-i386`, `qemu-img`, `pc-bios/`, and bundled `dxvk-native`
   3.1.1 `.so.0` libraries for SVGA3D.
