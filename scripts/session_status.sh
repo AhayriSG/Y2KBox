@@ -18,12 +18,11 @@ GH_T="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 if [ -z "$GH_T" ] && command -v gh >/dev/null 2>&1; then GH_T=$(gh auth token 2>/dev/null || true); fi
 
 gh_api() {
-  local -a auth_args=()
+  local -a headers=(-H "Accept: application/vnd.github+json")
   if [ -n "$GH_T" ]; then
-    auth_args=(-H "Authorization: Bearer $GH_T")
+    headers+=(-H "Authorization: Bearer $GH_T")
   fi
-  curl -s --max-time 8 -H "Accept: application/vnd.github+json" \
-    "${auth_args[@]}" \
+  curl -s --max-time 8 "${headers[@]}" \
     "https://api.github.com/repos/${REPO}/$1"
 }
 
