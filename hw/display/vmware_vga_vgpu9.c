@@ -3741,8 +3741,8 @@ static bool vmsvga3d_dxvk_materialize_buffer(
     /* The overwhelmingly common draw path already has the requested native
      * D3D9 buffer resident.  Check that directly before walking the D3D11
      * handoff, CPU shadow, resource-plan and materialization machinery.
-     * Resident buffer writes are uploaded in place; CPU-only fallback writes
-     * evict the resource, so a compatible resident buffer is authoritative. */
+     * Guest updates are coalesced in the CPU shadow and flushed on demand;
+     * CPU-only fallback writes evict the resource. */
     if (vmsvga3d_dxvk_d3d9_buffer_compatible(
             surface->dxvk_surface, index_buffer,
             (uint32_t)surface->storage_bytes, native_format)) {
