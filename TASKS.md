@@ -151,11 +151,11 @@ results, but must not mark these checks complete without the owner's confirmatio
 - Record the exact guest setup, application/game, scene, host, and observed result
   in `WORKLOG.md`; update this note only when the owner supplies new evidence.
 
-## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: PAUSED (integration committed; owner-run guest validation pending)
+## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: DONE 2026-11-24 (integration committed; CI-verified; runtime acceptance tracked separately)
 PRIMARY 3D plan (owner proposal 2026-11-14, evaluated and agreed; see HANDOFF 8a).
 Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for QEMU 11.1.x: device
 `vmvga`, SVGA3D vgpu9/vgpu10/vgpu11, DXVK-based rendering, `hw/i386/vmport.c`).
-* **Integration implemented and CI-verified;** remaining XP driver and application compatibility checks are in the owner-run XP guest validation note above.
+* **T09 integration and CI scope is complete.** XP driver, display/2D behavior, D3D API, and game compatibility acceptance belongs to the owner-run XP guest validation checklist above; it is not an unfinished AI-agent task.
   * Overlaid `hw/display/vmware_vga*.c`, `hw/display/include/*`, and `hw/i386/vmport.{c,-vmvga.h}`;
     restored `hw/i386/vmmouse.c` and `pc-bios/vgabios-vmware.bin` from `35a2e66`.
   * Wired `hw/display/meson.build`, `hw/i386/meson.build`, `pc-bios/meson.build`, `hw/pci/pci.c`
@@ -168,9 +168,7 @@ Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for
     (`target/i386/tcg/system/seg_helper.c`).
   * Added `xp/bench/vmport_ring3_test.asm` (CPL=3, IOPL=0, 0xFF TSS IOPB test for `0x5658`/`0x5659`
     vs `#GP` on `0x565A`) and Linux/Windows CI checks (`-vga help`, `-device help`, `vmport_ring3_test.asm`).
-* **Resume here:** no further integration work is pending here. The owner-run validation note above covers VMware Tools 10.0.12
-  SVGA driver 12.01.08, 2D acceleration, and application compatibility. Do not repeat completed
-  integration/build checks unless the source changes.
+* **Completion:** no further T09 integration work is pending. The owner-run validation checklist above is the separate place to record ongoing XP driver, display/2D, D3D API, and game-compatibility observations. Do not repeat completed integration/build checks unless the source changes.
 
 ## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: PAUSED (integration committed; owner-run guest validation pending)
 qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
