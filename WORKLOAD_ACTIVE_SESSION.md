@@ -12,7 +12,7 @@
 ## Current project state and working constraints
 
 - Repository: [AhayriSG/Y2KBox](https://github.com/AhayriSG/Y2KBox), `main`.
-- Latest repository HEAD observed while preparing this summary: `b1bdf5bf0967203661915f946f8a52610b9d59dd` — Session 80 implementation commit, dated 2026-11-23.
+- This summary can lag behind `main`; verify the current branch HEAD and task status before making changes.
 - Y2KBox targets 32-bit Windows XP. Linux product runtime is KVM-only; Windows product runtime is TCG-only. Performance optimization work targets Windows TCG.
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
 - Keep the owner-approved guest/device constraints in `HANDOFF.md`; do not infer that a standalone test or green CI proves in-game correctness.
