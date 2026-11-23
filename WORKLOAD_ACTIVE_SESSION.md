@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 83–92).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 84–93).
 
 ## How to use this file
 
@@ -20,11 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 83 — Consolidate agent guidance and repair project continuity docs
-- Made `AGENTS.md` the canonical shared policy for Claude, Gemini, Codex, and other agents; reduced `CLAUDE.md` to Claude hooks/secrets and added a short `GEMINI.md` entrypoint.
-- Tightened onboarding to read HANDOFF sections 0-3, the task overview plus only the selected task, the active summary, and the worklog index. Historical details remain available on demand.
-- Aligned documentation with the job-level Markdown-only CI skip introduced in `8ab36ee`, corrected XP boot status, single-machine state, frontend direction, artifact guidance, and several task statuses. Condensed the T13 task entry from about 20 KB to 4 KB by moving detailed historical evidence back to the indexed worklog. No QEMU source changed and no local QEMU build was run.
 
 ### Session 84 — Clarify cross-agent handoff and human validation
 - Confirmed Claude, Gemini, Codex, and other agents use the same durable repo state through `AGENTS.md`, task status, handoff, active summary, and worklog. Sequential agent/provider switching is the normal owner workflow; agents do not share private runtime memory.
@@ -98,3 +93,8 @@
 - VMware Tools/driver, 2D/display, D3D API, and game compatibility checks remain in the separate owner-run XP guest validation checklist, not as unfinished agent work.
 - HANDOFF wording now distinguishes completed T09 integration from ongoing human acceptance. T10 remains separately paused for its own validation scope.
 - Documentation-only update; no source changes, local build, benchmark, guest test, or CI polling.
+
+### Session 93 — Move QEMU base and license provenance into the README FAQ
+- Removed the upstream QEMU base/version and GPL-2.0 notice from the Fixed target area.
+- Added a dedicated FAQ answer identifying upstream QEMU 11.1.90, linking the exact base commit, and noting the unchanged GPL-2.0 license with `COPYING` and `LICENSE` references.
+- Documentation-only; no build, benchmark, functional test, or CI polling.
