@@ -2723,7 +2723,8 @@ static void vmsvga3d_renderer_surface_renderer_set(
              * Flush pending guest ranges first so the buffer Lock serializes
              * any earlier draws before the resource is released.
              */
-            if (!vmsvga3d_dxvk_surface_flush_buffer_range(
+            if (vmsvga3d_dxvk_ready(s->dxvk) &&
+                !vmsvga3d_dxvk_surface_flush_buffer_range(
                     s->dxvk, surface->dxvk_surface,
                     surface->mip_count == 1 && surface->mips != NULL
                         ? surface->mips[0].data : NULL,
