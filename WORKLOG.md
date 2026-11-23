@@ -1941,3 +1941,10 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Inspected the latest uploaded 865,891-byte Y2KBox diagnostic log (17,860 lines). It contains SVGA activity but no game WGL/PFD records; it cannot explain the Call of Duty 1 pixel-format rejection. T25 now explicitly requires an XP-side WGL probe or game API instrumentation, including all PFD attributes, generic-vs-ICD classification, SetPixelFormat/context creation, and GL vendor/renderer/version.
 - Research confirms Mesa's documented SVGA guest stack is Linux-specific (vmwgfx, libdrm, Gallium) and can provide OpenGL 2.1 when newer GL support is unavailable. Historical VMware Workstation 6 documentation says XP OpenGL ran in software emulation; this is not evidence of the exact VMware Tools 10.0.12 behavior.
 - Presented proposed README Fixed target wording to the owner and left README.md unchanged pending approval. No emulator source changes, diagnostic utility, local build, benchmark, guest test, or CI polling was performed.
+
+## Session 101 — Clarify the guest OpenGL target in the README
+
+- Updated README's Fixed target section to describe the guest graphics target as Direct3D 9.0c / Shader Model 3.0 plus an OpenGL 1.1 baseline and OpenGL 2.1 maximum.
+- Explicitly marked guest OpenGL as under investigation and not currently implemented, and excluded OpenGL versions newer than 2.1 from the target.
+- The OpenGL investigation remains scoped to establishing a complete OpenGL 2.1 implementation, including compatibility with older OpenGL 1.x applications; the WGL pixel-format failure still needs XP-side diagnosis before context creation.
+- Documentation-only. No emulator source changes, diagnostic utility, local build, benchmark, guest test, or CI polling was performed.
