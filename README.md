@@ -143,11 +143,35 @@ defeats interval capture.
 - **Networking and retro web browsing:** The standard launch profile uses `-netdev user,id=net0 -device virtio-net-pci,netdev=net0`. Windows XP needs the XP x86 **NetKVM** driver from `virtio-win-0.1.141_x86.vfd`; install it in the guest before relying on VirtIO networking. RTL8139 remains available as an independent fallback with `-nic user,model=rtl8139` and uses XP's in-box driver. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
 - **CD-ROM and CD images (BIN/CUE):** The emulated CD-ROM stays on the PIIX IDE controller by default (`-drive id=cdrom,if=ide,media=cdrom,readonly=on`), independently of the system-disk controller. Its slower optical-drive behavior and direct control of the emulated CD device are intentional; VirtIO Block does not replace this CD-ROM path. A future frontend option (T12) may offer a VirtIO SCSI CD-ROM as an alternative, but that requires restoring and validating the VirtIO SCSI device and XP driver path first; it is not enabled in current builds. Until Y2KBox's emulated CD-ROM supports the full BIN/CUE format—including the complete set of CUE flags (such as `DCP`)—and supports inserting/ejecting disc images in the emulated drive for multi-disc swapping, we recommend using **Daemon Tools 3.47** inside the Windows XP guest. First transfer the BIN/CUE image files from the host into the XP guest, then mount the image with Daemon Tools.
 
-## Project goals
+## FAQ
 
-Y2KBox exists to make preserving and revisiting the Windows XP-era computing experience easier. The goal is not simply to boot an old operating system: it is to provide a portable, reproducible, plug-and-play environment for the games and software people want to keep using, with the hardware behavior and compatibility those programs expect.
+### What are the host requirements?
 
-That means aiming for a complete **Windows XP experience in a box**: an SSE2-capable x86 environment with VMware SVGA/SVGA3D and the graphics capabilities associated with the era, including **Direct3D 8.1 and Direct3D 9.0c**. The longer-term vision is to make running this software feel as straightforward as using a modern emulator such as PCSX2: launch it, configure the guest once, and get on with the experience.
+- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
+- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
+- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
+
+### Why is Y2KBox limited to one vCPU?
+
+Some Windows XP-era PCs had multiple processor cores, so a dual-core configuration would certainly be period-appropriate. However, Y2KBox deliberately targets a fixed, single-vCPU configuration.
+
+With QEMU's TCG software CPU emulator, running multiple guest vCPUs introduces additional coordination and synchronization between those virtual CPUs. Cross-vCPU operations and shared-state coordination can add overhead, potentially reducing performance in games that primarily depend on one main thread. That overhead is workload-dependent; it does not mean that two vCPUs are always slower, or that dual-core XP systems were unrealistic.
+
+The decision is about Y2KBox's intended configuration and performance target. Rather than introduce a multi-vCPU option with additional complexity and potentially inconsistent results, the project focuses on making its single-vCPU environment as fast and compatible as possible.
+
+Also, **one guest vCPU does not mean QEMU is restricted to one host thread**. QEMU can still use separate host threads for its main loop, I/O, audio, and rendering.
+
+### Why build a Windows XP emulator when compatibility layers already exist?
+
+Compatibility layers such as Wine and various game-specific wrappers are valuable tools for running older Windows software on modern operating systems. They solve a different problem, though: adapting applications to work without running the original Windows environment.
+
+Y2KBox takes a different approach. It provides an actual Windows XP environment, including its operating-system behavior, virtual hardware, guest drivers, and graphics stack. This matters for software that expects XP-specific behavior or interacts with hardware and drivers in ways that compatibility layers may not reproduce consistently.
+
+The goal is not to replace Wine, wrappers, or community compatibility projects. Those solutions can be excellent choices for individual games. Y2KBox exists for people who want a more complete, self-contained Windows XP environment that they can preserve, configure once, and return to later.
+
+Y2KBox aims to provide a complete **Windows XP experience in a box**: an SSE2-capable x86 environment with VMware SVGA/SVGA3D and the graphics capabilities associated with the era, including **Direct3D 8.1 and Direct3D 9.0c**.
+
+The longer-term vision is to make running this software feel as straightforward as using a modern emulator such as PCSX2: launch it, configure the guest once, and get on with the experience.
 
 ### Why not make a proprietary hypervisor API mandatory?
 
@@ -156,22 +180,6 @@ Modern CPUs provide hardware virtualization through technologies such as Intel V
 Y2KBox therefore takes a different approach on Windows: use QEMU's **TCG software CPU emulator**, rather than requiring WHPX or another proprietary hypervisor interface. This costs performance and makes optimization work more demanding, but it keeps the CPU execution engine within the project’s open-source codebase and avoids making a vendor-controlled host API a prerequisite for running the guest. The same principle is why the Linux product uses **KVM**: it is an open-source Linux kernel virtualization interface, rather than a proprietary platform API. Linux KVM is currently mandatory for Linux builds; Windows builds use TCG. macOS/HVF is not a supported host target at present.
 
 This is an engineering and preservation choice, not a claim that hardware virtualization is inherently undesirable. KVM remains the right fit for the Linux product, while Windows TCG gives Y2KBox a path that does not depend on WHPX being available or supported indefinitely. The trade-off is deliberate: prioritize an implementation the project can inspect, maintain, optimize, and carry forward over relying on a closed host interface for a core capability.
-
-### Make preservation practical
-
-People can sometimes buy original hardware cheaply, but owning the machine is only the beginning. It also means finding working components, maintaining aging hardware, dealing with storage and display quirks, and keeping the whole setup usable on modern systems. Emulation can remove much of that friction while adding conveniences that original hardware never offered: portability, snapshots, easy backups, configurable devices, repeatable environments, and integration with modern workflows.
-
-Y2KBox aims to spare users from having to solve the same compatibility problems over and over inside the guest or on the host. Ideally, they should not need a chain of guest-side wrappers, per-game community patches, or fragile workarounds every time a host operating-system update breaks something. Nor should using the guest require users to modify the host's graphics-driver stack, install opaque kernel drivers, or edit system registries just to get an old game running.
-
-The objective is straightforward: make the Windows XP and Y2K-era software experience **portable, maintainable, and accessible**—so preservationists can spend less time repairing the environment and more time preserving, exploring, and enjoying the software itself.
-
-## FAQ
-
-### What are the host requirements?
-
-- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
-- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
-- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
 
 ### Why is the current guest RAM target 2 GiB?
 
@@ -198,3 +206,10 @@ and cache file data, depending on the workload. It does not automatically become
 a game-owned extra gigabyte, and it does not guarantee that a game will stop
 stuttering.
 
+### Make preservation practical
+
+People can sometimes buy original hardware cheaply, but owning the machine is only the beginning. It also means finding working components, maintaining aging hardware, dealing with storage and display quirks, and keeping the whole setup usable on modern systems. Emulation can remove much of that friction while adding conveniences that original hardware never offered: portability, snapshots, easy backups, configurable devices, repeatable environments, and integration with modern workflows.
+
+Y2KBox aims to spare users from having to solve the same compatibility problems over and over inside the guest or on the host. Ideally, they should not need a chain of guest-side wrappers, per-game community patches, or fragile workarounds every time a host operating-system update breaks something. Nor should using the guest require users to modify the host's graphics-driver stack, install opaque kernel drivers, or edit system registries just to get an old game running.
+
+The objective is straightforward: make the Windows XP and Y2K-era software experience **portable, maintainable, and accessible**—so preservationists can spend less time repairing the environment and more time preserving, exploring, and enjoying the software itself.
