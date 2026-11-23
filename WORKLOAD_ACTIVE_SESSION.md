@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 75–84).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 76–85).
 
 ## How to use this file
 
@@ -16,16 +16,10 @@
 - Y2KBox targets 32-bit Windows XP. Linux product runtime is KVM-only; Windows product runtime is TCG-only. Performance optimization work targets Windows TCG.
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
 - Keep the owner-approved guest/device constraints in `HANDOFF.md`; do not infer that a standalone test or green CI proves in-game correctness.
-- **Build/CI workflow:** follow `AGENTS.md` and HANDOFF section 7. Do not build locally unless explicitly doing approved benchmarking/A-B work. Markdown-only commits run only the lightweight detector; Linux/Windows build jobs are skipped. After pushing, finish the turn; do not poll CI. The Claude status hook reports CI/Codacy results.
+- **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Benchmarking/A-B always needs explicit authorization, including for Gemini 4 Neon. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 75 — In-flight range tracking and safe DISCARD/NOOVERWRITE selection
-- Root cause of repeated partial Lock synchronization: guest invalidation commands signaled dynamic-buffer DISCARD/rename cycles, but the backend did not track drawn byte ranges in flight.
-- Wired guest buffer invalidation into the DXVK backend and added per-surface sorted/coalesced in-flight byte ranges. Draw paths mark exact vertex/index ranges, with conservative full-buffer fallback for uncertain cases.
-- Lock policy: flags=0 for eviction/replacement; DISCARD for full replacement or post-invalidation rename; NOOVERWRITE only when the written span is proven disjoint from in-flight ranges; overlapping small buffers (<=64 KiB) may use full-shadow DISCARD; larger overlaps remain flags=0.
-- Standalone randomized interval and lock-mode tests passed. Linux/Windows CI and owner runtime A/B were pending at the time of the entry.
 
 ### Session 76 — Validate buffer-lock improvement; add vCPU profiler
 - Owner's Session 75 capture reduced measured buffer Lock time from 1,196.5 ms to 22.58 ms (about 53x less total time; per-call latency about 73x lower). NOOVERWRITE and invalidation DISCARD handled the measured updates; owner also reported smoother Hitman 2 and slight improvement in FIFA 2003 / Joint Operations. F1 still felt unchanged overall.
