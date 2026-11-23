@@ -64,4 +64,4 @@ T01, T14, README, and HANDOFF with the uniprocessor decision. Session 91 moved
 the project-purpose material into the FAQ, distinguished Y2KBox from compatibility
 layers, documented the one-vCPU/TCG trade-off, and separated the proprietary
 hypervisor API rationale into its own FAQ entry.
-Session 92 closed T09's integration/CI task while keeping XP driver, display/2D, D3D API, and game acceptance in the owner-run manual checklist; T10 remains separately paused. See Sessions 82–92 in `WORKLOG.md` for the policy evolution and related decisions.
+Session 92 closed T09's integration/CI task while keeping XP driver, display/2D, D3D API, and game acceptance in the owner-run manual checklist; T10 remains separately paused. Session 93 moved the upstream QEMU 11.1.90 base commit and unchanged GPL-2.0 notice from the README Fixed target area into a dedicated provenance FAQ entry. See Sessions 82–93 in `WORKLOG.md` for the policy evolution and related decisions.
