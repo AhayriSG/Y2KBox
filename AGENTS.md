@@ -77,12 +77,26 @@ sections; do not restart the full-history read.
 
 ## Build, tests, and CI
 
-- **Do not build QEMU locally.** Never run `./configure`, `make`, or `ninja`
-  in the sandbox unless the owner explicitly authorizes benchmarking or A/B
-  performance work (for example, `xp/bench/run.sh` or `xp/bench/perf.py`).
-- GitHub Actions is authoritative for compilation and configured functional
-  checks. Run applicable lightweight/static checks that do not violate the
-  no-local-build rule.
+- **Standing local-build authorization — Gemini 4 Neon only:** Gemini 4 Neon
+  may perform ordinary local QEMU configure/build and the relevant standard
+  functional checks in its sandbox as part of validating its own changes. This
+  is an owner-approved, model-specific exception, not a general permission for
+  Gemini CLI, other Gemini models, Claude, Codex, or other agents. Do not infer
+  that another agent inherits it. Use the repository's established build
+  configuration and avoid unnecessary clean/full rebuilds when an incremental
+  build or targeted check is sufficient.
+- **All other agents:** do not run QEMU configure/build commands (`./configure`,
+  `make`, or `ninja`) in the sandbox unless the owner explicitly authorizes
+  that work for the current task.
+- **Benchmarking/A-B work:** any agent, including Gemini 4 Neon, still needs
+  explicit owner authorization before running performance benchmarks or A/B
+  experiments (for example, `xp/bench/run.sh` or `xp/bench/perf.py`). The
+  Gemini 4 Neon build exception does not authorize benchmark campaigns.
+- GitHub Actions remains the authoritative shared Linux/Windows build and CI
+  result. A local build/test result is supplementary evidence, not CI status.
+  Report the exact local configuration, commands, and checks run; distinguish
+  local success/failure from GitHub Actions, and never claim CI passed based on
+  local results. Do not push knowingly broken or internally inconsistent code.
 - Markdown-only commits intentionally run only the lightweight CI change-
   detection job. Linux and Windows build/test jobs are skipped. Any non-`.md`
   change and manual `workflow_dispatch` run the normal platform jobs.
