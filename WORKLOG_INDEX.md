@@ -37,10 +37,12 @@ have follow-up subsections under the same number.
 
 ## Session 81 note
 
-Session 81 changed the workflow so Markdown-only commits run only the lightweight
-change-detection job. Linux and Windows build/test jobs are skipped entirely; no
-artifacts are produced. Any non-Markdown change and manual `workflow_dispatch`
-run the full platform jobs. See `.github/workflows/build.yml`.
+Session 81 initially skipped packaging, packaged smoke tests, and artifact uploads
+for Markdown-only commits while still running Linux/Windows builds and functional
+checks. The later job-level condition in commit `8ab36ee` skips both platform jobs
+entirely for Markdown-only commits; only the lightweight detector runs. Any
+non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
+See `.github/workflows/build.yml`.
 
 ## Session 82 note
 
