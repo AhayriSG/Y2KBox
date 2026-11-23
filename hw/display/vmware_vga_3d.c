@@ -2718,6 +2718,22 @@ static void vmsvga3d_renderer_surface_renderer_set(
             continue;
         }
         if (evict) {
+            /*
+             * Renderer teardown/recreation also drops native D3D9 buffers.
+             * Flush pending guest ranges first so the buffer Lock serializes
+             * any earlier draws before the resource is released.
+             */
+            if (!vmsvga3d_dxvk_surface_flush_buffer_range(
+                    s->dxvk, surface->dxvk_surface,
+                    surface->mip_count == 1 && surface->mips != NULL
+                        ? surface->mips[0].data : NULL,
+                    surface->mip_count == 1 && surface->mips != NULL
+                        ? surface->mips[0].data_size : 0)) {
+                VMVGA_TRACE_LOCAL(
+                    VMVGA_TRACE_3D,
+                    "D3D9-BUFFER sid=%u stage=renderer-evict-flush result=FAIL",
+                    sid);
+            }
             vmsvga3d_dxvk_surface_evict(surface->dxvk_surface);
             vmsvga3d_dxvk_surface_evict(surface->present_d3d9_bridge);
         }
