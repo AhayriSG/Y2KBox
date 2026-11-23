@@ -1755,7 +1755,8 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   as verified while content coverage remains under investigation.
 - Updated the documentation incrementally in commits:
   `9f12541`, `b6877d4`, `81f4883`, `1c6aaf8`, `7ef25cd`, `7b34080`, `0851728`,
-  `e216252`, `351b684`, `4530bba`, `71a79c4`, `6944828`, and `85ed278`.
+  `e216252`, `351b684`, `4530bba`, `71a79c4`, `6944828`, `85ed278`, `f619f02`,
+  and `f39d0fe`.
 - Documentation-only review and edits. No QEMU source changed, no local QEMU
   build was run, and CI was not polled. Markdown-only CI is expected to skip the
   Linux and Windows jobs on these commits.
