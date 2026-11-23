@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 72–81).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 73–82).
 
 ## How to use this file
 
@@ -20,11 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 72 — Small dynamic-buffer DISCARD experiment
-- Added a full-shadow DISCARD upload path for eligible vertex/index buffers up to 64 KiB; it uploads the authoritative CPU shadow, not merely a partial guest range, and clears dirty metadata only after successful Unlock.
-- Larger buffers and failed/mismatched uploads retain the deferred partial-range path. This was explicitly an experiment, not a proven speedup.
-- No NOOVERWRITE, manual ring offsets, stream/index rebasing, or guest-visible ordering changes were introduced.
 
 ### Session 73 (+ follow-up) — Lock profiling dimensions
 - Added counters separating DISCARD from flags-zero locks and requested lock-size buckets (<=4 KiB, <=64 KiB, <=256 KiB, >256 KiB), while retaining aggregate and vertex/index/full/partial dimensions.
@@ -77,6 +72,12 @@
 - Added a workflow change-detection job for pushes and pull requests. If every changed path ends in `.md`, Linux and Windows builds and functional checks still run, but package creation, packaged-layout smoke tests, and binary artifact uploads are skipped.
 - Mixed/code changes retain normal artifact production; manual `workflow_dispatch` always produces artifacts. Missing comparison commits or diff errors conservatively enable artifact production.
 - Updated `CLAUDE.md` and `HANDOFF.md`. Static review confirmed both build jobs consume the detection output and all six artifact-only steps are guarded. CI validation is pending; no local QEMU build or CI polling was performed.
+
+### Session 82 — Make coding-agent historical reads selective
+- Changed fresh-session onboarding to read the current handoff/task/recent-summary documents and `WORKLOG_INDEX.md`, not the entire append-only `WORKLOG.md` by default.
+- Added a topic-to-session index so agents can retrieve only historical evidence relevant to the active task. Updated `CLAUDE.md`, `HANDOFF.md`, and `README.md` to use the same policy.
+- The full Session 71 record remains in `WORKLOG.md`; it only aged out of the ten-entry rolling summary when Session 81 was added.
+- Documentation-only changes; no QEMU build, tests, or CI run performed.
 
 ## Current investigation / next actions
 
