@@ -206,17 +206,13 @@ static int choose_and_try(HDC dc, BYTE stencil_bits, const char *label)
                       PFD_DOUBLEBUFFER;
     request.iPixelType = PFD_TYPE_RGBA;
     request.cColorBits = 32;
-    request.cRedBits = 8;
-    request.cGreenBits = 8;
-    request.cBlueBits = 8;
-    request.cAlphaBits = 8;
     request.cDepthBits = 24;
     request.cStencilBits = stencil_bits;
     request.iLayerType = PFD_MAIN_PLANE;
 
     SetLastError(ERROR_SUCCESS);
     index = ChoosePixelFormat(dc, &request);
-    printf("\nChoosePixelFormat %s (RGBA, color=32, depth=24, stencil=%u)"
+    printf("\nChoosePixelFormat %s (color=32, depth=24, stencil=%u)"
            " -> %d, GetLastError=%lu\n",
            label, (unsigned int)stencil_bits, index,
            (unsigned long)GetLastError());
