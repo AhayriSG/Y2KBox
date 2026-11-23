@@ -1,6 +1,6 @@
 # Y2KBox task queue
 
-Several AIs/humans may work at the same time. **Claim a task before starting**:
+Different coding agents may take over sequentially; this shared task queue is the handoff point. Concurrent contributors are supported only when deliberately coordinated. **Claim an agent task before starting**:
 
 1. Fetch the latest `main` and re-read this file before choosing work.
 2. Edit the task's `Status` to `CLAIMED by <name/session> <date>` in this file,
@@ -58,7 +58,7 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   guest can never execute: SSE3, SSSE3, SSE4.1/4.2, AES/PCLMUL, AVX/AVX2/FMA/BMI, XSAVE,
   RDRAND, ... in `target/i386/tcg/` (decode-new.c.inc, emit.c.inc, translate.c, helpers);
   `gen_ldo_env_A0`/`gen_sto_env_A0` then always use pair atomicity. Keep x87/MMX/SSE/SSE2.
-* DoD: build; CPUID shows no SSE3+; vectest OK; XP boot still works once T08 exists.
+* DoD: build; CPUID shows no SSE3+; vectest OK; retain the owner-verified XP SP3 boot baseline.
 
 ## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done; Linux + Windows CI verified)
 * Remove macOS/BSD/Solaris/Haiku/Emscripten/other-OS code: meson/configure branches,
@@ -130,17 +130,30 @@ The current workflow skips both platform jobs for Markdown-only commits; any non
 change and manual dispatch run the full platform checks and artifact pipeline. The Claude
 status hook reports the HEAD run; agents must not poll CI after pushing.
 
-## T08 Boot Windows XP SP3 end to end  -  Status: PAUSED (XP SP3 boot and desktop owner-verified; install record incomplete)
-The owner has booted an XP SP3 desktop and run XP games, so the original boot/ISO
-prerequisite is satisfied. The remaining bookkeeping is to record a reproducible
-installation/launch procedure and installation time if still useful. Do not treat
-this task as blocking T09-T11 guest compatibility work.
+## Owner-run XP guest validation (manual checklist; not an AI-agent task)
 
-## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: PAUSED (integration committed; remaining guest compatibility tracked by T11)
+XP SP3 boot, desktop, and game launch are already owner-verified. The remaining
+checks require a person operating the guest and judging real application behavior;
+they are deliberately not claimable or independently completable by coding agents.
+Agents may prepare test steps, inspect supplied logs/captures, and analyze reported
+results, but must not mark these checks complete without the owner's confirmation.
+
+- Install VMware Tools 10.0.12 (`winPreVista.iso`), selecting the XP SVGA driver
+  12.01.08; record any installation or driver issues.
+- Confirm 2D/display behavior, resolution changes, mouse integration, and D3D9
+  acceleration in representative XP applications.
+- Check D3D8 and DirectDraw/Direct3D 7 coverage (including `d3d8to9` or a
+  DirectDraw wrapper where useful), shader limits, and representative game behavior.
+- Check actual Windows-host visual correctness and performance in the owner's
+  representative workloads. Distinguish owner observations from CI/build evidence.
+- Record the exact guest setup, application/game, scene, host, and observed result
+  in `WORKLOG.md`; update this note only when the owner supplies new evidence.
+
+## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: PAUSED (integration committed; owner-run guest validation pending)
 PRIMARY 3D plan (owner proposal 2026-11-14, evaluated and agreed; see HANDOFF 8a).
 Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for QEMU 11.1.x: device
 `vmvga`, SVGA3D vgpu9/vgpu10/vgpu11, DXVK-based rendering, `hw/i386/vmport.c`).
-* **Integration implemented and CI-verified;** remaining XP driver and application compatibility checks are tracked by T11.
+* **Integration implemented and CI-verified;** remaining XP driver and application compatibility checks are in the owner-run XP guest validation note above.
   * Overlaid `hw/display/vmware_vga*.c`, `hw/display/include/*`, and `hw/i386/vmport.{c,-vmvga.h}`;
     restored `hw/i386/vmmouse.c` and `pc-bios/vgabios-vmware.bin` from `35a2e66`.
   * Wired `hw/display/meson.build`, `hw/i386/meson.build`, `pc-bios/meson.build`, `hw/pci/pci.c`
@@ -153,13 +166,13 @@ Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for
     (`target/i386/tcg/system/seg_helper.c`).
   * Added `xp/bench/vmport_ring3_test.asm` (CPL=3, IOPL=0, 0xFF TSS IOPB test for `0x5658`/`0x5659`
     vs `#GP` on `0x565A`) and Linux/Windows CI checks (`-vga help`, `-device help`, `vmport_ring3_test.asm`).
-* **Resume here:** continue owner-led XP validation under T11, including VMware Tools 10.0.12
+* **Resume here:** no further integration work is pending here. The owner-run validation note above covers VMware Tools 10.0.12
   SVGA driver 12.01.08, 2D acceleration, and application compatibility. Do not repeat completed
   integration/build checks unless the source changes.
 
-## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: PAUSED (integration committed; remaining guest compatibility tracked by T11)
+## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: PAUSED (integration committed; owner-run guest validation pending)
 qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
-* **Integration implemented and CI-verified;** live guest rendering and API compatibility remain owner-validated under T11.
+* **Integration implemented and CI-verified;** live guest rendering and API compatibility require the owner-run XP guest validation note above.
   * **Linux:** `vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
     or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols when QEMU has
     already loaded SDL2 (`--enable-sdl`). `vmware_vga_dxvk.c` searches `<exec_dir>/`, `<exec_dir>/lib/`,
@@ -173,14 +186,9 @@ qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-nativ
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips DXVK/D3D init under `-display none`
     (via `display_backend_active` in `system/vl.c`) unless Y2KBox debug mode (`-y2kboxdebugmode on`) or `Y2KBOX_3D_HEADLESS` is set,
     preserving empty `stderr` and zero overhead in non-3D CI benchmarks.
-* **Resume here:** continue owner-led live guest rendering and D3D API validation in T11. CI's
+* **Resume here:** use the owner-run XP guest validation note above for live guest rendering and D3D API checks. CI's
   headless smoke check does not prove Windows-host visual correctness or game compatibility;
   render-thread pinning remains T14.
-
-## T11 XP guest driver validation and D3D coverage  -  Status: IN PROGRESS (XP booted; D3D8/DirectDraw and game compatibility under owner validation)
-Install VMware Tools 10.0.12 (`winPreVista.iso`) in XP; verify SVGA3D D3D9 apps (e.g. DX9 sample/game);
-find the gaps: Direct3D 8 and DirectDraw/Direct3D 7 apps (try `d3d8to9` and a ddraw wrapper in the guest),
-shader model limits, resolution/mouse integration (vmmouse), performance on TCG. Record results.
 
 ## T16 (P3, frozen alternative) VBoxVGA 5.2.x path  -  Status: TODO (not planned; kept as fallback)
 If qemu-vmvga proves unworkable on XP: VBoxVGA (VBE dispi + HGSMI/VBVA) + VMMDev (PCI 80ee:cafe) + HGCM +
@@ -227,7 +235,7 @@ details, and measurements are indexed under TCG performance in `WORKLOG_INDEX.md
   matching baseline. Inspect the complete `Y2KBOX-PERF`/`Y2KBOX-PROF` records;
   `cpu.exec` aggregate timing alone does not identify a bottleneck. Keep F1 crowded-
   grid profiling separate from FIFA residual hitches and the Hitman 2 D3D8 static-
-  background issue tracked by T11. Make no source change until a repeatable hotspot
+  background issue requiring owner visual confirmation; agents may analyze supplied captures. Make no source change until a repeatable hotspot
   is isolated.
 * **T13a x87: PAUSED.** Existing guarded host-x87 fast paths remain: arithmetic,
   square root, exact integer loads, and normal-finite FST m32/m64 stores, with
