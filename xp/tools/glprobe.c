@@ -198,6 +198,139 @@ static int try_format(int index, const char *label)
     return ok != 0;
 }
 
+
+/*
+ * Reproduce the Quake III / id Tech 3 GLW_ChoosePFD filtering and
+ * best-match rules. The game enumerates PFDs itself; it does not use
+ * ChoosePixelFormat for this selection.
+ */
+static int glw_choose_pfd(HDC dc, BYTE color_bits, BYTE depth_bits,
+                          BYTE stencil_bits, int allow_software,
+                          const char *label)
+{
+    PIXELFORMATDESCRIPTOR pfds[257];
+    DWORD required_flags;
+    int max_pfd;
+    int index;
+    int best = 0;
+
+    ZeroMemory(pfds, sizeof(pfds));
+    max_pfd = DescribePixelFormat(dc, 1, sizeof(pfds[0]), &pfds[0]);
+    printf("\nGLW_ChoosePFD model %s: color=%u depth=%u stencil=%u,"
+           " software_allowed=%d, reported_formats=%d\n",
+           label, (unsigned int)color_bits, (unsigned int)depth_bits,
+           (unsigned int)stencil_bits, allow_software, max_pfd);
+
+    if (max_pfd <= 0) {
+        printf("  DescribePixelFormat returned no formats\n");
+        return 0;
+    }
+    if (max_pfd > 256) {
+        printf("  limiting enumeration to 256 formats (id Tech 3 limit)\n");
+        max_pfd = 256;
+    }
+
+    required_flags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL |
+                     PFD_DOUBLEBUFFER;
+
+    for (index = 1; index <= max_pfd; ++index) {
+        PIXELFORMATDESCRIPTOR *candidate = &pfds[index];
+
+        if (!DescribePixelFormat(dc, index, sizeof(*candidate), candidate)) {
+            printf("  PFD %d rejected: DescribePixelFormat failed\n", index);
+            continue;
+        }
+
+        if ((candidate->dwFlags & PFD_GENERIC_FORMAT) && !allow_software) {
+            printf("  PFD %d rejected: PFD_GENERIC_FORMAT"
+                   " (software OpenGL not allowed)\n", index);
+            continue;
+        }
+        if (candidate->iPixelType != PFD_TYPE_RGBA) {
+            printf("  PFD %d rejected: not RGBA (pixelType=%u)\n",
+                   index, (unsigned int)candidate->iPixelType);
+            continue;
+        }
+        if ((candidate->dwFlags & required_flags) != required_flags) {
+            printf("  PFD %d rejected: required flags missing"
+                   " (have=0x%08lX need=0x%08lX)\n",
+                   index, (unsigned long)candidate->dwFlags,
+                   (unsigned long)required_flags);
+            continue;
+        }
+        if (candidate->cDepthBits < 15) {
+            printf("  PFD %d rejected: depth bits %u < 15\n",
+                   index, (unsigned int)candidate->cDepthBits);
+            continue;
+        }
+        if (candidate->cStencilBits < 4 && stencil_bits > 0) {
+            printf("  PFD %d rejected: stencil bits %u < 4"
+                   " (requested %u)\n",
+                   index, (unsigned int)candidate->cStencilBits,
+                   (unsigned int)stencil_bits);
+            continue;
+        }
+
+        printf("  PFD %d eligible: color=%u depth=%u stencil=%u\n",
+               index, (unsigned int)candidate->cColorBits,
+               (unsigned int)candidate->cDepthBits,
+               (unsigned int)candidate->cStencilBits);
+
+        if (best) {
+            if (pfds[best].cColorBits != color_bits) {
+                if (candidate->cColorBits == color_bits) {
+                    best = index;
+                    continue;
+                } else if (candidate->cColorBits > pfds[best].cColorBits) {
+                    best = index;
+                    continue;
+                }
+            }
+
+            if (pfds[best].cDepthBits != depth_bits) {
+                if (candidate->cDepthBits == depth_bits) {
+                    best = index;
+                    continue;
+                } else if (candidate->cDepthBits > pfds[best].cDepthBits) {
+                    best = index;
+                    continue;
+                }
+            }
+
+            if (pfds[best].cStencilBits != stencil_bits) {
+                if (candidate->cStencilBits == stencil_bits) {
+                    best = index;
+                    continue;
+                } else if (candidate->cStencilBits > pfds[best].cStencilBits &&
+                           stencil_bits > 0) {
+                    best = index;
+                    continue;
+                }
+            }
+        } else {
+            best = index;
+        }
+    }
+
+    if (!best) {
+        printf("  GLW_ChoosePFD result: FAILED (no eligible format)\n");
+        return 0;
+    }
+
+    printf("  GLW_ChoosePFD result: PFD %d selected\n", best);
+    describe_format(dc, best, &pfds[best]);
+    if (pfds[best].dwFlags & PFD_GENERIC_FORMAT) {
+        printf("  selected format is generic; game accepts it only when"
+               " r_allowSoftwareGL is enabled\n");
+    } else if (pfds[best].dwFlags & PFD_GENERIC_ACCELERATED) {
+        printf("  selected format reports generic acceleration (MCD)\n");
+    } else {
+        printf("  selected format is non-generic (driver/hardware path)\n");
+    }
+
+    return best;
+}
+
 static int choose_and_try(HDC dc, BYTE stencil_bits, const char *label)
 {
     PIXELFORMATDESCRIPTOR request;
@@ -286,9 +419,33 @@ int main(void)
         describe_format(dc, index, &pfd);
     }
 
-    printf("\n=== ChoosePixelFormat requests from COD1 log ===\n");
-    contexts_ok += choose_and_try(dc, 8, "COD1 stencil=8");
-    contexts_ok += choose_and_try(dc, 0, "COD1 stencil=0");
+    printf("\n=== Reproduce COD1 / id Tech 3 GLW_ChoosePFD ===\n");
+    index = glw_choose_pfd(dc, 32, 24, 8, 0,
+                           "32/24/8, software disallowed");
+    if (index > 0) {
+        contexts_ok += try_format(index, "GLW strict 32/24/8");
+    }
+    index = glw_choose_pfd(dc, 32, 24, 0, 0,
+                           "32/24/0, software disallowed");
+    if (index > 0) {
+        contexts_ok += try_format(index, "GLW strict 32/24/0");
+    }
+
+    printf("\n=== Diagnostic comparison: allow generic software formats ===\n");
+    index = glw_choose_pfd(dc, 32, 24, 8, 1,
+                           "32/24/8, software allowed");
+    if (index > 0) {
+        contexts_ok += try_format(index, "GLW software-allowed 32/24/8");
+    }
+    index = glw_choose_pfd(dc, 32, 24, 0, 1,
+                           "32/24/0, software allowed");
+    if (index > 0) {
+        contexts_ok += try_format(index, "GLW software-allowed 32/24/0");
+    }
+
+    printf("\n=== Windows ChoosePixelFormat comparison (not used by COD1) ===\n");
+    contexts_ok += choose_and_try(dc, 8, "Windows ChoosePixelFormat stencil=8");
+    contexts_ok += choose_and_try(dc, 0, "Windows ChoosePixelFormat stencil=0");
 
     ReleaseDC(hwnd, dc);
     DestroyWindow(hwnd);
@@ -299,8 +456,8 @@ int main(void)
     }
 
     printf("\nSummary: %d pixel-format context test(s) succeeded"
-           " out of %d enumerated formats.\n",
-           contexts_ok, format_count + 2);
+           " across %d enumerated formats.\n",
+           contexts_ok, format_count);
     printf("A successful context is not proof of hardware acceleration;"
            " inspect the PFD generic flags and GL strings above.\n");
 
