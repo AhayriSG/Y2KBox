@@ -400,6 +400,11 @@ struct vmsvga3d_dxvk_surface_s {
     uint64_t d3d9_screen_readback_sequence;
     bool d3d9_resident;
     bool d3d9_has_bounce;
+    /* Guest buffer writes are coalesced in the CPU shadow until a native
+     * D3D9 consumer or readback needs the updated contents. */
+    bool d3d9_buffer_dirty;
+    uint32_t d3d9_buffer_dirty_start;
+    uint32_t d3d9_buffer_dirty_end;
 
     VMSVGA3DD3D10CreateDesc d3d11_desc;
     void *d3d11_resource;
@@ -3788,6 +3793,9 @@ static void vmsvga3d_dxvk_surface_evict_d3d9(
     surface->d3d9_readback_height = 0;
     surface->d3d9_resident = false;
     surface->d3d9_has_bounce = false;
+    surface->d3d9_buffer_dirty = false;
+    surface->d3d9_buffer_dirty_start = 0;
+    surface->d3d9_buffer_dirty_end = 0;
 }
 
 static void vmsvga3d_dxvk_surface_evict_d3d11(
@@ -16127,6 +16135,11 @@ bool vmsvga3d_dxvk_surface_upload_buffer(
     memcpy(destination, data, size);
     result = unlock(surface->d3d9_resource);
 
+    if (vmsvga3d_dxvk_succeeded(result)) {
+        surface->d3d9_buffer_dirty = false;
+        surface->d3d9_buffer_dirty_start = 0;
+        surface->d3d9_buffer_dirty_end = 0;
+    }
     return vmsvga3d_dxvk_succeeded(result);
 #else
     (void)dxvk;
@@ -16137,7 +16150,7 @@ bool vmsvga3d_dxvk_surface_upload_buffer(
 #endif
 }
 
-bool vmsvga3d_dxvk_surface_upload_buffer_range(
+static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t offset,
     const void *data, uint32_t size)
 {
@@ -16211,6 +16224,93 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
     (void)offset;
     (void)data;
     (void)size;
+    return false;
+#endif
+}
+
+bool vmsvga3d_dxvk_surface_defer_buffer_range(
+    VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size)
+{
+#if VMSVGA3D_DXVK_BACKEND_SUPPORTED
+    uint64_t perf_start;
+    uint32_t end;
+
+    if (surface == NULL || !surface->d3d9_resident ||
+        surface->d3d9_resource == NULL || size == 0 ||
+        (surface->d3d9_resource_type !=
+             VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER &&
+         surface->d3d9_resource_type !=
+             VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER) ||
+        offset > surface->d3d9_length ||
+        size > surface->d3d9_length - offset) {
+        return false;
+    }
+
+    end = offset + size;
+    perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED);
+    if (surface->d3d9_buffer_dirty) {
+        surface->d3d9_buffer_dirty_start =
+            MIN(surface->d3d9_buffer_dirty_start, offset);
+        surface->d3d9_buffer_dirty_end =
+            MAX(surface->d3d9_buffer_dirty_end, end);
+    } else {
+        surface->d3d9_buffer_dirty = true;
+        surface->d3d9_buffer_dirty_start = offset;
+        surface->d3d9_buffer_dirty_end = end;
+    }
+    qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, size);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, perf_start);
+    return true;
+#else
+    (void)surface;
+    (void)offset;
+    (void)size;
+    return false;
+#endif
+}
+
+bool vmsvga3d_dxvk_surface_flush_buffer_range(
+    VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
+    const void *data, uint32_t data_size)
+{
+#if VMSVGA3D_DXVK_BACKEND_SUPPORTED
+    uint64_t perf_start;
+    uint32_t offset;
+    uint32_t size;
+    bool success;
+
+    if (surface == NULL) {
+        return false;
+    }
+    if (!surface->d3d9_buffer_dirty) {
+        return true;
+    }
+
+    offset = surface->d3d9_buffer_dirty_start;
+    if (surface->d3d9_buffer_dirty_end < offset) {
+        return false;
+    }
+    size = surface->d3d9_buffer_dirty_end - offset;
+    if (data == NULL || size == 0 || surface->d3d9_buffer_dirty_end > data_size) {
+        return false;
+    }
+
+    perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH);
+    success = vmsvga3d_dxvk_surface_upload_buffer_range(
+        dxvk, surface, offset, (const uint8_t *)data + offset, size);
+    qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, size);
+    qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, perf_start);
+    if (success) {
+        surface->d3d9_buffer_dirty = false;
+        surface->d3d9_buffer_dirty_start = 0;
+        surface->d3d9_buffer_dirty_end = 0;
+    }
+    return success;
+#else
+    (void)dxvk;
+    (void)surface;
+    (void)data;
+    (void)data_size;
     return false;
 #endif
 }
