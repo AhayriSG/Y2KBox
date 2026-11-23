@@ -1914,3 +1914,10 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Explained how testers can share `Y2KBOX-PERF` logs to support developer or LLM-assisted bottleneck analysis and targeted follow-up instrumentation; clarified that performance counters alone do not diagnose every graphics issue.
 - Documented `VMVGA_TRACE_DEEP_GB_UPDATE` as an optional compile-time developer trace, disabled by default and intended for targeted VMware SVGA investigations rather than ordinary tester logging.
 - Documentation-only. No emulator source, instrumentation, build, benchmark, functional test, guest test, or CI polling was performed.
+
+## Session 97 — Merge preservation rationale into the README project-purpose FAQ
+
+- Merged the former standalone “Make preservation practical” FAQ into “Why build a Windows XP emulator when compatibility layers already exist?” so the answer now connects compatibility layers, the value of preserving a complete XP environment, practical benefits of emulation, and the project's longer-term vision.
+- Retained the distinctions from Wine and game-specific wrappers, the original-hardware maintenance argument, portability/snapshots/backups/repeatability, the goal of minimizing host and guest workarounds, the Direct3D 8.1 / 9.0c target, and the PCSX2 usability comparison.
+- Removed the now-redundant standalone preservation FAQ entry. No other FAQ entries or emulator code were changed.
+- Documentation-only. No build, benchmark, functional test, guest validation, or CI polling was performed.
