@@ -16228,6 +16228,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     (void)offset;
     (void)data;
     (void)size;
+    (void)discard_full_range;
     return false;
 #endif
 }
@@ -16316,6 +16317,7 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     (void)surface;
     (void)data;
     (void)data_size;
+    (void)discard_full_range;
     return false;
 #endif
 }
