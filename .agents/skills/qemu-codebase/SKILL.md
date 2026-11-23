@@ -45,6 +45,8 @@ in the source; inspect those comments without building the documentation.
 
 ## Building and testing
 
+This skill is navigation and technical guidance only; it does not grant permission to configure, build, or run test suites. Follow the repository's current `AGENTS.md` build/test authorization policy before executing any build or test command. If that policy does not authorize the active agent and task, obtain explicit owner authorization first.
+
 QEMU builds out of tree and a checkout may have several build
 directories. When building or testing, find the applicable configured
 tree from context (for example, directories containing `meson-info`)
