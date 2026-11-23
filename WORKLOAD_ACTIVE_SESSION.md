@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 86–95).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 87–96).
 
 ## How to use this file
 
@@ -37,11 +37,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 86 — Extend Gemini 4 Neon standing authorization to benchmarks
-- Owner approved Gemini 4 Neon for relevant, bounded performance benchmarks and controlled A/B experiments, including the established `xp/bench/run.sh` and `xp/bench/perf.py` workflows.
-- The exception remains specific to Gemini 4 Neon; other Gemini models, Claude, Codex, and other agents still need explicit authorization.
-- Updated the shared policy, Gemini entrypoint, handoff, task workflow, and continuity records. No build, benchmark, functional test, or CI polling was performed.
 
 ### Session 87 — Clarify fixed guest targets and XP memory limits
 - README now explains that the current 2048 MiB setting is a Y2KBox product default, not XP's physical RAM ceiling; a future 4 GiB GUI option is only a possibility.
@@ -94,8 +89,14 @@
 - Replaced obsolete fetch/rebase advice with per-write verification of latest `main` HEAD and exact target blob SHA; clarified Gemini 4 Neon-only standing local build/benchmark authorization.
 - Updated the worklog index; historical worklog entries remain append-only. Documentation-only; no builds, tests, benchmarks, guest validation, or CI polling.
 
- 
+
 ### Session 95 — Fix optional GitHub token handling in CI status helper
 - Corrected `scripts/session_status.sh` to pass an existing `GITHUB_TOKEN` or `GH_TOKEN` as one properly quoted Authorization header argument to `curl`.
 - No change to sandbox GitHub authentication, token setup, permissions, or GitHub Actions; this only improves Claude's optional CI-status API requests.
 - Static review only; no token was read/displayed, no authenticated request or CI polling was performed, and no QEMU build/test was run.
+
+### Session 96 — Move diagnostic logging guidance into the README FAQ
+- Relocated the Ctrl+Alt+L instructions into a dedicated FAQ entry and retained the details about opt-in capture, separate files, counter resets, and shell redirection.
+- Added the expected recording overhead, guidance for comparable performance captures, and a tester-to-developer/LLM-assisted profiling workflow using `Y2KBOX-PERF` output.
+- Clarified the distinction between performance profiling and graphics diagnostics; documented `VMVGA_TRACE_DEEP_GB_UPDATE` as an optional compile-time trace disabled by default.
+- Documentation-only; no source changes, instrumentation, builds, benchmarks, tests, guest validation, or CI polling.
