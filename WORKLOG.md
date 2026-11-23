@@ -1872,3 +1872,11 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   workload-dependent qualification.
 - Documentation-only change. Static text/section review only; no QEMU build,
   benchmark, functional test, or CI polling was performed.
+
+
+## Session 92 — Close T09 integration; keep XP acceptance owner-run
+
+- Reclassified T09 as DONE: the qemu-vmvga/SVGA II + SVGA3D integration and its Linux/Windows CI checks are complete.
+- Clarified that VMware Tools/driver installation, 2D/display behavior, D3D API coverage, and game compatibility acceptance belongs to the owner-run XP guest validation checklist, not a pending AI-agent task or a reason to leave T09 paused.
+- Updated HANDOFF's T09 summary and removed wording that made T09's CI-verified Ring-3 backdoor integration sound blocked on separate guest validation. T10 remains separately paused for its own owner-run rendering/API acceptance scope.
+- Documentation-only status/continuity update. No QEMU source changes, local build, benchmark, guest test, or CI polling was performed.
