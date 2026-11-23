@@ -44,7 +44,7 @@ entirely for Markdown-only commits; only the lightweight detector runs. Any
 non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
 See `.github/workflows/build.yml`.
 
-## Sessions 82–86 note
+## Sessions 82–87 note
 
 Session 82 introduced selective historical reads and the topic index. Session 83
 centralized shared instructions in `AGENTS.md`; Session 84 clarified sequential
@@ -52,4 +52,6 @@ multi-agent handoff and moved XP guest acceptance to an owner-run checklist.
 Session 85 added the owner-approved Gemini 4 Neon-only ordinary local-build
 exception. Session 86 extended that same model-specific authorization to relevant,
 bounded benchmark/A-B work while retaining explicit authorization for every other
-agent. See Sessions 82–86 in `WORKLOG.md` for the policy evolution.
+agent. Session 87 clarified the fixed guest RAM rationale, XP x86 virtual/physical
+memory limits, and the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling.
+See Sessions 82–87 in `WORKLOG.md` for the policy evolution and related decisions.
