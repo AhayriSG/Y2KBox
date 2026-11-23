@@ -1835,3 +1835,15 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Documentation-only change. No QEMU build, benchmark, functional test, or CI
   polling was performed.
 
+## Session 89 — Refocus the README introduction on the project identity
+
+- Replaced the dense opening technical/runtime summary with a concise description
+  of Y2KBox's Windows XP gaming focus and its mid-to-late 2000s PC performance
+  target.
+- Clarified that the project is not chasing modern high-end gaming performance
+  and is not intended to be a cycle-accurate, low-level hardware emulator.
+- Added an appreciative acknowledgment of 86Box and its contributors, without
+  adding a repetitive closing mission statement.
+- Documentation-only change. No build, benchmark, functional test, or CI
+  polling was performed.
+
