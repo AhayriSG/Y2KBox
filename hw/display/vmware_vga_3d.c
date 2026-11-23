@@ -2729,7 +2729,8 @@ static void vmsvga3d_renderer_surface_renderer_set(
                     surface->mip_count == 1 && surface->mips != NULL
                         ? surface->mips[0].data : NULL,
                     surface->mip_count == 1 && surface->mips != NULL
-                        ? surface->mips[0].data_size : 0, false)) {
+                        ? surface->mips[0].data_size : 0, false,
+                    VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT)) {
                 VMVGA_TRACE_LOCAL(
                     VMVGA_TRACE_3D,
                     "D3D9-BUFFER sid=%u stage=renderer-evict-flush result=FAIL",
