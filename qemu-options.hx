@@ -278,34 +278,6 @@ SRST
         icount/replay).
 ERST
 
-DEF("smp", HAS_ARG, QEMU_OPTION_smp,
-    "-smp [[cpus=]n][,maxcpus=maxcpus][,drawers=drawers][,books=books][,sockets=sockets]\n"
-    "               [,dies=dies][,clusters=clusters][,modules=modules][,cores=cores]\n"
-    "               [,threads=threads]\n"
-    "                set the number of initial CPUs to 'n' [default=1]\n"
-    "                maxcpus= maximum number of total CPUs, including\n"
-    "                offline CPUs for hotplug, etc\n"
-    "                drawers= number of drawers on the machine board\n"
-    "                books= number of books in one drawer\n"
-    "                sockets= number of sockets in one book\n"
-    "                dies= number of dies in one socket\n"
-    "                clusters= number of clusters in one die\n"
-    "                modules= number of modules in one cluster\n"
-    "                cores= number of cores in one module\n"
-    "                threads= number of threads in one core\n"
-    "Note: Different machines may have different subsets of the CPU topology\n"
-    "      parameters supported, so the actual meaning of the supported parameters\n"
-    "      will vary accordingly. For example, for a machine type that supports a\n"
-    "      three-level CPU hierarchy of sockets/cores/threads, the parameters will\n"
-    "      sequentially mean as below:\n"
-    "                sockets means the number of sockets on the machine board\n"
-    "                cores means the number of cores in one socket\n"
-    "                threads means the number of threads in one core\n"
-    "      For a particular machine type board, an expected CPU topology hierarchy\n"
-    "      can be defined through the supported sub-option. Unsupported parameters\n"
-    "      can also be provided in addition to the sub-option, but their values\n"
-    "      must be set as 1 in the purpose of correct parsing.\n",
-    QEMU_ARCH_ALL)
 SRST
 ``-smp [[cpus=]n][,maxcpus=maxcpus][,drawers=drawers][,books=books][,sockets=sockets][,dies=dies][,clusters=clusters][,modules=modules][,cores=cores][,threads=threads]``
     Simulate a SMP system with '\ ``n``\ ' CPUs initially present on
