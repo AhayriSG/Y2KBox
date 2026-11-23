@@ -56,8 +56,9 @@ policy is respected by never upstreaming this code; it does not restrict develop
 - **Do NOT build locally:** never run `./configure`, `make` or `ninja` in the sandbox unless explicitly asked to benchmark
   (`xp/bench/run.sh`, `xp/bench/perf.py`, A/B work). Let GitHub Actions handle compilation, smoke tests and binary artifacts.
 - **CI pipeline (`.github/workflows/build.yml`):** on every push it runs `configure`, build, the SeaBIOS 2-vCPU boot check,
-  `vectest` (`xp/bench/vectest.asm`) and the x87 differential test (`xp/bench/x87cmp.sh`) on **Linux and Windows**, and uploads
-  the binaries (`qemu-system-i386[.exe]`, `qemu-img[.exe]`, `pc-bios/`, Windows runtime DLLs) as GitHub Actions Artifacts.
+  `vectest` (`xp/bench/vectest.asm`) and the x87 differential test (`xp/bench/x87cmp.sh`) on **Linux and Windows**. Binary
+  packaging, packaged-layout smoke tests, and artifact uploads are skipped when every changed file has the `.md` extension;
+  mixed/code changes and manual `workflow_dispatch` runs still produce the normal Linux and Windows artifacts.
 - **CI & Codacy feedback loop (never poll after pushing):**
   - The `UserPromptSubmit` hook (`scripts/session_status.sh`, registered in `.claude/settings.json`, also on `SessionStart`
     after compaction) injects GitHub Actions and Codacy status whenever `HEAD` has an unverified push, and is silent (0 tokens)
