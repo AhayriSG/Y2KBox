@@ -33,7 +33,7 @@ have follow-up subsections under the same number.
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
 | F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
 | FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81–91 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–92 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
 
 ## Session 81 note
 
@@ -44,7 +44,7 @@ entirely for Markdown-only commits; only the lightweight detector runs. Any
 non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
 See `.github/workflows/build.yml`.
 
-## Sessions 82–91 note
+## Sessions 82–92 note
 
 Session 82 introduced selective historical reads and the topic index. Session 83
 centralized shared instructions in `AGENTS.md`; Session 84 clarified sequential
@@ -64,4 +64,4 @@ T01, T14, README, and HANDOFF with the uniprocessor decision. Session 91 moved
 the project-purpose material into the FAQ, distinguished Y2KBox from compatibility
 layers, documented the one-vCPU/TCG trade-off, and separated the proprietary
 hypervisor API rationale into its own FAQ entry.
-See Sessions 82–91 in `WORKLOG.md` for the policy evolution and related decisions.
+Session 92 closed T09's integration/CI task while keeping XP driver, display/2D, D3D API, and game acceptance in the owner-run manual checklist; T10 remains separately paused. See Sessions 82–92 in `WORKLOG.md` for the policy evolution and related decisions.
