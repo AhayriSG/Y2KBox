@@ -3474,7 +3474,8 @@ static void vmsvga3d_legacy_surface_evict(struct vmsvga_state_s *s,
             surface->mip_count == 1 && surface->mips != NULL
                 ? surface->mips[0].data : NULL,
             surface->mip_count == 1 && surface->mips != NULL
-                ? surface->mips[0].data_size : 0, false)) {
+                ? surface->mips[0].data_size : 0, false,
+            VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT)) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
             "D3D9-BUFFER sid=%u stage=evict-flush result=FAIL",
@@ -3807,7 +3808,8 @@ static bool vmsvga3d_dxvk_materialize_buffer(
                 surface->mip_count == 1 && surface->mips != NULL
                     ? surface->mips[0].data : NULL,
                 surface->mip_count == 1 && surface->mips != NULL
-                    ? surface->mips[0].data_size : 0, true)) {
+                    ? surface->mips[0].data_size : 0, true,
+                VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW)) {
             return false;
         }
         return true;
@@ -3845,7 +3847,8 @@ static bool vmsvga3d_dxvk_materialize_buffer(
             !compatible &&
             !vmsvga3d_dxvk_surface_flush_buffer_range(
                 s->dxvk, surface->dxvk_surface, surface->mips[0].data,
-                surface->mips[0].data_size, false)) {
+                surface->mips[0].data_size, false,
+                VMSVGA3D_DXVK_BUFFER_FLUSH_REPLACE)) {
             return false;
         }
     }
