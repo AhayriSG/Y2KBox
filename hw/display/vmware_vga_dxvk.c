@@ -401,7 +401,8 @@ struct vmsvga3d_dxvk_surface_s {
     bool d3d9_resident;
     bool d3d9_has_bounce;
     /* Guest buffer writes are coalesced in the CPU shadow until a native
-     * D3D9 consumer or readback needs the updated contents. */
+     * D3D9 consumer needs the updated contents.  Buffer readback is a no-op:
+     * the CPU shadow is authoritative for these input-only resources. */
     bool d3d9_buffer_dirty;
     uint32_t d3d9_buffer_dirty_start;
     uint32_t d3d9_buffer_dirty_end;
