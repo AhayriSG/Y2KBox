@@ -734,10 +734,13 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *excp)
 #else
     if (replay_exception()) {
         const TCGCPUOps *tcg_ops = cpu->cc->tcg_ops;
+        uint64_t perf_excp_ns =
+            qemu_perf_stats_begin(QEMU_PERF_TCG_CPU_EXCEPTION);
 
         bql_lock();
         tcg_ops->do_interrupt(cpu);
         bql_unlock();
+        qemu_perf_stats_end(QEMU_PERF_TCG_CPU_EXCEPTION, perf_excp_ns);
         cpu->exception_index = -1;
 
         if (unlikely(cpu_single_stepping(cpu))) {
@@ -809,11 +812,14 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
     assert(!cpu_test_interrupt(cpu, ~0));
 #else
     if (unlikely(cpu_test_interrupt(cpu, ~0))) {
+        uint64_t perf_intr_ns =
+            qemu_perf_stats_begin(QEMU_PERF_TCG_CPU_INTERRUPT);
         bql_lock();
         if (cpu_test_interrupt(cpu, CPU_INTERRUPT_DEBUG)) {
             cpu_reset_interrupt(cpu, CPU_INTERRUPT_DEBUG);
             cpu->exception_index = EXCP_DEBUG;
             bql_unlock();
+            qemu_perf_stats_end(QEMU_PERF_TCG_CPU_INTERRUPT, perf_intr_ns);
             return true;
         }
         if (replay_mode == REPLAY_MODE_PLAY && !replay_has_interrupt()) {
@@ -824,6 +830,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
             cpu->halted = 1;
             cpu->exception_index = EXCP_HLT;
             bql_unlock();
+            qemu_perf_stats_end(QEMU_PERF_TCG_CPU_INTERRUPT, perf_intr_ns);
             return true;
         } else {
             const TCGCPUOps *tcg_ops = cpu->cc->tcg_ops;
@@ -833,6 +840,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
                 replay_interrupt();
                 tcg_ops->cpu_exec_reset(cpu);
                 bql_unlock();
+                qemu_perf_stats_end(QEMU_PERF_TCG_CPU_INTERRUPT, perf_intr_ns);
                 return true;
             }
 
@@ -860,6 +868,8 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
                 if (unlikely(cpu_single_stepping(cpu))) {
                     cpu->exception_index = EXCP_DEBUG;
                     bql_unlock();
+                    qemu_perf_stats_end(QEMU_PERF_TCG_CPU_INTERRUPT,
+                                        perf_intr_ns);
                     return true;
                 }
                 cpu->exception_index = -1;
@@ -875,6 +885,7 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
 
         /* If we exit via cpu_loop_exit/longjmp it is reset in cpu_exec */
         bql_unlock();
+        qemu_perf_stats_end(QEMU_PERF_TCG_CPU_INTERRUPT, perf_intr_ns);
     }
 #endif /* !CONFIG_USER_ONLY */
 
@@ -976,10 +987,13 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
             if (tb == NULL) {
                 CPUJumpCache *jc;
                 uint32_t h;
+                uint64_t perf_gen_ns =
+                    qemu_perf_stats_begin(QEMU_PERF_TCG_TB_GEN_CODE);
 
                 mmap_lock();
                 tb = tb_gen_code(cpu, s);
                 mmap_unlock();
+                qemu_perf_stats_end(QEMU_PERF_TCG_TB_GEN_CODE, perf_gen_ns);
 
                 /*
                  * We add the TB in the virtual pc hash table
@@ -1007,6 +1021,7 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
                 tb_add_jump(last_tb, tb_exit, tb);
             }
 
+            qemu_perf_stats_add_work(QEMU_PERF_TCG_TB_EXEC_LOOPS, 1);
             cpu_loop_exec_tb(cpu, tb, s.pc, &last_tb, &tb_exit);
 
             /* Try to align the host and virtual clocks

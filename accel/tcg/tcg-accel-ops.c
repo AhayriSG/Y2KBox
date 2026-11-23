@@ -48,6 +48,7 @@
 #include "tcg-accel-ops-mttcg.h"
 #include "tcg-accel-ops-rr.h"
 #include "tcg-accel-ops-icount.h"
+#include "vcpu-profile.h"
 
 /* common functionality among all TCG variants */
 
@@ -223,6 +224,7 @@ static void tcg_accel_ops_init(AccelClass *ac)
     ops->remove_gdbstub_breakpoint = tcg_remove_gdbstub_breakpoint;
     ops->remove_all_gdbstub_breakpoints = tcg_remove_all_gdbstub_breakpoints;
     ops->update_guest_debug = tcg_update_cflags;
+    vcpu_profile_register_hooks();
 }
 
 static void tcg_accel_ops_class_init(ObjectClass *oc, const void *data)

@@ -171,7 +171,33 @@ static const char *const perf_stat_names[QEMU_PERF_STAT__MAX] = {
     [QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY] = "dxvk.upload_texture_copy",
     [QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK] = "dxvk.upload_texture_unlock",
     [QEMU_PERF_DXVK_UPLOAD_TEXTURE_UPDATE] = "dxvk.upload_texture_update",
+    [QEMU_PERF_TCG_TB_GEN_CODE] = "tcg.tb_gen_code",
+    [QEMU_PERF_TCG_TB_EXEC_LOOPS] = "tcg.tb_exec_loops",
+    [QEMU_PERF_TCG_CPU_EXCEPTION] = "tcg.cpu_exception",
+    [QEMU_PERF_TCG_CPU_INTERRUPT] = "tcg.cpu_interrupt",
+    [QEMU_PERF_TCG_TLB_FILL] = "tcg.tlb_fill",
+    [QEMU_PERF_TCG_MMIO_BQL_WAIT] = "tcg.mmio_bql_wait",
+    [QEMU_PERF_TCG_PIO_IN] = "tcg.pio_in",
+    [QEMU_PERF_TCG_PIO_OUT] = "tcg.pio_out",
 };
+
+static void (*perf_vcpu_profile_start_hook)(void);
+static void (*perf_vcpu_profile_stop_hook)(void);
+
+void qemu_perf_stats_set_vcpu_profile_hooks(void (*on_start)(void),
+                                            void (*on_stop)(void))
+{
+    perf_vcpu_profile_start_hook = on_start;
+    perf_vcpu_profile_stop_hook = on_stop;
+}
+
+uint64_t qemu_perf_stats_get_count(QemuPerfStat stat)
+{
+    if (stat >= QEMU_PERF_STAT__MAX) {
+        return 0;
+    }
+    return qatomic_read(&perf_stats[stat].count);
+}
 
 void qemu_perf_stats_start(void)
 {
@@ -199,6 +225,9 @@ void qemu_perf_stats_start(void)
     }
     perf_stats_start_ns = g_get_monotonic_time() * 1000;
     qatomic_set(&perf_stats_enabled, true);
+    if (perf_vcpu_profile_start_hook) {
+        perf_vcpu_profile_start_hook();
+    }
 }
 
 uint64_t qemu_perf_stats_begin(QemuPerfStat stat)
@@ -378,4 +407,7 @@ void qemu_perf_stats_stop(void)
                 qatomic_read(&counter->over_100ms));
     }
     fprintf(stderr, "Y2KBOX-PERF note=category_times_overlap_do_not_sum\n");
+    if (perf_vcpu_profile_stop_hook) {
+        perf_vcpu_profile_stop_hook();
+    }
 }

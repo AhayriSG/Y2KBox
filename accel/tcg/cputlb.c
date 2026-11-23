@@ -1246,11 +1246,13 @@ static bool tlb_fill_align(CPUState *cpu, vaddr addr, MMUAccessType type,
 {
     const TCGCPUOps *ops = cpu->cc->tcg_ops;
     CPUTLBEntryFull full;
+    uint64_t perf_tlb_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_TLB_FILL);
 
     if (ops->tlb_fill_align) {
         if (ops->tlb_fill_align(cpu, &full, addr, type, mmu_idx,
                                 memop, size, probe, ra)) {
             tlb_set_page_full(cpu, mmu_idx, addr, &full);
+            qemu_perf_stats_end(QEMU_PERF_TCG_TLB_FILL, perf_tlb_ns);
             return true;
         }
     } else {
@@ -1259,9 +1261,11 @@ static bool tlb_fill_align(CPUState *cpu, vaddr addr, MMUAccessType type,
             ops->do_unaligned_access(cpu, addr, type, mmu_idx, ra);
         }
         if (ops->tlb_fill(cpu, addr, size, type, mmu_idx, probe, ra)) {
+            qemu_perf_stats_end(QEMU_PERF_TCG_TLB_FILL, perf_tlb_ns);
             return true;
         }
     }
+    qemu_perf_stats_end(QEMU_PERF_TCG_TLB_FILL, perf_tlb_ns);
     assert(probe);
     return false;
 }

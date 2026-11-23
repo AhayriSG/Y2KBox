@@ -156,6 +156,14 @@ typedef enum QemuPerfStat {
     QEMU_PERF_DXVK_UPLOAD_TEXTURE_COPY,
     QEMU_PERF_DXVK_UPLOAD_TEXTURE_UNLOCK,
     QEMU_PERF_DXVK_UPLOAD_TEXTURE_UPDATE,
+    QEMU_PERF_TCG_TB_GEN_CODE,
+    QEMU_PERF_TCG_TB_EXEC_LOOPS,
+    QEMU_PERF_TCG_CPU_EXCEPTION,
+    QEMU_PERF_TCG_CPU_INTERRUPT,
+    QEMU_PERF_TCG_TLB_FILL,
+    QEMU_PERF_TCG_MMIO_BQL_WAIT,
+    QEMU_PERF_TCG_PIO_IN,
+    QEMU_PERF_TCG_PIO_OUT,
     QEMU_PERF_STAT__MAX
 } QemuPerfStat;
 
@@ -169,5 +177,8 @@ void qemu_perf_stats_record_work(QemuPerfStat stat, uint64_t amount);
 void qemu_perf_stats_command_end(uint32_t command_id,
                                  const char *command_name,
                                  uint64_t start_ns);
+uint64_t qemu_perf_stats_get_count(QemuPerfStat stat);
+void qemu_perf_stats_set_vcpu_profile_hooks(void (*on_start)(void),
+                                            void (*on_stop)(void));
 
 #endif

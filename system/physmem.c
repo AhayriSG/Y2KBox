@@ -26,6 +26,7 @@
 #include "qemu/hbitmap.h"
 #include "qemu/madvise.h"
 #include "qemu/lockable.h"
+#include "qemu/perf-stats.h"
 
 #ifdef CONFIG_TCG
 #include "accel/tcg/cpu-ops.h"
@@ -3182,7 +3183,10 @@ bool prepare_mmio_access(MemoryRegion *mr)
     bool release_lock = false;
 
     if (!bql_locked() && !mr->lockless_io) {
+        uint64_t perf_bql_ns =
+            qemu_perf_stats_begin(QEMU_PERF_TCG_MMIO_BQL_WAIT);
         bql_lock();
+        qemu_perf_stats_end(QEMU_PERF_TCG_MMIO_BQL_WAIT, perf_bql_ns);
         release_lock = true;
     }
     if (mr->flush_coalesced_mmio) {

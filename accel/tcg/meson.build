@@ -35,5 +35,6 @@ system_ss.add(files(
   'tcg-accel-ops-icount.c',
   'tcg-accel-ops-mttcg.c',
   'tcg-accel-ops-rr.c',
+  'vcpu-profile.c',
   'watchpoint.c',
 ))

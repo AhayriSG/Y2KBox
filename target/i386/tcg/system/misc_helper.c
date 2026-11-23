@@ -19,6 +19,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/main-loop.h"
+#include "qemu/perf-stats.h"
 #include "cpu.h"
 #include "exec/helper-proto.h"
 #include "accel/tcg/cpu-ldst.h"
@@ -31,38 +32,53 @@
 
 void HELPER(outb)(CPUX86State *env, uint32_t port, uint32_t data)
 {
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_OUT);
     address_space_stb(&address_space_io, port, data,
                       cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_OUT, perf_ns);
 }
 
 target_ulong HELPER(inb)(CPUX86State *env, uint32_t port)
 {
-    return address_space_ldub(&address_space_io, port,
-                              cpu_get_mem_attrs(env), NULL);
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_IN);
+    target_ulong val = address_space_ldub(&address_space_io, port,
+                                          cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_IN, perf_ns);
+    return val;
 }
 
 void HELPER(outw)(CPUX86State *env, uint32_t port, uint32_t data)
 {
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_OUT);
     address_space_stw_le(&address_space_io, port, data,
                          cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_OUT, perf_ns);
 }
 
 target_ulong HELPER(inw)(CPUX86State *env, uint32_t port)
 {
-    return address_space_lduw_le(&address_space_io, port,
-                                 cpu_get_mem_attrs(env), NULL);
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_IN);
+    target_ulong val = address_space_lduw_le(&address_space_io, port,
+                                             cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_IN, perf_ns);
+    return val;
 }
 
 void HELPER(outl)(CPUX86State *env, uint32_t port, uint32_t data)
 {
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_OUT);
     address_space_stl_le(&address_space_io, port, data,
                          cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_OUT, perf_ns);
 }
 
 target_ulong HELPER(inl)(CPUX86State *env, uint32_t port)
 {
-    return address_space_ldl_le(&address_space_io, port,
-                                cpu_get_mem_attrs(env), NULL);
+    uint64_t perf_ns = qemu_perf_stats_begin(QEMU_PERF_TCG_PIO_IN);
+    target_ulong val = address_space_ldl_le(&address_space_io, port,
+                                            cpu_get_mem_attrs(env), NULL);
+    qemu_perf_stats_end(QEMU_PERF_TCG_PIO_IN, perf_ns);
+    return val;
 }
 
 target_ulong HELPER(read_cr8)(CPUX86State *env)
