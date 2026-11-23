@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 78–87).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 79–88).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 78 — PIO/BQL, TB lookup, and x87 cleanup
-- Removed BQL acquisition for no-op ISA port 0x80 and buffered stderr during Ctrl+Alt+L capture, eliminating a large number of single-byte Windows WriteFile calls. Added capture-only PIO-port counters.
-- Optimized TCG TB lookup: larger jump cache, inline cache metadata, direct guest-state arguments, and a leaf fast path. Further x87 status and stack/move helpers were optimized.
-- Expanded CI x87 differential coverage from 30 to 46 operations. Standalone checks passed; full CI and owner capture were pending at the time of the entry.
-- Owner validation of this work later showed NtWriteFile and several x87/TB lookup hotspots disappearing; PIO out and BQL wait time fell materially.
 
 ### Session 79 — KVMVAPIC, same-page SMC, and O(1) jump-cache flush
 - Root causes included XP HAL repeatedly issuing TCG-ineffective `out 0x7e`, writable VAPIC data sharing an executable ROM page and triggering SMC/TB churn, and linear jump-cache flushes on invalidation.
@@ -65,6 +59,11 @@
 - Added standing owner authorization for Gemini 4 Neon to run ordinary local QEMU configure/build and relevant standard functional checks while validating its own changes.
 - Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Benchmarking/A-B authorization was still restricted at the time of this session.
 - GitHub Actions remains authoritative; local results must report exact commands/configuration and remain distinct from CI status. Updated shared agent guidance, Gemini entrypoint, handoff, task workflow, and worklog/index. No build, benchmark, or CI polling was performed.
+
+### Session 88 — Reorganize README host and guest-memory guidance
+- Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
+- Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
+- Preserved the XP physical-memory, virtual-address, /3GB, LARGEADDRESSAWARE, and workload caveats. Documentation-only; no build, benchmark, functional test, or CI polling.
 
 ## Current investigation / next actions
 
