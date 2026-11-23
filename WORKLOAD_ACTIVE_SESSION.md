@@ -38,11 +38,6 @@
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
 
-### Session 88 — Reorganize README host and guest-memory guidance
-- Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
-- Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
-- Preserved the XP physical-memory, virtual-address, /3GB, LARGEADDRESSAWARE, and workload caveats. Documentation-only; no build, benchmark, functional test, or CI polling.
-
 ### Session 89 — Refocus the README introduction on the project identity
 - Replaced the dense opening technical/runtime summary with a concise description of Y2KBox's Windows XP gaming focus and its mid-to-late 2000s PC performance target.
 - Clarified that the project is not chasing modern high-end gaming performance and is not intended to be a cycle-accurate, low-level hardware emulator.
@@ -100,3 +95,8 @@
 - Combined the former standalone preservation-practicality FAQ with the compatibility-layer answer, connecting the case for a complete XP environment with the practical benefits of emulation.
 - Preserved the Wine/wrapper distinction, original-hardware maintenance rationale, portability and repeatability benefits, minimal-workaround vision, Direct3D 8.1 / 9.0c target, and PCSX2 comparison.
 - Removed the separate preservation FAQ heading. Documentation-only; no builds, benchmarks, tests, guest validation, or CI polling.
+
+### Session 98 — Move project-purpose FAQ to the bottom of the README
+- Moved the merged compatibility-layer and preservation answer to the final FAQ position, after the technical questions.
+- Preserved the approved answer wording; only section order changed.
+- Documentation-only; no builds, benchmarks, tests, guest validation, or CI polling.
