@@ -1886,3 +1886,14 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Removed the upstream QEMU base commit/version and GPL-2.0 notice from the Fixed target area so that section remains focused on the guest configuration.
 - Added a dedicated FAQ entry, **“Which version of QEMU is Y2KBox based on?”**, identifying upstream QEMU 11.1.90, linking commit `9d7d057a558b9a1c232cea390b4481dd20d9c9ce`, and noting that the upstream GPL-2.0 license is unchanged with `COPYING` and `LICENSE` as the repository references.
 - Documentation-only change. Static placement and wording review; no build, benchmark, functional test, or CI polling was performed.
+
+
+## Session 94 — Reconcile agent guidance and stale handoff instructions
+
+- Re-audited all 16 Markdown files on `main` for agent instructions, authorization boundaries, cross-agent redirection, and stale workflow guidance. No malicious prompt injection or instruction redirecting agents away from the owner/repository was found.
+- Updated the QEMU codebase skill to state that its build/test suggestions are technical guidance, not authorization; `AGENTS.md` remains controlling.
+- Clarified in `AGENTS.md` and `HANDOFF.md` that the pushed-CI/Codacy status hook is Claude-specific. Gemini/Codex and other agents must not assume it exists and should leave result review to the owner or a later session rather than polling.
+- Replaced the obsolete `git fetch` + `git rebase` handoff instruction with the current serialized-write procedure: verify latest `main` HEAD and exact target blob SHA before every write, then abort/refetch/reapply if either moved.
+- Clarified that the manual benchmark reference does not grant general local-build or benchmark permission; the standing exception is Gemini 4 Neon only, and all other agents require explicit owner authorization.
+- Updated the worklog index and rolling active-session summary. Historical worklog entries were left intact.
+- Documentation-only static review. No QEMU source changes, local build, benchmark, functional test, guest test, or CI polling was performed.
