@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 87–96).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 90–99).
 
 ## How to use this file
 
@@ -37,12 +37,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 89 — Refocus the README introduction on the project identity
-- Replaced the dense opening technical/runtime summary with a concise description of Y2KBox's Windows XP gaming focus and its mid-to-late 2000s PC performance target.
-- Clarified that the project is not chasing modern high-end gaming performance and is not intended to be a cycle-accurate, low-level hardware emulator.
-- Added an appreciative acknowledgment of 86Box and its contributors, without a repetitive closing mission statement.
-- Documentation-only; no build, benchmark, functional test, or CI polling.
 
 ### Session 90 — Fix the product target to one vCPU
 - Owner approved a strict 32-bit Windows XP uniprocessor target: exactly one vCPU, with no multi-vCPU/SMP mode.
@@ -100,3 +94,8 @@
 - Moved the merged compatibility-layer and preservation answer to the final FAQ position, after the technical questions.
 - Preserved the approved answer wording; only section order changed.
 - Documentation-only; no builds, benchmarks, tests, guest validation, or CI polling.
+
+### Session 99 — Add guest OpenGL investigation to the task queue
+- Added T25 to investigate a Windows XP guest OpenGL path through VMware SVGA3D, targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
+- The task begins with WGL pixel-format and ICD diagnostics for Call of Duty 1, audits the guest/host SVGA3D protocol, evaluates an XP-compatible guest ICD, and requires incremental context/rendering tests while preserving D3D9.
+- Key distinction: Mesa demonstrates OpenGL 2.1 over VMware SVGA3D, but that does not prove VMware Tools 10.0.12 supplies accelerated OpenGL for Windows XP. No emulator source changes, builds, tests, guest validation, or CI polling.
