@@ -1717,3 +1717,12 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
   - **PASS**: Fast color clear (`bytes = 1, 2, 3, 4`, uniform and non-uniform values) and depth/stencil clear (`D24S8` depth-only/stencil-only/both, `S8D24`, `D24X8`, `D16`, masked 16-bit) bit-identical to `vmsvga3d_load_le`/`vmsvga3d_store_le`.
   - **PASS**: Ping-pong radix-sort + sweep-line `FlatView` builder 100% bit-identical to `render_memory_region_legacy()` across 200 heavy-overlap randomized trials, `[0, 2^64)` `Int128` boundary cases, sorted fast path, and refcount invariants (`8,042`-page × `3,720`-root FIFA scale benchmark: `0.538 ms/root` vs `1.284 ms/root` for arena B+tree, and ~10–14× faster than GLib `GSequence` + 98M QPC calls).
 - Full Linux & Windows QEMU CI builds and in-game FIFA 2003 / F1 '99-'02 captures: **pending push**.
+
+
+## Session 81 — Skip binary artifacts for Markdown-only changes
+
+- Updated `.github/workflows/build.yml` with a lightweight change-detection job. It compares the push range or pull-request base/head and enables artifact production only when at least one changed path does not end in `.md`.
+- Linux and Windows configure/build/functional checks still run for documentation-only commits. Only the binary `Package` steps, packaged-layout smoke tests, and `Upload binaries` steps are skipped, avoiding pointless executable artifacts while retaining CI validation.
+- Non-Markdown or mixed changes retain normal packaging and uploads. Manual `workflow_dispatch` runs always produce artifacts. Missing/invalid comparison commits or diff errors fail safe by enabling artifacts.
+- Updated `CLAUDE.md` and `HANDOFF.md` to document the behavior.
+- Static review confirmed both build jobs depend on the change-detection output and all six package/smoke/upload steps are guarded. No local QEMU build or CI run was performed; GitHub Actions validation is pending after push.
