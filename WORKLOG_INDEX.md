@@ -25,7 +25,7 @@ have follow-up subsections under the same number.
 | Topic | Relevant worklog sessions | Use these when investigating |
 |---|---:|---|
 | Repository bootstrap, pruning, fixed XP platform and build configuration | 1, 10–11, 13, 16–20, 28–29 | Original project decisions, removed QEMU subsystems, Linux KVM / Windows TCG split, build dependencies and platform-specific regressions |
-| TCG performance, x87, XMM/SSE and benchmark methodology | 2–9, 19–28, 68, 77–79 | T04/T13 benchmark setup, x87 fast paths, XMM caching, TCG helper costs, differential testing and measured performance changes |
+| TCG performance, x87, XMM/SSE and benchmark methodology | 2–9, 19–28, 68, 73–80 | T04/T13 benchmark setup, x87 fast paths, XMM caching, TCG helper costs, differential testing and measured performance changes |
 | VMware SVGA / SVGA3D, DXVK and D3D compatibility | 12, 29–32, 65–67, 80 | VMVGA integration, display/scanout issues, D3D9/D3D8 translation, shader/state compatibility and rendering regressions |
 | SDL windowing, fullscreen, input and diagnostic capture | 33–36, 60–64 | Capture hotkey/file lifecycle, debug-mode controls, guest-driven window sizing, fullscreen behavior and diagnostic logging |
 | VirtIO Block / Net and supported guest devices | 37–44 | VirtIO source restoration, Linux host-backend build gates, device defaults and PS/2 pointing-device policy |
