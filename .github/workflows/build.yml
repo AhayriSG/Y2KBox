@@ -70,6 +70,7 @@ jobs:
 
   linux:
     needs: changes
+    if: needs.changes.outputs.build_artifacts == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -176,6 +177,7 @@ jobs:
 
   windows:
     needs: changes
+    if: needs.changes.outputs.build_artifacts == 'true'
     runs-on: windows-latest
     defaults:
       run:
