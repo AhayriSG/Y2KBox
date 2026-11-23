@@ -1556,3 +1556,6 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Instrumented both the full-buffer upload path and the deferred range-flush path. The existing aggregate, vertex/index, and full/partial counters remain unchanged. The new dimensions overlap those existing counters and must not be summed together.
 - No D3D9 lock flags, upload ordering, guest-visible behavior, or buffer lifetime semantics changed. In particular, no NOOVERWRITE, manual ring offsets, or delayed batching were introduced.
 - Next owner test: repeat the same dry Albert Park race-start capture and compare DISCARD vs flags-zero latency, then inspect which size buckets account for the slow calls. Keep capture duration and race setup consistent. No local build or CI polling was performed (HANDOFF section 7).
+
+
+- CI follow-up: the first instrumentation commit omitted the two local `QemuPerfStat` declarations in `vmsvga3d_dxvk_surface_upload_buffer_range()`; both Linux and Windows correctly rejected the same compile error. Added `lock_flags_stat` and `lock_size_stat` beside the existing lock-stat declarations in commit `d2f2f61`. This is a compile-only correction; no behavior or counter semantics changed. Owner should rerun both CI jobs. No local build or CI polling was performed (HANDOFF section 7).
