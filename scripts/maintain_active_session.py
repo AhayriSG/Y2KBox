@@ -11,16 +11,19 @@ from pathlib import Path
 ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path(__file__).resolve().parent.parent))
 WORKLOG = ROOT / "WORKLOG.md"
 ACTIVE = ROOT / "WORKLOAD_ACTIVE_SESSION.md"
-SESSION_HEADING = re.compile(r"^### Session\s+(\d+)\b")
+ACTIVE_HEADING = re.compile(r"^### Session\s+(\d+)\b")
+WORKLOG_HEADING = re.compile(r"^#{2,3}\s+Session\s+(\d+)\b", re.IGNORECASE)
 TOP_HEADING = re.compile(r"^## ")
 
-def session_ids(path: Path) -> list[int]:
+def session_ids(path: Path, *, worklog: bool = False) -> list[int]:
     if not path.is_file():
         return []
+    heading = WORKLOG_HEADING if worklog else ACTIVE_HEADING
     found: list[int] = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        match = SESSION_HEADING.match(line)
-        if match:
+        match = heading.match(line)
+        # Owner-validation notes may be appended later but belong to an earlier session.
+        if match and not (worklog and "owner validation" in line.lower()):
             value = int(match.group(1))
             if not found or found[-1] != value:
                 found.append(value)
@@ -28,7 +31,7 @@ def session_ids(path: Path) -> list[int]:
 
 def prune_oldest_active_entries() -> None:
     lines = ACTIVE.read_text(encoding="utf-8").splitlines(keepends=True)
-    starts = [i for i, line in enumerate(lines) if SESSION_HEADING.match(line)]
+    starts = [i for i, line in enumerate(lines) if ACTIVE_HEADING.match(line)]
     if len(starts) <= 10:
         return
 
@@ -37,7 +40,7 @@ def prune_oldest_active_entries() -> None:
     for start in starts[:remove_count]:
         end = len(lines)
         for i in range(start + 1, len(lines)):
-            if SESSION_HEADING.match(lines[i]) or TOP_HEADING.match(lines[i]):
+            if ACTIVE_HEADING.match(lines[i]) or TOP_HEADING.match(lines[i]):
                 end = i
                 break
         remove_ranges.append((start, end))
@@ -55,9 +58,9 @@ def main() -> int:
     if not WORKLOG.is_file() or not ACTIVE.is_file():
         stop("Session handoff incomplete: WORKLOG.md or WORKLOAD_ACTIVE_SESSION.md is missing.")
 
-    worklog_ids = session_ids(WORKLOG)
+    worklog_ids = session_ids(WORKLOG, worklog=True)
     if not worklog_ids:
-        stop("No '### Session N' entries found in WORKLOG.md; check the session heading format.")
+        stop("No session headings found in WORKLOG.md; check the session heading format.")
 
     # If the agent added a new condensed entry, automatically roll the window forward.
     prune_oldest_active_entries()
