@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 84–93).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 85–94).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 84 — Clarify cross-agent handoff and human validation
-- Confirmed Claude, Gemini, Codex, and other agents use the same durable repo state through `AGENTS.md`, task status, handoff, active summary, and worklog. Sequential agent/provider switching is the normal owner workflow; agents do not share private runtime memory.
-- Removed T08 and T11 as claimable tasks. XP SP3 boot is owner-verified; remaining driver, D3D API, game, visual, and performance acceptance is combined into a manual owner-run checklist in `TASKS.md`. Agents can analyze supplied evidence but cannot certify guest behavior.
-- Updated T09/T10 and HANDOFF references, clarified the separate Hitman 2 capture investigation, and removed wxWidgets from README frontend messaging. SDL2 + Dear ImGui is the clear primary frontend direction.
-- No QEMU source changes, local build, or CI polling.
 
 ### Session 85 — Model-specific local build authorization
 - Added standing owner authorization for Gemini 4 Neon to run ordinary local QEMU configure/build and relevant standard functional checks while validating its own changes.
@@ -98,3 +92,10 @@
 - Removed the upstream QEMU base/version and GPL-2.0 notice from the Fixed target area.
 - Added a dedicated FAQ answer identifying upstream QEMU 11.1.90, linking the exact base commit, and noting the unchanged GPL-2.0 license with `COPYING` and `LICENSE` references.
 - Documentation-only; no build, benchmark, functional test, or CI polling.
+
+### Session 94 — Reconcile agent guidance and stale handoff instructions
+- Re-audited all 16 Markdown files; no malicious prompt injection or unrelated-repository redirection found.
+- Clarified that the QEMU codebase skill does not authorize builds/tests and that `AGENTS.md` controls execution permission.
+- Scoped CI/Codacy status-hook reporting to Claude; other agents leave post-push review to the owner or a later session and do not poll.
+- Replaced obsolete fetch/rebase advice with per-write verification of latest `main` HEAD and exact target blob SHA; clarified Gemini 4 Neon-only standing local build/benchmark authorization.
+- Updated the worklog index; historical worklog entries remain append-only. Documentation-only; no builds, tests, benchmarks, guest validation, or CI polling.
