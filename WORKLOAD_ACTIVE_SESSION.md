@@ -60,10 +60,6 @@
 - Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Benchmarking/A-B authorization was still restricted at the time of this session.
 - GitHub Actions remains authoritative; local results must report exact commands/configuration and remain distinct from CI status. Updated shared agent guidance, Gemini entrypoint, handoff, task workflow, and worklog/index. No build, benchmark, or CI polling was performed.
 
-### Session 88 — Reorganize README host and guest-memory guidance
-- Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
-- Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
-- Preserved the XP physical-memory, virtual-address, /3GB, LARGEADDRESSAWARE, and workload caveats. Documentation-only; no build, benchmark, functional test, or CI polling.
 
 ## Current investigation / next actions
 
@@ -91,3 +87,8 @@
 - README now explains that the current 2048 MiB setting is a Y2KBox product default, not XP's physical RAM ceiling; a future 4 GiB GUI option is only a possibility.
 - Clarified the 32-bit XP 2 GiB/2 GiB virtual-address split, /3GB plus LARGEADDRESSAWARE requirements and kernel tradeoff, and why extra RAM may help the OS without guaranteeing game access or reduced stutter.
 - Documented the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling, confirmed against the project's advertised SVGA3D caps. Updated HANDOFF's durable RAM note. No build, benchmark, or CI polling was performed.
+
+### Session 88 — Reorganize README host and guest-memory guidance
+- Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
+- Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
+- Preserved the XP physical-memory, virtual-address, /3GB, LARGEADDRESSAWARE, and workload caveats. Documentation-only; no build, benchmark, functional test, or CI polling.
