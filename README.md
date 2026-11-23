@@ -46,8 +46,6 @@ claims and serialize commits.
   model. Direct3D 10/11 and Shader Model 4.0 or newer are outside the guest-facing
   graphics target. Host-side rendering may use newer APIs internally.
 
-Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
-License: GPL-2.0, unchanged (see COPYING / LICENSE).
 
 | Windows XP SP3 Desktop (ACPI PC HAL)<br/>VMware SVGA II (Experimental) | F1 Challenge '99-'02 | Joint Operations: Typhoon Rising 1.4.3.0
 | :---: | :---: | :---: |
@@ -150,6 +148,10 @@ defeats interval capture.
 - **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
 - **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
 - **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
+
+### Which version of QEMU is Y2KBox based on?
+
+Y2KBox is based on upstream QEMU **11.1.90**, at commit [`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`](https://github.com/qemu/qemu/commit/9d7d057a558b9a1c232cea390b4481dd20d9c9ce). The upstream QEMU license remains **GPL-2.0**, unchanged; see the repository's `COPYING` and `LICENSE` files.
 
 ### Why is Y2KBox limited to one vCPU?
 
