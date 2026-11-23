@@ -27,25 +27,25 @@ Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
 
 ## T01 (P0) Fixed XP machine  -  Status: PAUSED (parts 1, 2a, 2b done)
 Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
-* DONE part 1: default RAM 2 GiB, default 1 vCPU, `max_cpus` 2 (`hw/i386/pc.c`).
+* DONE part 1: fixed RAM 2 GiB and exactly 1 vCPU, with `default_cpus = max_cpus = 1` (`hw/i386/pc.c`). The QEMU `-smp` CLI option and its parser have been removed; multi-vCPU/SMP configurations are unsupported.
 * DONE part 2a (`xp/strip/08-fixed-machine-memory.py`): minimal `pc_memory_init` (all RAM below 4 GiB,
   asserts above-4G == 0), memory-device/DIMM/NVDIMM/SP-MEM/HV-balloon hotplug handlers, CXL, device
   memory, `pc_max_used_gpa`, and in `acpi-build.c` the NVDIMM/memory-hotplug AML, CXL, SRAT device
   memory, HMAT, VIOT, VMGenID, VMClock, CEDT. `default.mak` now has DIMM, MEM_DEVICE, NVDIMM,
   ACPI_NVDIMM/HMAT/VIOT/CXL/VMGENID/VMCLOCK/MEMORY_HOTPLUG, HV_BALLOON_SUPPORTED = n
   (10 stale Kconfig `select` lines removed); 11 dead C files deleted. Checks green: e820 = one
-  2 GiB entry, vectest OK, `-smp 2` boots, no pc-dimm/nvdimm devices.
+  2 GiB entry, vectest OK, no pc-dimm/nvdimm devices. Historical pre-restriction testing showed `-smp 2` could boot; that is not supported by the current product target.
 * DONE part 2b (`xp/strip/09-single-machine-type.py`): only `pc-i440fx-11.2` (alias `pc`) remains; 88 compat
   tables (`pc_compat_*`, `hw_compat_*`) deleted. `-machine help` = pc + none.
 * DONE part 2c-1: removed dead above-4G / `max_ram_below_4g` / `pci_hole64` / `gigabyte_align` /
   `enforce_amd_1tb_hole` / `pc_init1` memory-split code across `hw/i386/{pc,pc_piix,x86,acpi-build}.c`,
   `hw/pci-host/i440fx.c`, and `include/hw/i386/{pc,x86}.h`.
-* Resume here (part 2c-2): remove remaining `ram-slots`/`maxmem` fields if unused; (3) remove the `-m/-smp/-machine/-cpu`
-  CLI paths (qemu-options.hx, system/vl.c, `-smp` parsing) now that defaults are fixed; (4) rename the machine to something like `xp` (drop the version suffix); (5) ACPI
+* Resume here (part 2c-2): remove remaining `ram-slots`/`maxmem` fields if unused; (3) remove the remaining `-m/-machine/-cpu`
+  CLI paths now that defaults are fixed (`-smp` has already been removed); (4) rename the machine to something like `xp` (drop the version suffix); (5) ACPI
   CPU hotplug AML (`build_cpus_aml`) is still needed for the CPU objects - keep it, drop the
   hotplug-only parts later; (6) re-run dead-source pass (HANDOFF 5b), standard checks.
 * DoD: fresh configure+build; one machine in `-machine help`; standard checks (HANDOFF 7);
-  `info mtree` shows 2 GiB below 4 GiB only.
+  `info mtree` shows 2 GiB below 4 GiB only; the machine exposes exactly one CPU and does not accept `-smp`.
 
 ## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: PAUSED (parts 1 and 2a done)
 * DONE: model `xp-p4` (Pentium 4 Northwood: family 15 model 2 stepping 9, SSE2, no SSE3+) added
@@ -268,7 +268,7 @@ Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin
 (vCPU thread to the fastest/performance core, others elsewhere) with Windows
 (`SetThreadAffinityMask`/`SetThreadIdealProcessorEx`, priority) and Linux (`sched_setaffinity`)
 APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
-Measure with and without (1 vCPU default; 2-vCPU experimental mode if added).
+Measure scheduling and affinity changes with the guest fixed at exactly 1 vCPU; do not introduce a multi-vCPU test mode.
 
 ## T15 (P3) Restore and enable VirtIO Block + Net for XP  -  Status: DONE 2026-11-21
 The minimal VirtIO implementation and build wiring have been restored from the exact upstream QEMU 11.1.90 baseline (`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`): shared VirtIO core/config/bus/QMP, PCI transport, VirtIO Block + Net frontends and implementations, `net_rx_pkt`, and the missing public headers. Meson wiring includes only the selected Block/Net device sources. `CONFIG_VIRTIO`, `CONFIG_VIRTIO_PCI`, `CONFIG_VIRTIO_BLK`, and `CONFIG_VIRTIO_NET` are enabled; unrelated VirtIO devices remain disabled.
