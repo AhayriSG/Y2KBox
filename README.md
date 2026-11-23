@@ -36,10 +36,12 @@ claims and serialize commits.
 
 ## Fixed target
 
+- **Guest OS:** 32-bit Windows XP.
 - **Guest memory:** 2048 MiB, assigned automatically; there is no RAM setting in the
   current build.
 - **Guest CPU:** xp-p4 (Pentium 4 Northwood class), with SSE2 as the maximum exposed
-  instruction set; 1 vCPU by default.
+  instruction set; exactly 1 vCPU (uniprocessor). Multi-vCPU/SMP configurations are not
+  supported.
 - **Guest 3D API:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised shader
   model. Direct3D 10/11 and Shader Model 4.0 or newer are outside the guest-facing
   graphics target. Host-side rendering may use newer APIs internally.
