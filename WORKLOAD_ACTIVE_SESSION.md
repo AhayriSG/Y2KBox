@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 90–99).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 91–100).
 
 ## How to use this file
 
@@ -26,8 +26,9 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
-5. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
+4. **T25 guest OpenGL investigation is active.** Mesa's SVGA Gallium driver translates OpenGL operations into SVGA3D commands; the host dispatcher already accepts some legacy commands such as DRAW_PRIMITIVES, but its legacy capability profile is documented as D3D9-oriented. Compare the exact Mesa GL 2.1 command/state/capability needs against current handlers. The latest uploaded QEMU log has no WGL/PFD records, so the next diagnostic must run inside XP and enumerate PFDs, generic-vs-ICD classification, pixel-format selection, and WGL context creation.
+5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
+6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
 ## Key diagnostic interpretation rules
 
@@ -37,12 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 90 — Fix the product target to one vCPU
-- Owner approved a strict 32-bit Windows XP uniprocessor target: exactly one vCPU, with no multi-vCPU/SMP mode.
-- Set `max_cpus` to 1 and removed QEMU's `-smp` CLI option/parser. README now states the 32-bit guest OS and exact one-vCPU limit.
-- Updated T01, T14, and HANDOFF so future implementation and thread-pinning work preserve the fixed CPU count. Old two-vCPU boot evidence is explicitly historical.
-- Static review only; no local build, functional test, or CI polling.
 
 ### Session 91 — Explain Y2KBox's purpose and fixed vCPU target in the README FAQ
 - Moved the former Project goals section into the FAQ and explained why a real
@@ -99,3 +94,9 @@
 - Added T25 to investigate a Windows XP guest OpenGL path through VMware SVGA3D, targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
 - The task begins with WGL pixel-format and ICD diagnostics for Call of Duty 1, audits the guest/host SVGA3D protocol, evaluates an XP-compatible guest ICD, and requires incremental context/rendering tests while preserving D3D9.
 - Key distinction: Mesa demonstrates OpenGL 2.1 over VMware SVGA3D, but that does not prove VMware Tools 10.0.12 supplies accelerated OpenGL for Windows XP. No emulator source changes, builds, tests, guest validation, or CI polling.
+
+### Session 100 — Start guest OpenGL investigation and audit the SVGA3D path
+- Began T25 (IN PROGRESS), targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
+- Corrected the protocol model: Mesa translates OpenGL into SVGA3D commands; there is no separate raw OpenGL FIFO. Y2KBox already whitelists some legacy commands used by SVGA3D, but complete GL 2.1 semantics and caps are unverified.
+- The latest QEMU diagnostic log has no WGL/PFD output. A guest-side probe is needed to enumerate pixel formats, distinguish generic software from ICD formats, and test context creation.
+- Mesa's documented SVGA guest driver stack is Linux-specific; historical Workstation 6 documentation describes XP OpenGL as software-emulated but does not establish VMware Tools 10.0.12 behavior. README Fixed target wording was previewed and awaits owner approval. No source changes, diagnostic utility, builds, tests, guest validation, or CI polling.
