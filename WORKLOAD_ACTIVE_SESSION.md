@@ -38,11 +38,6 @@
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
 
-### Session 87 — Clarify fixed guest targets and XP memory limits
-- README now explains that the current 2048 MiB setting is a Y2KBox product default, not XP's physical RAM ceiling; a future 4 GiB GUI option is only a possibility.
-- Clarified the 32-bit XP 2 GiB/2 GiB virtual-address split, /3GB plus LARGEADDRESSAWARE requirements and kernel tradeoff, and why extra RAM may help the OS without guaranteeing game access or reduced stutter.
-- Documented the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling, confirmed against the project's advertised SVGA3D caps. Updated HANDOFF's durable RAM note. No build, benchmark, or CI polling was performed.
-
 ### Session 88 — Reorganize README host and guest-memory guidance
 - Kept the Fixed target summary guest-only by removing its duplicate host-platform bullet.
 - Moved host requirements and the full 2 GiB RAM explanation into separate entries under a new FAQ at the bottom of README.
@@ -100,3 +95,8 @@
 - Added the expected recording overhead, guidance for comparable performance captures, and a tester-to-developer/LLM-assisted profiling workflow using `Y2KBOX-PERF` output.
 - Clarified the distinction between performance profiling and graphics diagnostics; documented `VMVGA_TRACE_DEEP_GB_UPDATE` as an optional compile-time trace disabled by default.
 - Documentation-only; no source changes, instrumentation, builds, benchmarks, tests, guest validation, or CI polling.
+
+### Session 97 — Merge preservation rationale into the README project-purpose FAQ
+- Combined the former standalone preservation-practicality FAQ with the compatibility-layer answer, connecting the case for a complete XP environment with the practical benefits of emulation.
+- Preserved the Wine/wrapper distinction, original-hardware maintenance rationale, portability and repeatability benefits, minimal-workaround vision, Direct3D 8.1 / 9.0c target, and PCSX2 comparison.
+- Removed the separate preservation FAQ heading. Documentation-only; no builds, benchmarks, tests, guest validation, or CI polling.
