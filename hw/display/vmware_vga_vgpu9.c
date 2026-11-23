@@ -3251,8 +3251,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_readback_surface_image(
     }
 
     /* D3D9 vertex and index buffers are input-only in this backend.  Every
-     * mutation originates in the CPU shadow and is uploaded explicitly, so
-     * there is no newer GPU copy to read back. */
+     * mutation originates in the CPU shadow; deferred native uploads are
+     * flushed before D3D9 draws, so there is no newer GPU copy to read back. */
     if (vmsvga3d_d3d9_transfer_buffer(&info)) {
         return level == 0 ? VMSVGA3D_D3D9_ACCEL_COMPLETE
                           : VMSVGA3D_D3D9_ACCEL_FAILED;
@@ -3800,10 +3800,10 @@ static bool vmsvga3d_dxvk_materialize_buffer(
     }
 
     /* A compatible resident D3D9 buffer already contains the authoritative
-     * contents. Guest writes update resident buffers explicitly, while CPU-only
-     * fallback writes evict them before the next draw. Re-uploading the full
-     * CPU shadow here would therefore discard/rename an unchanged dynamic
-     * buffer on every draw. */
+     * contents. Guest writes are either flushed from the pending range by the
+     * resident fast path above or the resource is recreated from the CPU shadow.
+     * Re-uploading the full shadow here would discard/rename an unchanged
+     * dynamic buffer on every draw. */
     if (compatible) {
         return true;
     }
