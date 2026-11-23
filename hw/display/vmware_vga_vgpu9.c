@@ -3816,21 +3816,14 @@ static bool vmsvga3d_dxvk_materialize_buffer(
     }
 
     if (before.resident) {
-        if (use == VMSVGA3D_D3D9_RESOURCE_USE_VERTEX_BUFFER) {
-            compatible = before.resource_type ==
-                         VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER;
-        } else {
-            compatible = before.resource_type ==
-                             VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER &&
-                         before.format == plan.primary.format;
-        }
+        compatible = vmsvga3d_dxvk_d3d9_buffer_compatible(
+            surface->dxvk_surface, index_buffer,
+            (uint32_t)surface->storage_bytes, native_format);
         if ((before.resource_type ==
                  VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
              before.resource_type ==
                  VMSVGA3D_D3D9_HOST_RESOURCE_INDEX_BUFFER) &&
-            !vmsvga3d_dxvk_d3d9_buffer_compatible(
-                surface->dxvk_surface, index_buffer,
-                (uint32_t)surface->storage_bytes, native_format) &&
+            !compatible &&
             !vmsvga3d_dxvk_surface_flush_buffer_range(
                 s->dxvk, surface->dxvk_surface, surface->mips[0].data,
                 surface->mips[0].data_size)) {
