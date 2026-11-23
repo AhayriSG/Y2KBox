@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 80–89).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 82–91).
 
 ## How to use this file
 
@@ -20,11 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 81 — Skip binary artifacts for Markdown-only changes
-- Added a fail-safe change detector. Initially, Markdown-only commits still ran Linux/Windows builds and functional checks, but skipped packaging, packaged smoke tests, and artifact uploads.
-- Any non-Markdown change and manual `workflow_dispatch` run retained normal artifact production; missing comparison commits or diff errors conservatively enabled artifacts.
-- The later job-level skip (commit `8ab36ee`, recorded in Session 83) changed the current behavior so Markdown-only commits now run only the detector.
 
 ### Session 82 — Make coding-agent historical reads selective
 - Replaced full-history onboarding with a layered read: current handoff/task state, the rolling summary, and a topic index; open only relevant worklog sessions.
@@ -92,3 +87,14 @@
 - Set `max_cpus` to 1 and removed QEMU's `-smp` CLI option/parser. README now states the 32-bit guest OS and exact one-vCPU limit.
 - Updated T01, T14, and HANDOFF so future implementation and thread-pinning work preserve the fixed CPU count. Old two-vCPU boot evidence is explicitly historical.
 - Static review only; no local build, functional test, or CI polling.
+
+### Session 91 — Explain Y2KBox's purpose and fixed vCPU target in the README FAQ
+- Moved the former Project goals section into the FAQ and explained why a real
+  Windows XP environment serves a different purpose from compatibility layers.
+- Added a standalone one-vCPU FAQ answer covering era-accurate dual-core XP,
+  workload-dependent TCG/MTTCG coordination overhead, and the distinction
+  between guest vCPUs and host threads.
+- Separated the proprietary hypervisor API rationale into its own FAQ question
+  and retained the preservation-practicality discussion as a closing entry.
+- Clarified HANDOFF's durable vCPU rationale. Documentation-only; no QEMU build,
+  benchmark, functional test, or CI polling.
