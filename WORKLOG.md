@@ -1726,3 +1726,11 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Non-Markdown or mixed changes retain normal packaging and uploads. Manual `workflow_dispatch` runs always produce artifacts. Missing/invalid comparison commits or diff errors fail safe by enabling artifacts.
 - Updated `CLAUDE.md` and `HANDOFF.md` to document the behavior.
 - Static review confirmed both build jobs depend on the change-detection output and all six package/smoke/upload steps are guarded. No local QEMU build or CI run was performed; GitHub Actions validation is pending after push.
+
+## Session 82 — Make coding-agent historical reads selective
+
+- Replaced the fresh-session instruction to read all of `WORKLOG.md` with a layered workflow: read `CLAUDE.md`, `HANDOFF.md`, `TASKS.md`, and `WORKLOAD_ACTIVE_SESSION.md`; use `WORKLOG_INDEX.md` to locate only historical sessions relevant to the task.
+- Added `WORKLOG_INDEX.md` as a topic-to-session navigation map. It points to the append-only worklog without duplicating its content.
+- Updated `HANDOFF.md`, `README.md`, and the active-summary instructions to match. Historical worklog entries remain untouched; the rolling summary continues to retain only the latest ten sessions.
+- Clarified the Session 71 concern: Session 71's full historical entry remains in `WORKLOG.md`; only its brief entry aged out of `WORKLOAD_ACTIVE_SESSION.md` when Session 81 entered the ten-session window.
+- Static review only; no QEMU build, tests, or CI run were performed. Documentation changes were committed directly to `main` in small sequential commits.
