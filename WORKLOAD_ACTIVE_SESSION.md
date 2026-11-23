@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 76–85).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 77–86).
 
 ## How to use this file
 
@@ -16,16 +16,10 @@
 - Y2KBox targets 32-bit Windows XP. Linux product runtime is KVM-only; Windows product runtime is TCG-only. Performance optimization work targets Windows TCG.
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
 - Keep the owner-approved guest/device constraints in `HANDOFF.md`; do not infer that a standalone test or green CI proves in-game correctness.
-- **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Benchmarking/A-B always needs explicit authorization, including for Gemini 4 Neon. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
+- **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 76 — Validate buffer-lock improvement; add vCPU profiler
-- Owner's Session 75 capture reduced measured buffer Lock time from 1,196.5 ms to 22.58 ms (about 53x less total time; per-call latency about 73x lower). NOOVERWRITE and invalidation DISCARD handled the measured updates; owner also reported smoother Hitman 2 and slight improvement in FIFA 2003 / Joint Operations. F1 still felt unchanged overall.
-- Phase profiling isolated a separate F1 launch cliff: during race launch the vCPU was busy almost continuously while host SVGA3D/display work accounted for under 2% of frame time; most time was unattributed inside TCG.
-- Added structural TCG counters and an opt-in 1 kHz Windows x64 vCPU sampler, active only during Ctrl+Alt+L capture. It reports per-second FPS phases, host symbols, and JIT guest PCs.
-- Standalone compile/runtime checks passed; full Linux/Windows CI and owner capture were pending.
 
 ### Session 77 — x87 TCG bottleneck overhaul
 - vCPU profiling found x87 helpers and softfloat consumed more than half of samples, with additional cost from exception-flag merging, redundant loads, a lost FST fast path, zero handling, helper_fpop, and missing TCG_CALL_NO_RWG annotations.
@@ -75,7 +69,7 @@
 
 ### Session 85 — Model-specific local build authorization
 - Added standing owner authorization for Gemini 4 Neon to run ordinary local QEMU configure/build and relevant standard functional checks while validating its own changes.
-- Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Performance benchmarking/A-B work requires explicit authorization for every agent, including Gemini 4 Neon.
+- Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Benchmarking/A-B authorization was still restricted at the time of this session.
 - GitHub Actions remains authoritative; local results must report exact commands/configuration and remain distinct from CI status. Updated shared agent guidance, Gemini entrypoint, handoff, task workflow, and worklog/index. No build, benchmark, or CI polling was performed.
 
 ## Current investigation / next actions
@@ -93,3 +87,9 @@
 - Overlapping lock dimensions (aggregate, vertex/index, full/partial, flags, size buckets) are not additive.
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
+
+
+### Session 86 — Extend Gemini 4 Neon standing authorization to benchmarks
+- Owner approved Gemini 4 Neon for relevant, bounded performance benchmarks and controlled A/B experiments, including the established `xp/bench/run.sh` and `xp/bench/perf.py` workflows.
+- The exception remains specific to Gemini 4 Neon; other Gemini models, Claude, Codex, and other agents still need explicit authorization.
+- Updated the shared policy, Gemini entrypoint, handoff, task workflow, and continuity records. No build, benchmark, functional test, or CI polling was performed.
