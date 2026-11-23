@@ -16147,6 +16147,10 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
     void *destination = NULL;
     int32_t result;
     uint64_t perf_start_ns;
+    uint64_t perf_type_start_ns;
+    uint64_t perf_range_start_ns;
+    QemuPerfStat lock_type_stat;
+    QemuPerfStat lock_range_stat;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL || !surface->d3d9_resident ||
         surface->d3d9_resource == NULL || data == NULL || size == 0 ||
@@ -16162,9 +16166,23 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
         return false;
     }
 
+    lock_type_stat =
+        surface->d3d9_resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
+            ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_VERTEX
+            : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_INDEX;
+    lock_range_stat = offset == 0 && size == surface->d3d9_length
+                          ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
+                          : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_PARTIAL_RANGE;
+
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK);
+    perf_type_start_ns = qemu_perf_stats_begin(lock_type_stat);
+    perf_range_start_ns = qemu_perf_stats_begin(lock_range_stat);
     result = lock(surface->d3d9_resource, offset, size, &destination, 0);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK, perf_start_ns);
+    qemu_perf_stats_end(lock_type_stat, perf_type_start_ns);
+    qemu_perf_stats_end(lock_range_stat, perf_range_start_ns);
+    qemu_perf_stats_add_work(lock_type_stat, size);
+    qemu_perf_stats_add_work(lock_range_stat, size);
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
         return false;
     }
