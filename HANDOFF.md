@@ -40,7 +40,7 @@ The normal workflow is sequential handoff between agents (for example, Claude to
     no 3.5 GB mode, no above-4G / 64-bit-hole logic);
   - guest CPU: model `xp-p4` (Pentium 4 Northwood class), **SSE2 is the maximum**
     (no SSE3/SSSE3/SSE4/AVX in the guest, so those translators can be deleted);
-  - **1 vCPU by default** (uniprocessor); 2 vCPUs possible later as an experimental option
+  - **Exactly 1 vCPU** (uniprocessor); multi-vCPU/SMP configurations are outside the product target.
     (decision and reasoning in section 4, Q1);
   - no user-facing QEMU flags (-smp, -cpu, -m, -machine ...). Our own front end will only
     ask for: qcow2 disk (made with qemu-img), floppy image, CD/ISO image.
@@ -106,7 +106,7 @@ The normal workflow is sequential handoff between agents (for example, Claude to
 * Accelerator policy: Linux product builds expose/use KVM only; Windows builds expose/use TCG only. Only
   `pc-i440fx-11.2` (alias `pc`) remains. Default CPU `xp-p4` (verified in-guest: family 15,
   SSE2 yes, SSE3/SSSE3/SSE4/AVX no); default RAM 2 GiB below 4 GiB (e820 verified);
-  1 vCPU default. SeaBIOS boots under TCG with 2 vCPUs. The owner has booted an XP SP3
+  exactly 1 vCPU; `max_cpus` is 1 and the `-smp` CLI option is removed. SeaBIOS booted with 2 vCPUs in historical testing before this restriction; that configuration is no longer supported. The owner has booted an XP SP3
   desktop and run XP games. Remaining VMware driver, 3D API, and per-game compatibility
   checks require owner-run guest validation (see the manual checklist in TASKS.md)
   alongside the active agent investigations.
@@ -135,18 +135,17 @@ The normal workflow is sequential handoff between agents (for example, Claude to
 
 ## 4. Decisions on the former open questions (owner answers + rationale)
 
-**Q1 vCPUs / host threads / HAL (owner: unsure, "up to you").** Owner clarified he meant
-the *host threads QEMU uses*, not the guest vCPU count, and doubts multiple vCPUs are a
-good idea for XP. **Decision: 1 vCPU (uniprocessor) by default.** Reasons: XP's
-uniprocessor ACPI HAL has the least synchronisation overhead; TCG with 1 vCPU needs no
-MTTCG cross-vCPU locking/TLB-flush traffic; XP-era software gains little from 2 CPUs
-relative to the emulation cost. `max_cpus` is 2 (XP Pro's licensed socket count) so a 2-vCPU
-mode can be added later; if enabled, the user must choose the *ACPI Multiprocessor PC* HAL
-during setup - document this in the README then. The owner has booted XP SP3 using the
-ACPI PC HAL; re-check HAL/APIC behavior if the guest CPU topology is changed. Host threads still matter: QEMU
-already runs the vCPU, main-loop/IO, audio and (later) the 3D render on separate host
-threads. **Thread pinning** (vCPU thread on a dedicated fast core, others elsewhere, Windows
-and Linux affinity APIs) is task T14. Note: "host passthrough" CPU models are a KVM
+**Q1 vCPU count / host threads / HAL (owner decision, 2026-11-24).** Y2KBox has a strict
+**one-vCPU uniprocessor target**. `default_cpus` and `max_cpus` are both 1, and the QEMU
+`-smp` command-line option is removed; multi-vCPU/SMP configurations are not supported.
+This is a product-scope decision, not a claim that multiple vCPUs are technically impossible
+or slower in every workload. The single-vCPU configuration avoids MTTCG cross-vCPU
+coordination and keeps the XP guest on the uniprocessor ACPI PC HAL. Do not add a second
+vCPU or experimental SMP mode without an explicit owner decision to revise this target.
+Host threads remain distinct from guest vCPUs: QEMU also runs the main loop/IO, audio,
+and (later) 3D rendering on host threads. **Thread pinning** (vCPU thread on a dedicated
+fast core, others elsewhere, Windows and Linux affinity APIs) is task T14 and must retain
+the fixed one-vCPU guest configuration. Note: "host passthrough" CPU models are a KVM
 concept and do not apply to TCG (the guest CPU is emulated); what we *can* do is use host
 CPU features inside TCG (AVX2/BMI/etc. already assumed) and pass host resources such as the
 GPU through our own 3D path.
@@ -342,8 +341,9 @@ only (asserted); plugin memory callbacks are not emitted for these ops.
 **Tested** with `xp/bench/vectest.asm` (prints OK/FAIL<n> on port 0x402): unaligned
 loads/stores across 4 KB page boundaries, aligned ops, misaligned MOVDQA raising
 #GP (load and store), memory-operand ALU op vs register form, and loads from VGA
-text RAM (MMIO slow path) vs integer loads. Passes on the old reference binary and
-the new one, -smp 1 and -smp 2. SeaBIOS still boots. Not yet tested: real XP,
+text RAM (MMIO slow path) vs integer loads. Historically passed on the old reference
+binary and the new one with `-smp 1` and `-smp 2`; the latter is no longer a supported
+product configuration. SeaBIOS still boots. Not yet tested: real XP,
 AVX-guest atomicity path (MO_ATOM_IFALIGN), a stress test under MTTCG.
 
 
@@ -428,7 +428,7 @@ idempotent (`git checkout` touched files first).
 - **Manual reference (humans / benchmarking only)** - what the CI checks do:
 
       ./qemu-system-i386 -accel help                        # only: tcg
-      ./qemu-system-i386 -L pc-bios -accel tcg -smp 2 -display none -monitor none -serial none \
+      ./qemu-system-i386 -L pc-bios -accel tcg -display none -monitor none -serial none \
         -chardev stdio,id=d -device isa-debugcon,iobase=0x402,chardev=d     # "Found 2 cpu(s)", "Booting from ..."
       nasm -fbin xp/bench/vectest.asm -o vectest.img   # run with isa-debug-exit + debugcon, expect "OK"
       xp/bench/x87cmp.sh build 2000                    # all 30 operations identical
