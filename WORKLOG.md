@@ -1734,3 +1734,27 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Updated `HANDOFF.md`, `README.md`, and the active-summary instructions to match. Historical worklog entries remain untouched; the rolling summary continues to retain only the latest ten sessions.
 - Clarified the Session 71 concern: Session 71's full historical entry remains in `WORKLOG.md`; only its brief entry aged out of `WORKLOAD_ACTIVE_SESSION.md` when Session 81 entered the ten-session window.
 - Static review only; no QEMU build, tests, or CI run were performed. Documentation changes were committed directly to `main` in small sequential commits.
+
+## Session 83 — Consolidate agent guidance and repair project continuity docs
+
+- Made `AGENTS.md` the canonical cross-agent policy for Claude, Gemini, Codex,
+  and other coding agents. It now defines a selective fresh-session read order,
+  authoritative document roles, safe checkpointing, direct-to-`main` workflow,
+  no-local-QEMU-build/CI rules, and verification standards while preserving
+  Y2KBox's downstream-only AI authorization and security guidance.
+- Reduced `CLAUDE.md` to Claude-specific hook and local-secret behavior, and
+  added a short `GEMINI.md` entrypoint. Codex and other agents use `AGENTS.md`.
+- Corrected `HANDOFF.md`, `TASKS.md`, and `README.md` to match the current
+  Markdown-only CI behavior (only the lightweight detector runs; Linux and
+  Windows build jobs are skipped), owner-confirmed XP boot, the single remaining
+  i440FX machine, current frontend direction, and actual artifact availability.
+- Reconciled stale task states: T08's XP boot prerequisite is satisfied but its
+  install record remains incomplete; T11 is active for remaining guest/API
+  compatibility; T13 reflects the active T13e-F1 subtrack; T17 is paused pending
+  Linux KVM host-runtime validation; T19 records basic repeated-capture behavior
+  as verified while content coverage remains under investigation.
+- Updated the documentation incrementally in commits:
+  `9f12541`, `b6877d4`, `81f4883`, `1c6aaf8`, `7ef25cd`, and `7b34080`.
+- Documentation-only review and edits. No QEMU source changed, no local QEMU
+  build was run, and CI was not polled. Markdown-only CI is expected to skip the
+  Linux and Windows jobs on these commits.
