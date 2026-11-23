@@ -16151,6 +16151,7 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
     uint64_t perf_range_start_ns;
     QemuPerfStat lock_type_stat;
     QemuPerfStat lock_range_stat;
+    uint32_t lock_flags;
 
     if (!vmsvga3d_dxvk_ready(dxvk) || surface == NULL || !surface->d3d9_resident ||
         surface->d3d9_resource == NULL || data == NULL || size == 0 ||
@@ -16173,11 +16174,18 @@ bool vmsvga3d_dxvk_surface_upload_buffer_range(
     lock_range_stat = offset == 0 && size == surface->d3d9_length
                           ? QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
                           : QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_PARTIAL_RANGE;
+    /*
+     * DISCARD is safe only when this upload replaces every byte in the
+     * dynamic buffer. Partial guest updates must preserve the untouched data.
+     */
+    lock_flags = lock_range_stat == QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FULL_RANGE
+                     ? VMSVGA3D_DXVK_D3DLOCK_DISCARD
+                     : 0;
 
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK);
     perf_type_start_ns = qemu_perf_stats_begin(lock_type_stat);
     perf_range_start_ns = qemu_perf_stats_begin(lock_range_stat);
-    result = lock(surface->d3d9_resource, offset, size, &destination, 0);
+    result = lock(surface->d3d9_resource, offset, size, &destination, lock_flags);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK, perf_start_ns);
     qemu_perf_stats_end(lock_type_stat, perf_type_start_ns);
     qemu_perf_stats_end(lock_range_stat, perf_range_start_ns);
