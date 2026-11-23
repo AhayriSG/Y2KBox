@@ -1854,3 +1854,21 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Updated T01 to record the completed CPU restriction and CLI removal, with remaining CLI cleanup scoped to `-m`, `-machine`, and `-cpu`. Updated T14 to keep all thread-pinning measurements on the fixed one-vCPU guest.
 - Reconciled HANDOFF's old experimental two-vCPU option with the new owner decision. Historical two-vCPU boot/test evidence is retained as historical evidence, not current support.
 - Source/documentation changes reviewed statically only. No local build or functional tests were run, and GitHub Actions/Codacy were not polled.
+
+## Session 91 — Explain Y2KBox's purpose and fixed vCPU target in the README FAQ
+
+- Moved the former Project goals section into the FAQ and reframed it as
+  **“Why build a Windows XP emulator when compatibility layers already exist?”**
+  The answer distinguishes a real XP guest environment from application
+  compatibility layers without dismissing Wine or game-specific wrappers.
+- Made the one-vCPU target a standalone FAQ entry. It acknowledges era-accurate
+  dual-core XP systems, explains workload-dependent TCG/MTTCG coordination
+  overhead, and explicitly avoids claiming that two vCPUs are always slower.
+  It also distinguishes guest vCPUs from QEMU host threads.
+- Moved the proprietary hypervisor API explanation into its own independent FAQ
+  question and retained the preservation-practicality discussion as a separate
+  closing FAQ entry. Kept the existing host-requirements and 2 GiB RAM answers.
+- Clarified the durable HANDOFF Q1 rationale to match the FAQ and preserve the
+  workload-dependent qualification.
+- Documentation-only change. Static text/section review only; no QEMU build,
+  benchmark, functional test, or CI polling was performed.
