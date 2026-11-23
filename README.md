@@ -14,8 +14,12 @@ A QEMU fork that emulates exactly one thing: **32-bit Windows XP guests**, on
 Long-term goals: fast TCG for all guest instruction classes, **VMware SVGA3D
 (qemu-vmvga) 3D acceleration** for XP (VBoxVGA 5.2.x kept as the alternative), and a small wxWidgets launcher.
 
-**Contributors / LLMs: read [HANDOFF.md](HANDOFF.md) first**, then pick work from
-[TASKS.md](TASKS.md) (claim on `main`) and log what you did in [WORKLOG.md](WORKLOG.md).
+**Contributors / LLMs:** read [HANDOFF.md](HANDOFF.md), [TASKS.md](TASKS.md), and
+[WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md) before starting. Follow the
+session-aware reading rules in [CLAUDE.md](CLAUDE.md): a fresh coding-agent session
+reads `WORKLOG.md` to establish history; continued work in the same session uses the
+rolling summary and consults only relevant historical worklog sections. Append every
+completed/paused session to [WORKLOG.md](WORKLOG.md) and refresh the rolling summary.
 Contributors work directly on `main`; coordinate task claims and serialize commits.
 
 Fixed target: guest RAM 2048 MB (automatic, not configurable), guest CPU SSE2 maximum
