@@ -640,6 +640,13 @@ typedef enum VMSVGA3DDxvkBufferFlushReason {
     VMSVGA3D_DXVK_BUFFER_FLUSH_REPLACE,
 } VMSVGA3DDxvkBufferFlushReason;
 
+bool vmsvga3d_dxvk_d3d9_software_vp(const VMSVGA3DDxvk *dxvk);
+void vmsvga3d_dxvk_surface_invalidate_buffer(VMSVGA3DDxvkSurface *surface);
+void vmsvga3d_dxvk_surface_mark_buffer_drawn_range(
+    VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size);
+void vmsvga3d_dxvk_surface_mark_buffer_drawn_all(VMSVGA3DDxvkSurface *surface);
+bool vmsvga3d_dxvk_surface_buffer_fully_inflight(
+    const VMSVGA3DDxvkSurface *surface);
 bool vmsvga3d_dxvk_surface_defer_buffer_range(
     VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size);
 bool vmsvga3d_dxvk_surface_flush_buffer_range(

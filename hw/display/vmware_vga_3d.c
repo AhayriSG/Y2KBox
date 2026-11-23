@@ -14283,8 +14283,10 @@ static bool vmsvga3d_gb_surface_invalidate_live(
         (void)subresource;
     }
 
-    /* VirtualBox leaves buffer invalidation as a no-op.  For textures it
-     * destroys all cached views, irrespective of the requested image. */
+    /* Notify the D3D9 buffer tracker so the next draw-consumed upload can
+     * rename via D3DLOCK_DISCARD instead of stalling on discarded contents.
+     * For non-buffer textures, also drop cached D3D11 views. */
+    vmsvga3d_dxvk_surface_invalidate_buffer(surface->dxvk_surface);
     if (surface->format != SVGA3D_BUFFER) {
         vmsvga3d_dxvk_d3d11_surface_invalidate_views(surface->dxvk_surface);
     }
