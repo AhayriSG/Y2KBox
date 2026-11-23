@@ -139,11 +139,15 @@ The normal workflow is sequential handoff between agents (for example, Claude to
 **one-vCPU uniprocessor target**. `default_cpus` and `max_cpus` are both 1, and the QEMU
 `-smp` command-line option is removed; multi-vCPU/SMP configurations are not supported.
 This is a product-scope decision, not a claim that multiple vCPUs are technically impossible
-or slower in every workload. The single-vCPU configuration avoids MTTCG cross-vCPU
-coordination and keeps the XP guest on the uniprocessor ACPI PC HAL. Do not add a second
-vCPU or experimental SMP mode without an explicit owner decision to revise this target.
+or slower in every workload. Windows XP-era dual-core systems were period-appropriate, but
+multi-vCPU TCG/MTTCG execution adds cross-vCPU coordination and synchronization that can
+create overhead, particularly for workloads dominated by one guest thread. The impact is
+workload-dependent; do not describe two vCPUs as universally slower. Y2KBox chooses the
+simpler fixed uniprocessor target and keeps the XP guest on the uniprocessor ACPI PC HAL.
+Do not add a second vCPU or experimental SMP mode without an explicit owner decision to
+revise this target.
 Host threads remain distinct from guest vCPUs: QEMU also runs the main loop/IO, audio,
-and (later) 3D rendering on host threads. **Thread pinning** (vCPU thread on a dedicated
+and 3D rendering on host threads. **Thread pinning** (vCPU thread on a dedicated
 fast core, others elsewhere, Windows and Linux affinity APIs) is task T14 and must retain
 the fixed one-vCPU guest configuration. Note: "host passthrough" CPU models are a KVM
 concept and do not apply to TCG (the guest CPU is emulated); what we *can* do is use host
