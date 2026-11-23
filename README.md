@@ -35,32 +35,6 @@ claims and serialize commits.
 - **Guest 3D API:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised shader
   model. Direct3D 10/11 and Shader Model 4.0 or newer are outside the guest-facing
   graphics target. Host-side rendering may use newer APIs internally.
-- **Host:** Windows or Linux on x86-64-v3 or newer.
-
-### Why the current guest RAM target is 2 GiB
-
-The 2048 MiB default is a Y2KBox product decision, not a hard 2 GiB physical-memory
-limit in 32-bit Windows XP. 32-bit XP can address up to 4 GiB of physical address
-space, although PCI devices and other memory-mapped hardware can reserve part of that
-range, leaving less than 4 GiB available to the guest OS. A future GUI option for
-4 GiB of guest RAM may be considered; it is not available today.
-
-The familiar **2 GiB user / 2 GiB kernel split is virtual address space, not a split
-of installed RAM**. By default, each 32-bit XP process gets up to 2 GiB of user-mode
-virtual address space, while the other 2 GiB is reserved for the system. Installing
-more guest RAM does not by itself increase the address space available to a game.
-
-On supported 32-bit Windows XP Professional installations, the /3GB Boot.ini
-switch can change the split to 3 GiB for user mode and 1 GiB for the kernel. The
-game executable must also have the LARGEADDRESSAWARE flag set to use the extra
-user address space. This is an application-specific option, not a general
-recommendation: reducing kernel virtual address space can affect drivers and other
-system resources, so compatibility must be tested.
-
-More physical RAM can still help Windows keep working data resident, reduce paging,
-and cache file data, depending on the workload. It does not automatically become
-a game-owned extra gigabyte, and it does not guarantee that a game will stop
-stuttering.
 
 Base: upstream QEMU `9d7d057a558b9a1c232cea390b4481dd20d9c9ce` (11.1.90).
 License: GPL-2.0, unchanged (see COPYING / LICENSE).
@@ -70,11 +44,6 @@ License: GPL-2.0, unchanged (see COPYING / LICENSE).
 | <img src="https://github.com/user-attachments/assets/adcae51d-6939-4ed8-8e61-9a98fa4d94ce" width="310" alt="Windows XP SP3 desktop running in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/c36efbb4-8e7e-457c-b253-115691552d9f" width="310" alt="VMware SVGA II in Y2KBox (Experimental)"> | <img src="https://github.com/user-attachments/assets/ee1ba790-3550-4cbe-a479-358a126f7378" width="310" alt="VMware SVGA II and F1 Challenge '99-'02 in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/034245a2-0ba9-4eb8-80d0-b4a3779c543e" width="310" alt="VMware SVGA II and F1 Challenge '99-'02  in Y2KBox"> | <img src="https://github.com/user-attachments/assets/59ad794a-ad31-49a6-a209-9beaef453098" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising  in Y2KBox"><br/><img src="https://github.com/user-attachments/assets/70f54da1-c64d-41ed-975f-5ea3da77173f" width="310" alt="VMware SVGA II and Joint Operations Typhoon Rising in Y2KBox">
 
 
-## Host requirements
-
-- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
-- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
-- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
 
 ## Download & Usage
 
@@ -185,4 +154,37 @@ People can sometimes buy original hardware cheaply, but owning the machine is on
 Y2KBox aims to spare users from having to solve the same compatibility problems over and over inside the guest or on the host. Ideally, they should not need a chain of guest-side wrappers, per-game community patches, or fragile workarounds every time a host operating-system update breaks something. Nor should using the guest require users to modify the host's graphics-driver stack, install opaque kernel drivers, or edit system registries just to get an old game running.
 
 The objective is straightforward: make the Windows XP and Y2K-era software experience **portable, maintainable, and accessible**—so preservationists can spend less time repairing the environment and more time preserving, exploring, and enjoying the software itself.
+
+## FAQ
+
+### What are the host requirements?
+
+- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
+- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
+- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
+
+### Why is the current guest RAM target 2 GiB?
+
+The 2048 MiB default is a Y2KBox product decision, not a hard 2 GiB physical-memory
+limit in 32-bit Windows XP. 32-bit XP can address up to 4 GiB of physical address
+space, although PCI devices and other memory-mapped hardware can reserve part of that
+range, leaving less than 4 GiB available to the guest OS. A future GUI option for
+4 GiB of guest RAM may be considered; it is not available today.
+
+The familiar **2 GiB user / 2 GiB kernel split is virtual address space, not a split
+of installed RAM**. By default, each 32-bit XP process gets up to 2 GiB of user-mode
+virtual address space, while the other 2 GiB is reserved for the system. Installing
+more guest RAM does not by itself increase the address space available to a game.
+
+On supported 32-bit Windows XP Professional installations, the /3GB Boot.ini
+switch can change the split to 3 GiB for user mode and 1 GiB for the kernel. The
+game executable must also have the LARGEADDRESSAWARE flag set to use the extra
+user address space. This is an application-specific option, not a general
+recommendation: reducing kernel virtual address space can affect drivers and other
+system resources, so compatibility must be tested.
+
+More physical RAM can still help Windows keep working data resident, reduce paging,
+and cache file data, depending on the workload. It does not automatically become
+a game-owned extra gigabyte, and it does not guarantee that a game will stop
+stuttering.
 
