@@ -631,6 +631,9 @@ void vmsvga3d_dxvk_screen_readback_discard(VMSVGA3DDxvkSurface *surface);
 bool vmsvga3d_dxvk_surface_upload_buffer(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
     const void *data, uint32_t size);
+bool vmsvga3d_dxvk_surface_upload_buffer_discard_full(
+    VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
+    const void *data, uint32_t size);
 bool vmsvga3d_dxvk_surface_defer_buffer_range(
     VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size);
 bool vmsvga3d_dxvk_surface_flush_buffer_range(
