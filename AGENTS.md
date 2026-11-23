@@ -88,10 +88,20 @@ sections; do not restart the full-history read.
 - **All other agents:** do not run QEMU configure/build commands (`./configure`,
   `make`, or `ninja`) in the sandbox unless the owner explicitly authorizes
   that work for the current task.
-- **Benchmarking/A-B work:** any agent, including Gemini 4 Neon, still needs
-  explicit owner authorization before running performance benchmarks or A/B
-  experiments (for example, `xp/bench/run.sh` or `xp/bench/perf.py`). The
-  Gemini 4 Neon build exception does not authorize benchmark campaigns.
+- **Standing benchmarking/A-B authorization — Gemini 4 Neon only:** Gemini 4
+  Neon may run the repository's established performance benchmark scripts and
+  controlled A/B experiments (including `xp/bench/run.sh` and
+  `xp/bench/perf.py`) when they are relevant to validating its own changes.
+  This is a separate owner-approved, model-specific exception; it does not
+  extend to Gemini CLI generally, other Gemini models, Claude, Codex, or other
+  agents. Do not infer that another agent inherits it.
+- Keep benchmark runs purposeful and bounded: use the established methodology,
+  preserve comparable before/after results and configuration, avoid needless
+  repetitions or unnecessarily long campaigns, and report the exact commands,
+  workload, and results. Treat noisy or incomparable measurements as
+  inconclusive rather than claiming a speedup. Any agent other than Gemini 4
+  Neon still needs explicit owner authorization for performance benchmarks or
+  A/B experiments.
 - GitHub Actions remains the authoritative shared Linux/Windows build and CI
   result. A local build/test result is supplementary evidence, not CI status.
   Report the exact local configuration, commands, and checks run; distinguish
