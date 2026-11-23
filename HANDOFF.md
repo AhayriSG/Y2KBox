@@ -194,9 +194,15 @@ For a fresh XP installation, load the XP x86 `viostor` driver from
 after setup. An existing IDE installation must have `viostor` installed before switching
 its boot disk to VirtIO Block. Owner-led disk/network performance comparisons remain
 manual; do not add recurring CI performance benchmarks.
-**Q4 RAM.** Decision (owner): always 2048 MB, automatic, no user setting. Implemented as
-`mc->default_ram_size = 2 GiB` in `hw/i386/pc.c`; the above-4G/hole64 code is dead and is
-removed by T01.
+**Q4 RAM.** Current decision (owner): always 2048 MiB, automatic, no user setting.
+Implemented as `mc->default_ram_size = 2 GiB` in `hw/i386/pc.c`; the above-4G/hole64
+code is dead and is removed by T01. This is a product default, not a claim that 32-bit
+XP cannot use more physical RAM. A future GUI option up to 4 GiB may be considered,
+but actual XP-visible RAM can be lower because PCI/MMIO ranges occupy part of the
+32-bit physical address space. More guest RAM does not enlarge a normal 32-bit
+process's default 2 GiB user virtual address space; XP Professional's /3GB boot
+switch and an executable's LARGEADDRESSAWARE flag are separate, compatibility-sensitive
+requirements for a process to use up to 3 GiB.
 
 ## 5. Findings and design notes (evidence)
 
