@@ -1880,3 +1880,9 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Clarified that VMware Tools/driver installation, 2D/display behavior, D3D API coverage, and game compatibility acceptance belongs to the owner-run XP guest validation checklist, not a pending AI-agent task or a reason to leave T09 paused.
 - Updated HANDOFF's T09 summary and removed wording that made T09's CI-verified Ring-3 backdoor integration sound blocked on separate guest validation. T10 remains separately paused for its own owner-run rendering/API acceptance scope.
 - Documentation-only status/continuity update. No QEMU source changes, local build, benchmark, guest test, or CI polling was performed.
+
+## Session 93 — Move QEMU base and license provenance into the README FAQ
+
+- Removed the upstream QEMU base commit/version and GPL-2.0 notice from the Fixed target area so that section remains focused on the guest configuration.
+- Added a dedicated FAQ entry, **“Which version of QEMU is Y2KBox based on?”**, identifying upstream QEMU 11.1.90, linking commit `9d7d057a558b9a1c232cea390b4481dd20d9c9ce`, and noting that the upstream GPL-2.0 license is unchanged with `COPYING` and `LICENSE` as the repository references.
+- Documentation-only change. Static placement and wording review; no build, benchmark, functional test, or CI polling was performed.
