@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 71–80).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 72–81).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 71 — D3D9 buffer update deferral and synchronization boundaries
-- Added one pending dirty range per resident D3D9 vertex/index buffer; guest updates coalesce in CPU shadow and flush immediately before draw consumption.
-- Preserved flags=0 synchronization for eviction, renderer teardown/recreation, handoff, and incompatible-resource replacement. Only a complete pre-draw replacement may use DISCARD. Partial ranges remain conservative.
-- Owner captures showed one guest update was consumed by the next draw: 44,448 deferred updates became 44,448 flushes, with zero merges. Do not widen the batching window or delay guest-visible updates.
-- Next investigation was the per-update D3D9 Lock cost, not further batching.
 
 ### Session 72 — Small dynamic-buffer DISCARD experiment
 - Added a full-shadow DISCARD upload path for eligible vertex/index buffers up to 64 KiB; it uploads the authoritative CPU shadow, not merely a partial guest range, and clears dirty metadata only after successful Unlock.
@@ -78,6 +72,11 @@
 - Implemented: skip CPU shadow clear when native GPU clear succeeds (retain fallback); bit-exact SSE2 and division-free scalar 16->32 conversion; gate deep readback tracing correctly; raise overlapping-buffer full-shadow DISCARD threshold from 64 KiB to 256 KiB; replace the GLib GSequence FlatView builder with ping-pong radix sorting plus a sweep-line/min-heap renderer; skip no-op GART unmap transactions.
 - Standalone checks passed, including exhaustive 65,536-value pixel conversion, clear-path equivalence, and randomized FlatView equivalence against the legacy renderer.
 - At the time Session 80 was appended, full Linux/Windows CI and in-game FIFA/F1 validation were marked pending. The owner subsequently reported both Linux and Windows CI passing. A separate 23.526 s dry-weather capture was also shared: `cpu.exec` count 3,415, total 23.515560 s, max 19.554 ms, 3,164 intervals >1 ms, 1,064 >10 ms, and none >100 ms. The capture's full workload attribution is not reproduced here; consult its diagnostic log before drawing conclusions.
+
+### Session 81 — Skip binary artifacts for Markdown-only changes
+- Added a workflow change-detection job for pushes and pull requests. If every changed path ends in `.md`, Linux and Windows builds and functional checks still run, but package creation, packaged-layout smoke tests, and binary artifact uploads are skipped.
+- Mixed/code changes retain normal artifact production; manual `workflow_dispatch` always produces artifacts. Missing comparison commits or diff errors conservatively enable artifact production.
+- Updated `CLAUDE.md` and `HANDOFF.md`. Static review confirmed both build jobs consume the detection output and all six artifact-only steps are guarded. CI validation is pending; no local QEMU build or CI polling was performed.
 
 ## Current investigation / next actions
 
