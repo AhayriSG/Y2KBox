@@ -717,55 +717,151 @@ static void render_memory_region_legacy(FlatView *view,
 }
 
 /*
- * Render into a balanced ordered sequence.  This avoids moving the existing
- * FlatRange array on every insertion; the sequence is flattened once after
- * the recursive priority traversal is complete.
+ * Collect terminating leaf regions in priority order, radix-sort by start
+ * address, and sweep with a priority min-heap to produce the exact disjoint
+ * FlatView without per-range heap allocations or splay-tree pointer chasing.
  */
-static gint flatview_sequence_compare(gconstpointer a, gconstpointer b,
-                                      gpointer opaque)
-{
-    const FlatRange *ra = a;
-    const FlatRange *rb = b;
+typedef struct FlatViewLeaf {
+    Int128 start;
+    Int128 end;
+    MemoryRegion *mr;
+    hwaddr offset_in_region;
+    uint32_t seq;
+    uint8_t dirty_log_mask;
+    bool romd_mode;
+    bool readonly;
+    bool nonvolatile;
+    bool unmergeable;
+} FlatViewLeaf;
 
-    (void)opaque;
-    if (int128_lt(ra->addr.start, rb->addr.start)) {
-        return -1;
+typedef struct FlatViewSortKey {
+    uint64_t start;
+    uint32_t idx;
+} FlatViewSortKey;
+
+typedef struct FlatViewBuilder {
+    FlatViewLeaf *leaves;
+    uint32_t nr;
+    uint32_t cap;
+    uint64_t visited;
+} FlatViewBuilder;
+
+typedef struct FlatViewSeqHeap {
+    uint32_t *data;
+    uint32_t nr;
+    uint32_t cap;
+} FlatViewSeqHeap;
+
+static inline void flatview_heap_push(FlatViewSeqHeap *heap,
+                                      const FlatViewLeaf *leaves,
+                                      uint32_t idx)
+{
+    uint32_t i;
+    uint32_t seq;
+
+    if (heap->nr == heap->cap) {
+        heap->cap = heap->cap ? heap->cap * 2u : 16u;
+        heap->data = g_renew(uint32_t, heap->data, heap->cap);
     }
-    if (int128_gt(ra->addr.start, rb->addr.start)) {
-        return 1;
+    i = heap->nr++;
+    seq = leaves[idx].seq;
+    while (i > 0) {
+        uint32_t p = (i - 1u) >> 1;
+
+        if (leaves[heap->data[p]].seq <= seq) {
+            break;
+        }
+        heap->data[i] = heap->data[p];
+        i = p;
     }
-    return 0;
+    heap->data[i] = idx;
 }
 
-static void flatview_tree_insert(GSequence *ranges, GSequenceIter *before,
-                                 const FlatRange *range)
+static inline void flatview_heap_pop(FlatViewSeqHeap *heap,
+                                     const FlatViewLeaf *leaves)
 {
-    FlatRange *copy = g_new(FlatRange, 1);
-    uint64_t start_ns = qemu_perf_stats_begin(
-        QEMU_PERF_FLATVIEW_TREE_INSERT);
+    uint32_t last = heap->data[--heap->nr];
+    uint32_t seq;
+    uint32_t i = 0;
 
-    *copy = *range;
-    g_sequence_insert_before(before, copy);
-    memory_region_ref(range->mr);
-    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_TREE_INSERT, start_ns);
-    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_TREE_INSERT, 1);
+    if (heap->nr == 0) {
+        return;
+    }
+    seq = leaves[last].seq;
+    for (;;) {
+        uint32_t l = (i << 1) + 1u;
+        uint32_t r;
+        uint32_t c;
+
+        if (l >= heap->nr) {
+            break;
+        }
+        r = l + 1u;
+        c = (r < heap->nr &&
+             leaves[heap->data[r]].seq < leaves[heap->data[l]].seq) ? r : l;
+        if (seq <= leaves[heap->data[c]].seq) {
+            break;
+        }
+        heap->data[i] = heap->data[c];
+        i = c;
+    }
+    heap->data[i] = last;
 }
 
-static void render_memory_region_tree(GSequence *ranges, MemoryRegion *mr,
-                                      Int128 base, AddrRange clip,
-                                      bool readonly, bool nonvolatile,
-                                      bool unmergeable)
+static FlatViewSortKey *flatview_radix_sort_keys(FlatViewSortKey *a,
+                                                 FlatViewSortKey *b,
+                                                 uint32_t n)
+{
+    FlatViewSortKey *src = a;
+    FlatViewSortKey *dst = b;
+    uint64_t diff = 0;
+    uint64_t first_start = src[0].start;
+    uint32_t i;
+    int shift;
+
+    for (i = 1; i < n; i++) {
+        diff |= src[i].start ^ first_start;
+    }
+
+    for (shift = 0; shift < 64; shift += 8) {
+        uint32_t cnt[256] = { 0 };
+        uint32_t sum = 0;
+        FlatViewSortKey *tmp;
+
+        if (((diff >> shift) & 0xffu) == 0) {
+            continue;
+        }
+        for (i = 0; i < n; i++) {
+            cnt[(src[i].start >> shift) & 0xffu]++;
+        }
+        for (i = 0; i < 256; i++) {
+            uint32_t c = cnt[i];
+            cnt[i] = sum;
+            sum += c;
+        }
+        for (i = 0; i < n; i++) {
+            uint8_t byte = (uint8_t)(src[i].start >> shift);
+            dst[cnt[byte]++] = src[i];
+        }
+        tmp = src;
+        src = dst;
+        dst = tmp;
+    }
+
+    return src;
+}
+
+static void render_memory_region_collect(FlatViewBuilder *builder,
+                                         MemoryRegion *mr,
+                                         Int128 base, AddrRange clip,
+                                         bool readonly, bool nonvolatile,
+                                         bool unmergeable)
 {
     MemoryRegion *subregion;
-    GSequenceIter *iter;
-    FlatRange key, fr;
-    hwaddr offset_in_region;
-    Int128 remain, now;
     AddrRange tmp;
-    uint64_t search_start_ns;
-    uint64_t comparisons = 0;
+    FlatViewLeaf *leaf;
 
-    qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, 1);
+    builder->visited++;
 
     if (!mr->enabled) {
         return;
@@ -785,110 +881,152 @@ static void render_memory_region_tree(GSequence *ranges, MemoryRegion *mr,
     if (mr->alias) {
         int128_subfrom(&base, int128_make64(mr->alias->addr));
         int128_subfrom(&base, int128_make64(mr->alias_offset));
-        render_memory_region_tree(ranges, mr->alias, base, clip,
-                                  readonly, nonvolatile, unmergeable);
+        render_memory_region_collect(builder, mr->alias, base, clip,
+                                     readonly, nonvolatile, unmergeable);
         return;
     }
 
-    /* Higher-priority subregions must be inserted before this region. */
+    /* Higher-priority subregions must be collected before this region. */
     QTAILQ_FOREACH(subregion, &mr->subregions, subregions_link) {
-        render_memory_region_tree(ranges, subregion, base, clip,
-                                  readonly, nonvolatile, unmergeable);
+        render_memory_region_collect(builder, subregion, base, clip,
+                                     readonly, nonvolatile, unmergeable);
     }
 
-    if (!mr->terminates) {
+    if (!mr->terminates || !int128_nz(clip.size)) {
         return;
     }
 
-    offset_in_region = int128_get64(int128_sub(clip.start, base));
-    base = clip.start;
-    remain = clip.size;
+    if (builder->nr == builder->cap) {
+        builder->cap = builder->cap ? builder->cap * 2u : 256u;
+        builder->leaves = g_renew(FlatViewLeaf, builder->leaves, builder->cap);
+    }
 
-    fr.mr = mr;
-    fr.dirty_log_mask = memory_region_get_dirty_log_mask(mr);
-    fr.romd_mode = mr->romd_mode;
-    fr.readonly = readonly;
-    fr.nonvolatile = nonvolatile;
-    fr.unmergeable = unmergeable;
+    leaf = &builder->leaves[builder->nr];
+    leaf->start = clip.start;
+    leaf->end = addrrange_end(clip);
+    leaf->mr = mr;
+    leaf->offset_in_region = int128_get64(int128_sub(clip.start, base));
+    leaf->seq = builder->nr;
+    leaf->dirty_log_mask = memory_region_get_dirty_log_mask(mr);
+    leaf->romd_mode = mr->romd_mode;
+    leaf->readonly = readonly;
+    leaf->nonvolatile = nonvolatile;
+    leaf->unmergeable = unmergeable;
+    builder->nr++;
+}
 
-    /*
-     * Search by start address, then step back once if the predecessor
-     * overlaps the beginning of this region.  Existing ranges are disjoint.
-     */
-    key.addr.start = base;
-    search_start_ns = qemu_perf_stats_begin(QEMU_PERF_FLATVIEW_SEARCH);
-    iter = g_sequence_search(ranges, &key, flatview_sequence_compare, NULL);
-    ++comparisons;
-    if (!g_sequence_iter_is_begin(iter)) {
-        GSequenceIter *prev = g_sequence_iter_prev(iter);
-        FlatRange *candidate = g_sequence_get(prev);
+static void flatview_sweep_flatten(FlatView *view, FlatViewBuilder *builder)
+{
+    uint64_t flatten_start_ns = qemu_perf_stats_begin(
+        QEMU_PERF_FLATVIEW_TREE_FLATTEN);
+    const FlatViewLeaf *leaves = builder->leaves;
+    uint32_t n = builder->nr;
+    FlatViewSortKey *buf_a = NULL;
+    FlatViewSortKey *buf_b = NULL;
+    FlatViewSortKey *keys;
+    FlatViewSeqHeap heap = { 0 };
+    bool sorted = true;
+    uint32_t i;
+    uint32_t k = 0;
+    Int128 pos;
 
-        if (int128_gt(addrrange_end(candidate->addr), base)) {
-            iter = prev;
+    if (n == 0) {
+        view->nr = 0;
+        view->nr_allocated = 0;
+        view->ranges = NULL;
+        qemu_perf_stats_end(QEMU_PERF_FLATVIEW_TREE_FLATTEN, flatten_start_ns);
+        return;
+    }
+
+    buf_a = g_new(FlatViewSortKey, n);
+    buf_a[0].start = int128_getlo(leaves[0].start);
+    buf_a[0].idx = 0;
+    for (i = 1; i < n; i++) {
+        uint64_t s = int128_getlo(leaves[i].start);
+
+        buf_a[i].start = s;
+        buf_a[i].idx = i;
+        if (s < buf_a[i - 1u].start) {
+            sorted = false;
         }
     }
-    qemu_perf_stats_end(QEMU_PERF_FLATVIEW_SEARCH, search_start_ns);
-    qemu_perf_stats_record_work(QEMU_PERF_FLATVIEW_SEARCH, comparisons);
 
-    while (!g_sequence_iter_is_end(iter) && int128_nz(remain)) {
-        FlatRange *existing = g_sequence_get(iter);
-        Int128 existing_end = addrrange_end(existing->addr);
+    if (sorted) {
+        keys = buf_a;
+    } else {
+        buf_b = g_new(FlatViewSortKey, n);
+        keys = flatview_radix_sort_keys(buf_a, buf_b, n);
+    }
 
-        if (int128_ge(base, existing_end)) {
-            iter = g_sequence_iter_next(iter);
+    view->nr = 0;
+    view->nr_allocated = MAX(n + (n >> 3) + 16u, 32u);
+    view->ranges = g_new(FlatRange, view->nr_allocated);
+
+    pos = leaves[keys[0].idx].start;
+    while (k < n || heap.nr > 0) {
+        const FlatViewLeaf *top;
+        Int128 next_end;
+
+        if (heap.nr == 0 && int128_lt(pos, leaves[keys[k].idx].start)) {
+            pos = leaves[keys[k].idx].start;
+        }
+        while (k < n && int128_le(leaves[keys[k].idx].start, pos)) {
+            uint32_t idx = keys[k++].idx;
+
+            if (int128_gt(leaves[idx].end, pos)) {
+                flatview_heap_push(&heap, leaves, idx);
+            }
+        }
+        while (heap.nr > 0 && int128_le(leaves[heap.data[0]].end, pos)) {
+            flatview_heap_pop(&heap, leaves);
+        }
+        if (heap.nr == 0) {
             continue;
         }
 
-        if (int128_lt(base, existing->addr.start)) {
-            now = int128_min(remain,
-                             int128_sub(existing->addr.start, base));
-            fr.offset_in_region = offset_in_region;
-            fr.addr = addrrange_make(base, now);
-            flatview_tree_insert(ranges, iter, &fr);
-            int128_addto(&base, now);
-            offset_in_region += int128_get64(now);
-            int128_subfrom(&remain, now);
-            if (!int128_nz(remain)) {
+        top = &leaves[heap.data[0]];
+        next_end = top->end;
+        while (k < n && int128_lt(leaves[keys[k].idx].start, next_end)) {
+            uint32_t cand = keys[k].idx;
+
+            if (leaves[cand].seq < top->seq) {
+                next_end = leaves[cand].start;
                 break;
             }
+            if (int128_gt(leaves[cand].end, top->end)) {
+                flatview_heap_push(&heap, leaves, cand);
+            }
+            k++;
         }
 
-        now = int128_sub(int128_min(int128_add(base, remain),
-                                    existing_end), base);
-        int128_addto(&base, now);
-        offset_in_region += int128_get64(now);
-        int128_subfrom(&remain, now);
-        iter = g_sequence_iter_next(iter);
+        if (int128_gt(next_end, pos)) {
+            FlatRange *fr;
+
+            if (view->nr == view->nr_allocated) {
+                view->nr_allocated *= 2u;
+                view->ranges = g_renew(FlatRange, view->ranges,
+                                       view->nr_allocated);
+            }
+            fr = &view->ranges[view->nr++];
+            fr->mr = top->mr;
+            fr->offset_in_region =
+                top->offset_in_region + int128_get64(int128_sub(pos, top->start));
+            fr->addr = addrrange_make(pos, int128_sub(next_end, pos));
+            fr->dirty_log_mask = top->dirty_log_mask;
+            fr->romd_mode = top->romd_mode;
+            fr->readonly = top->readonly;
+            fr->nonvolatile = top->nonvolatile;
+            fr->unmergeable = top->unmergeable;
+            memory_region_ref(top->mr);
+            pos = next_end;
+        }
     }
 
-    if (int128_nz(remain)) {
-        fr.offset_in_region = offset_in_region;
-        fr.addr = addrrange_make(base, remain);
-        flatview_tree_insert(ranges, iter, &fr);
-    }
-}
-
-static void flatview_tree_flatten(FlatView *view, GSequence *ranges)
-{
-    GSequenceIter *iter;
-    uint64_t flatten_start_ns = qemu_perf_stats_begin(
-        QEMU_PERF_FLATVIEW_TREE_FLATTEN);
-    unsigned i = 0;
-
-    view->nr = g_sequence_get_length(ranges);
-    view->nr_allocated = view->nr;
-    view->ranges = g_new(FlatRange, view->nr);
-
-    for (iter = g_sequence_get_begin_iter(ranges);
-         !g_sequence_iter_is_end(iter);
-         iter = g_sequence_iter_next(iter)) {
-        view->ranges[i++] = *(FlatRange *)g_sequence_get(iter);
-    }
-    g_assert(i == view->nr);
-
+    g_free(heap.data);
+    g_free(buf_b);
+    g_free(buf_a);
     qemu_perf_stats_end(QEMU_PERF_FLATVIEW_TREE_FLATTEN, flatten_start_ns);
     qemu_perf_stats_add_work(QEMU_PERF_FLATVIEW_TREE_FLATTEN, view->nr);
-    g_sequence_free(ranges);
 }
 
 static bool flatview_ranges_identical(const FlatView *a, const FlatView *b,
@@ -1000,21 +1138,29 @@ static FlatView *generate_memory_topology(MemoryRegion *mr)
     FlatView *view;
     uint64_t total_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_TOTAL);
     uint64_t perf_start_ns;
-    bool verify_builder = g_strcmp0(g_getenv("Y2KBOX_FLATVIEW_VERIFY"),
-                                    "1") == 0;
+    static int verify_builder_cached = -1;
+    bool verify_builder;
     FlatView *reference = NULL;
+
+    if (unlikely(verify_builder_cached < 0)) {
+        verify_builder_cached =
+            g_strcmp0(g_getenv("Y2KBOX_FLATVIEW_VERIFY"), "1") == 0 ? 1 : 0;
+    }
+    verify_builder = verify_builder_cached != 0;
 
     view = flatview_new(mr);
 
     if (mr) {
-        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_RENDER);
-        GSequence *ranges = g_sequence_new(g_free);
+        FlatViewBuilder builder = { 0 };
 
-        render_memory_region_tree(ranges, mr, int128_zero(),
-                                  addrrange_make(int128_zero(),
-                                                 int128_2_64()),
-                                  false, false, false);
-        flatview_tree_flatten(view, ranges);
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_TOPOLOGY_RENDER);
+        render_memory_region_collect(&builder, mr, int128_zero(),
+                                     addrrange_make(int128_zero(),
+                                                    int128_2_64()),
+                                     false, false, false);
+        qemu_perf_stats_add_work(QEMU_PERF_TOPOLOGY_RENDER, builder.visited);
+        flatview_sweep_flatten(view, &builder);
+        g_free(builder.leaves);
         qemu_perf_stats_end(QEMU_PERF_TOPOLOGY_RENDER, perf_start_ns);
 
         if (verify_builder) {

@@ -2104,22 +2104,33 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
         return false;
     }
 
-    qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_ALIAS, num_pages);
-    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_ALIAS);
-    memory_region_transaction_begin();
-    for (page = 0; page < num_pages; page++) {
-        VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
+    {
+        bool txn_opened = false;
 
-        vmsvga3d_gart_page_remove_alias(s, entry);
-        entry->gpa = 0;
-        entry->mobid = SVGA3D_INVALID_ID;
-        entry->mob_page = 0;
+        qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_ALIAS, num_pages);
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_ALIAS);
+        for (page = 0; page < num_pages; page++) {
+            VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
+
+            if (entry->alias_active) {
+                if (!txn_opened) {
+                    memory_region_transaction_begin();
+                    txn_opened = true;
+                }
+                vmsvga3d_gart_page_remove_alias(s, entry);
+            }
+            entry->gpa = 0;
+            entry->mobid = SVGA3D_INVALID_ID;
+            entry->mob_page = 0;
+        }
+        qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
+        if (txn_opened) {
+            qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, num_pages);
+            perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
+            memory_region_transaction_commit();
+            qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT, perf_start_ns);
+        }
     }
-    qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
-    qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, num_pages);
-    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
-    memory_region_transaction_commit();
-    qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT, perf_start_ns);
 
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
@@ -6370,11 +6381,66 @@ static bool vmsvga3d_clear_color_image(VMSVGA3DSurface *surface,
                 continue;
             }
 
-            for (y = 0; y < rect.h; y++) {
-                uint8_t *row = image->data + (uint64_t)(rect.y + y) * image->pitch +
-                               (uint64_t)rect.x * bytes;
-                for (x = 0; x < rect.w; x++) {
-                    vmsvga3d_store_le(row + (uint64_t)x * bytes, bytes, value);
+            if (bytes == 4 &&
+                (((value ^ (value >> 8)) & 0x00ffffffu) == 0)) {
+                int fill_byte = (int)(value & 0xffu);
+                size_t row_bytes = (size_t)rect.w * 4u;
+
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * 4u;
+                    memset(row, fill_byte, row_bytes);
+                }
+            } else if (bytes == 4) {
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * 4u;
+                    for (x = 0; x < rect.w; x++) {
+                        stl_le_p(row + (size_t)x * 4u, value);
+                    }
+                }
+            } else if (bytes == 2 &&
+                       ((value & 0xffu) == ((value >> 8) & 0xffu))) {
+                int fill_byte = (int)(value & 0xffu);
+                size_t row_bytes = (size_t)rect.w * 2u;
+
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * 2u;
+                    memset(row, fill_byte, row_bytes);
+                }
+            } else if (bytes == 2) {
+                uint16_t value16 = (uint16_t)value;
+
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * 2u;
+                    for (x = 0; x < rect.w; x++) {
+                        stw_le_p(row + (size_t)x * 2u, value16);
+                    }
+                }
+            } else if (bytes == 1) {
+                int fill_byte = (int)(value & 0xffu);
+
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x;
+                    memset(row, fill_byte, rect.w);
+                }
+            } else {
+                for (y = 0; y < rect.h; y++) {
+                    uint8_t *row = image->data +
+                                   (uint64_t)(rect.y + y) * image->pitch +
+                                   (uint64_t)rect.x * bytes;
+                    for (x = 0; x < rect.w; x++) {
+                        vmsvga3d_store_le(row + (uint64_t)x * bytes, bytes,
+                                          value);
+                    }
                 }
             }
         }
@@ -6505,37 +6571,108 @@ static bool vmsvga3d_clear_depth_stencil_image(
                     (uint64_t)rect.w * rect.h * bytes);
             }
 
-            if (clear_depth && !clear_stencil && stencil_bits == 0) {
-                /* Depth-only formats have no preserved stencil component.
-                 * Any bits outside the depth field are padding (for example,
-                 * the X8 byte in D24X8), so avoid reading the old pixel. */
-                for (y = 0; y < rect.h; y++) {
-                    uint8_t *row = image->data +
-                                   (uint64_t)(rect.y + y) * image->pitch +
-                                   (uint64_t)rect.x * bytes;
-                    for (x = 0; x < rect.w; x++) {
-                        vmsvga3d_store_le(row + (uint64_t)x * bytes,
-                                          bytes, (uint32_t)depth_value);
-                    }
-                }
-            } else {
-                for (y = 0; y < rect.h; y++) {
-                    uint8_t *row = image->data +
-                                   (uint64_t)(rect.y + y) * image->pitch +
-                                   (uint64_t)rect.x * bytes;
-                    for (x = 0; x < rect.w; x++) {
-                        uint8_t *pixel = row + (uint64_t)x * bytes;
-                        uint32_t value = vmsvga3d_load_le(pixel, bytes);
+            {
+                uint32_t clear_mask =
+                    (clear_depth ? (uint32_t)depth_mask : 0u) |
+                    (clear_stencil ? (uint32_t)stencil_mask : 0u);
+                uint32_t fill_value =
+                    (clear_depth ? (uint32_t)depth_value : 0u) |
+                    (clear_stencil ? (uint32_t)stencil_value : 0u);
+                uint32_t keep_mask = ~clear_mask;
+                bool overwrite_all =
+                    (clear_depth && !clear_stencil && stencil_bits == 0) ||
+                    (bytes == 4 && clear_mask == 0xffffffffu) ||
+                    (bytes == 2 && (clear_mask & 0xffffu) == 0xffffu) ||
+                    (bytes == 1 && (clear_mask & 0xffu) == 0xffu);
 
-                        if (clear_depth) {
-                            value = (uint32_t)(((uint64_t)value & ~depth_mask) |
-                                               depth_value);
+                if (overwrite_all && bytes == 4) {
+                    if (((fill_value ^ (fill_value >> 8)) & 0x00ffffffu) == 0) {
+                        int fill_byte = (int)(fill_value & 0xffu);
+                        size_t row_bytes = (size_t)rect.w * 4u;
+
+                        for (y = 0; y < rect.h; y++) {
+                            uint8_t *row =
+                                image->data +
+                                (uint64_t)(rect.y + y) * image->pitch +
+                                (uint64_t)rect.x * 4u;
+                            memset(row, fill_byte, row_bytes);
                         }
-                        if (clear_stencil) {
-                            value = (uint32_t)(((uint64_t)value & ~stencil_mask) |
-                                               stencil_value);
+                    } else {
+                        for (y = 0; y < rect.h; y++) {
+                            uint8_t *row =
+                                image->data +
+                                (uint64_t)(rect.y + y) * image->pitch +
+                                (uint64_t)rect.x * 4u;
+                            for (x = 0; x < rect.w; x++) {
+                                stl_le_p(row + (size_t)x * 4u, fill_value);
+                            }
                         }
-                        vmsvga3d_store_le(pixel, bytes, value);
+                    }
+                } else if (overwrite_all && bytes == 2) {
+                    uint16_t fill16 = (uint16_t)fill_value;
+
+                    for (y = 0; y < rect.h; y++) {
+                        uint8_t *row =
+                            image->data +
+                            (uint64_t)(rect.y + y) * image->pitch +
+                            (uint64_t)rect.x * 2u;
+                        for (x = 0; x < rect.w; x++) {
+                            stw_le_p(row + (size_t)x * 2u, fill16);
+                        }
+                    }
+                } else if (overwrite_all) {
+                    for (y = 0; y < rect.h; y++) {
+                        uint8_t *row =
+                            image->data +
+                            (uint64_t)(rect.y + y) * image->pitch +
+                            (uint64_t)rect.x * bytes;
+                        for (x = 0; x < rect.w; x++) {
+                            vmsvga3d_store_le(row + (uint64_t)x * bytes, bytes,
+                                              fill_value);
+                        }
+                    }
+                } else if (bytes == 4) {
+                    for (y = 0; y < rect.h; y++) {
+                        uint8_t *row =
+                            image->data +
+                            (uint64_t)(rect.y + y) * image->pitch +
+                            (uint64_t)rect.x * 4u;
+                        for (x = 0; x < rect.w; x++) {
+                            uint8_t *pixel = row + (size_t)x * 4u;
+                            uint32_t value =
+                                ((uint32_t)ldl_le_p(pixel) & keep_mask) | fill_value;
+                            stl_le_p(pixel, value);
+                        }
+                    }
+                } else if (bytes == 2) {
+                    uint16_t keep16 = (uint16_t)keep_mask;
+                    uint16_t fill16 = (uint16_t)fill_value;
+
+                    for (y = 0; y < rect.h; y++) {
+                        uint8_t *row =
+                            image->data +
+                            (uint64_t)(rect.y + y) * image->pitch +
+                            (uint64_t)rect.x * 2u;
+                        for (x = 0; x < rect.w; x++) {
+                            uint8_t *pixel = row + (size_t)x * 2u;
+                            uint16_t value =
+                                (uint16_t)(((uint16_t)lduw_le_p(pixel) & keep16) | fill16);
+                            stw_le_p(pixel, value);
+                        }
+                    }
+                } else {
+                    for (y = 0; y < rect.h; y++) {
+                        uint8_t *row =
+                            image->data +
+                            (uint64_t)(rect.y + y) * image->pitch +
+                            (uint64_t)rect.x * bytes;
+                        for (x = 0; x < rect.w; x++) {
+                            uint8_t *pixel = row + (uint64_t)x * bytes;
+                            uint32_t value =
+                                (vmsvga3d_load_le(pixel, bytes) & keep_mask) |
+                                fill_value;
+                            vmsvga3d_store_le(pixel, bytes, value);
+                        }
                     }
                 }
             }
@@ -8637,6 +8774,94 @@ static bool vmsvga3d_present_rect_to_buffer_internal(
                                  (uint64_t)row * image->pitch;
             uint8_t *dst = dst_base + dst_offset + (uint64_t)row * dst_pitch;
             memcpy(dst, src, (size_t)src_row_bytes);
+        }
+    } else if (dst_depth == 32 && surface->format == SVGA3D_R5G6B5) {
+#ifdef __SSE2__
+        const __m128i mask5 = _mm_set1_epi16(0x001f);
+        const __m128i mask6 = _mm_set1_epi16(0x003f);
+        const __m128i mul5 = _mm_set1_epi16(527);
+        const __m128i add5 = _mm_set1_epi16(23);
+        const __m128i mul6 = _mm_set1_epi16(259);
+        const __m128i add6 = _mm_set1_epi16(33);
+#endif
+        for (row = 0; row < clipped.h; row++) {
+            const uint8_t *src = image->data + src_offset +
+                                 (uint64_t)row * image->pitch;
+            uint8_t *dst = dst_base + dst_offset + (uint64_t)row * dst_pitch;
+            uint32_t column = 0;
+
+#ifdef __SSE2__
+            for (; column + 8u <= clipped.w; column += 8u) {
+                __m128i p = _mm_loadu_si128(
+                    (const __m128i *)(src + (size_t)column * 2u));
+                __m128i b = _mm_and_si128(p, mask5);
+                __m128i g = _mm_and_si128(_mm_srli_epi16(p, 5), mask6);
+                __m128i r = _mm_srli_epi16(p, 11);
+
+                /* Bit-exact with (v * 255 + mask / 2) / mask for 5- and 6-bit. */
+                b = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(b, mul5), add5), 6);
+                g = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(g, mul6), add6), 6);
+                r = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(r, mul5), add5), 6);
+
+                __m128i bg = _mm_or_si128(b, _mm_slli_epi16(g, 8));
+                _mm_storeu_si128((__m128i *)(dst + (size_t)column * 4u),
+                                 _mm_unpacklo_epi16(bg, r));
+                _mm_storeu_si128((__m128i *)(dst + (size_t)(column + 4u) * 4u),
+                                 _mm_unpackhi_epi16(bg, r));
+            }
+#endif
+            for (; column < clipped.w; column++) {
+                uint32_t p = (uint32_t)lduw_le_p(src + (size_t)column * 2u);
+                uint32_t blue = (((p & 0x1fu) * 527u) + 23u) >> 6;
+                uint32_t green = ((((p >> 5) & 0x3fu) * 259u) + 33u) >> 6;
+                uint32_t red = (((p >> 11) * 527u) + 23u) >> 6;
+
+                stl_le_p(dst + (size_t)column * 4u,
+                         blue | (green << 8) | (red << 16));
+            }
+        }
+    } else if (dst_depth == 32 &&
+               (surface->format == SVGA3D_X1R5G5B5 ||
+                surface->format == SVGA3D_A1R5G5B5)) {
+#ifdef __SSE2__
+        const __m128i mask5 = _mm_set1_epi16(0x001f);
+        const __m128i mul5 = _mm_set1_epi16(527);
+        const __m128i add5 = _mm_set1_epi16(23);
+#endif
+        for (row = 0; row < clipped.h; row++) {
+            const uint8_t *src = image->data + src_offset +
+                                 (uint64_t)row * image->pitch;
+            uint8_t *dst = dst_base + dst_offset + (uint64_t)row * dst_pitch;
+            uint32_t column = 0;
+
+#ifdef __SSE2__
+            for (; column + 8u <= clipped.w; column += 8u) {
+                __m128i p = _mm_loadu_si128(
+                    (const __m128i *)(src + (size_t)column * 2u));
+                __m128i b = _mm_and_si128(p, mask5);
+                __m128i g = _mm_and_si128(_mm_srli_epi16(p, 5), mask5);
+                __m128i r = _mm_and_si128(_mm_srli_epi16(p, 10), mask5);
+
+                b = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(b, mul5), add5), 6);
+                g = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(g, mul5), add5), 6);
+                r = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(r, mul5), add5), 6);
+
+                __m128i bg = _mm_or_si128(b, _mm_slli_epi16(g, 8));
+                _mm_storeu_si128((__m128i *)(dst + (size_t)column * 4u),
+                                 _mm_unpacklo_epi16(bg, r));
+                _mm_storeu_si128((__m128i *)(dst + (size_t)(column + 4u) * 4u),
+                                 _mm_unpackhi_epi16(bg, r));
+            }
+#endif
+            for (; column < clipped.w; column++) {
+                uint32_t p = (uint32_t)lduw_le_p(src + (size_t)column * 2u);
+                uint32_t blue = (((p & 0x1fu) * 527u) + 23u) >> 6;
+                uint32_t green = ((((p >> 5) & 0x1fu) * 527u) + 23u) >> 6;
+                uint32_t red = ((((p >> 10) & 0x1fu) * 527u) + 23u) >> 6;
+
+                stl_le_p(dst + (size_t)column * 4u,
+                         blue | (green << 8) | (red << 16));
+            }
         }
     } else {
         for (row = 0; row < clipped.h; row++) {

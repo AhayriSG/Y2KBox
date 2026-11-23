@@ -5983,7 +5983,7 @@ static bool vmsvga3d_d3d9_clear_shadow_target(
 static bool vmsvga3d_d3d9_clear_shadow_non_msaa(
     struct vmsvga_state_s *s, uint32_t cid, SVGA3dClearFlag clear_flags,
     uint32_t color, float depth, uint32_t stencil, uint32_t rect_count,
-    const SVGA3dRect *rects, bool *skipped_multisample)
+    const SVGA3dRect *rects, bool execute, bool *skipped_multisample)
 {
     VMSVGA3DContext *context;
     uint32_t type;
@@ -5994,7 +5994,9 @@ static bool vmsvga3d_d3d9_clear_shadow_non_msaa(
         return false;
     }
 
-    *skipped_multisample = false;
+    if (!execute) {
+        *skipped_multisample = false;
+    }
     context = vmsvga3d_context(s, cid);
     if (context == NULL) {
         return false;
@@ -6005,40 +6007,18 @@ static bool vmsvga3d_d3d9_clear_shadow_non_msaa(
              type <= SVGA3D_RT_COLOR7 && valid; type++) {
             valid = vmsvga3d_d3d9_clear_shadow_target(
                 s, context, type, color, depth, stencil, rects, rect_count,
-                false, skipped_multisample);
+                execute, skipped_multisample);
         }
     }
     if (valid && (clear_flags & SVGA3D_CLEAR_DEPTH)) {
         valid = vmsvga3d_d3d9_clear_shadow_target(
             s, context, SVGA3D_RT_DEPTH, color, depth, stencil, rects,
-            rect_count, false, skipped_multisample);
+            rect_count, execute, skipped_multisample);
     }
     if (valid && (clear_flags & SVGA3D_CLEAR_STENCIL)) {
         valid = vmsvga3d_d3d9_clear_shadow_target(
             s, context, SVGA3D_RT_STENCIL, color, depth, stencil, rects,
-            rect_count, false, skipped_multisample);
-    }
-    if (!valid) {
-        return false;
-    }
-
-    if (clear_flags & SVGA3D_CLEAR_COLOR) {
-        for (type = SVGA3D_RT_COLOR0;
-             type <= SVGA3D_RT_COLOR7 && valid; type++) {
-            valid = vmsvga3d_d3d9_clear_shadow_target(
-                s, context, type, color, depth, stencil, rects, rect_count,
-                true, skipped_multisample);
-        }
-    }
-    if (valid && (clear_flags & SVGA3D_CLEAR_DEPTH)) {
-        valid = vmsvga3d_d3d9_clear_shadow_target(
-            s, context, SVGA3D_RT_DEPTH, color, depth, stencil, rects,
-            rect_count, true, skipped_multisample);
-    }
-    if (valid && (clear_flags & SVGA3D_CLEAR_STENCIL)) {
-        valid = vmsvga3d_d3d9_clear_shadow_target(
-            s, context, SVGA3D_RT_STENCIL, color, depth, stencil, rects,
-            rect_count, true, skipped_multisample);
+            rect_count, execute, skipped_multisample);
     }
 
     return valid;
@@ -6222,18 +6202,17 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
         }
     }
 
-    {
-        uint64_t perf_start_ns =
-            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_SHADOW);
-        bool shadow_ok = vmsvga3d_d3d9_clear_shadow_non_msaa(
+    /* Validate bound targets and clear rects before touching the GPU, but
+     * defer the CPU shadow pixel fill until the fallback path below.  All
+     * bound color and depth/stencil targets are D3D9-resident and GPU-
+     * authoritative here, so filling CPU shadow on a successful native clear
+     * is wasted work. */
+    if (!vmsvga3d_d3d9_clear_shadow_non_msaa(
             s, command->cid, command->clearFlag, command->color,
-            command->depth, command->stencil, rect_count, rects,
-            &skipped_multisample_shadow);
-        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_SHADOW, perf_start_ns);
-        if (!shadow_ok) {
-            g_free(d3d_rects);
-            return VMSVGA3D_D3D9_ACCEL_FAILED;
-        }
+            command->depth, command->stencil, rect_count, rects, false,
+            &skipped_multisample_shadow)) {
+        g_free(d3d_rects);
+        return VMSVGA3D_D3D9_ACCEL_FAILED;
     }
 
     d3d_flags = vmsvga3d_d3d9_clear_flags(effective_clear_flags);
@@ -6264,6 +6243,19 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_clear(
     if (skipped_multisample_shadow) {
         g_free(d3d_rects);
         return VMSVGA3D_D3D9_ACCEL_FAILED;
+    }
+    {
+        uint64_t perf_start_ns =
+            qemu_perf_stats_begin(QEMU_PERF_VMVGA_CLEAR_SHADOW);
+        bool shadow_ok = vmsvga3d_d3d9_clear_shadow_non_msaa(
+            s, command->cid, command->clearFlag, command->color,
+            command->depth, command->stencil, rect_count, rects, true,
+            &skipped_multisample_shadow);
+        qemu_perf_stats_end(QEMU_PERF_VMVGA_CLEAR_SHADOW, perf_start_ns);
+        if (!shadow_ok) {
+            g_free(d3d_rects);
+            return VMSVGA3D_D3D9_ACCEL_FAILED;
+        }
     }
     {
         uint64_t perf_start_ns =

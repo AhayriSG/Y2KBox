@@ -13036,8 +13036,12 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                 (uint64_t)source_width * bytes_per_pixel;
             uint32_t trace_row_bytes =
                 row_bytes64 <= UINT32_MAX ? (uint32_t)row_bytes64 : 0;
+            bool trace_band =
+                VMVGA_TRACE_DEEP_READBACK_BAND &&
+                VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_FLIGHT) &&
+                trace_row_bytes != 0;
 
-            if (VMVGA_TRACE_FLIGHT && trace_row_bytes != 0) {
+            if (trace_band) {
                 {
                     uint64_t perf_start_ns =
                         qemu_perf_stats_begin(
@@ -13127,7 +13131,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                     QEMU_PERF_DXVK_READBACK_SECONDARY_COPY, perf_start_ns);
             }
 
-            if (VMVGA_TRACE_FLIGHT && trace_row_bytes != 0) {
+            if (trace_band) {
                 shadow_hash.valid = vmsvga3d_dxvk_trace_hash_bottom_rows(
                     data, trace_row_bytes, row_pitch, source_height,
                     &shadow_hash);
@@ -13170,7 +13174,7 @@ bool vmsvga3d_dxvk_surface_readback_rects(
                         secondary_data != NULL ? "present" : "absent");
             }
 
-            VMVGA_TRACE_LOCAL_CACHED(
+            VMVGA_TRACE_LOCAL(
                 VMVGA_TRACE_3D,
                 "D3D9-READBACK sid=%u mode=full rects=%u bbox=%u,%u/%ux%u",
                 surface->sid, rect_count, batch_left, batch_top, batch_width,
@@ -16550,12 +16554,13 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         copy_size = size;
         lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
         lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
-    } else if (surface->d3d9_length <= 64u * 1024u &&
+    } else if (surface->d3d9_length <= 256u * 1024u &&
                shadow_size == surface->d3d9_length) {
         /*
-         * Small-buffer overlap fallback: replace the entire dynamic buffer from
-         * the authoritative CPU shadow via D3DLOCK_DISCARD so untouched bytes
-         * are preserved without stalling on earlier GPU reads.
+         * Dynamic-buffer overlap fallback: replace the entire dynamic buffer
+         * from the authoritative CPU shadow via D3DLOCK_DISCARD so untouched
+         * bytes are preserved without stalling on earlier GPU reads, and reset
+         * in-flight tracking so subsequent ring-buffer appends use NOOVERWRITE.
          */
         lock_offset = 0;
         lock_size = surface->d3d9_length;

@@ -36,6 +36,9 @@
 #include "qemu/cutils.h"
 #include "qemu/main-loop.h"
 #include "qemu/timer.h"
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
 #include "exec/target_page.h"
 #include "trace.h"
 #include "hw/i386/vmport-vmvga.h"
@@ -324,6 +327,7 @@ struct vmsvga_cursor_source_s {
 #define VMVGA_TRACE_DEEP_D3D9_DRAW     0
 #define VMVGA_TRACE_DEEP_D3D9_STATE    0
 #define VMVGA_TRACE_DEEP_SHADER_CONST  0
+#define VMVGA_TRACE_DEEP_READBACK_BAND 0
 
 #define VMVGA_TRACE_DEVCAP  1
 #define VMVGA_TRACE_FLIGHT  1
