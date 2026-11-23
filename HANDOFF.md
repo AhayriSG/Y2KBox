@@ -115,9 +115,10 @@ The normal workflow is sequential handoff between agents (for example, Claude to
 * **T09 / T10 integration on `main`:** `qemu-vmvga` (`vmvga` SVGA II + SVGA3D,
   `vmmouse`, `vmport` with TCG Ring-3 `0x5658`/`0x5659` backdoor exemption) is the
   default and only display device, with Linux `dxvk-native` and Windows
-  `d3d9.dll`/`d3d11.dll` host backends. XP boot is owner-verified. CI builds and
-  smoke checks validate integration; remaining VMware driver, D3D8/DirectDraw,
-  and per-game compatibility require owner-run guest validation (see TASKS.md) and active investigations.
+  `d3d9.dll`/`d3d11.dll` host backends. T09 integration and its CI checks are
+  complete; T10 host-backend integration is also committed and CI-verified.
+  XP driver, display/2D, D3D API, and game compatibility observations are tracked
+  separately in the owner-run guest validation checklist in TASKS.md.
 * T13a host-x87 arithmetic/load and normal-finite FST m32/m64 fast paths are implemented. Windows five-run A/B medians: FST m32 2.474809 s -> 2.383368 s (+3.69%, 1.038x); FST m64 2.508467 s -> 2.359847 s (+5.92%, 1.063x). These are focused hot-cache results, not general workload gains; see TASKS.md and xp/bench/README.md. Further x87 expansion remains PAUSED; retain the existing guarded fast paths and differential test, and revisit only if representative profiling justifies more work.
 * T13d legacy XMM register caching (`c272958`) and the Win64 five-register pressure guard are implemented. Linux A/B: 0.877822 s before vs 0.872720 s after, +0.58% (1.006x). Windows A/B: 3.166927 s before vs 3.132343 s after, +1.09% (1.011x). Both are effectively near-neutral shared-runner measurements, not demonstrated speedups. Windows benchmark setup now uses awk and the UCRT64 runtime directory on `PATH`; both executable preflights and all six benchmark runs succeeded.
 * Known "still ON because machine code calls them": memory hotplug, DIMM/NVDIMM, CXL,
@@ -456,8 +457,7 @@ idempotent (`git checkout` touched files first).
 * **TCG Ring-3 backdoor exemption (T09 integration implemented):** `gen_check_io` -> `HELPER(check_io)`
   (`target/i386/tcg/system/seg_helper.c`) now exempts `0x5658` and `0x5659` (`size <= 4`) when
   `vmport_tcg_backdoor_enabled` is true (`hw/i386/vmport.c`). Verified on CI via `xp/bench/vmport_ring3_test.asm`
-  (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`); still needs real XP driver and application compatibility
-  verification by the owner (see the manual checklist in TASKS.md).
+  (CPL=3, IOPL=0, 0xFF TSS IOPB: allows `0x5658`/`0x5659`, traps `#GP` on `0x565A`). This completes the T09 integration/CI scope; real XP driver and application acceptance is recorded separately in the owner-run manual checklist in TASKS.md.
 * **Host-side 3D backends (T10 integration implemented):**
   * **Linux:** `hw/display/vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
     or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols if `--enable-sdl` already
