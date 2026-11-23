@@ -1760,3 +1760,12 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Documentation-only review and edits. No QEMU source changed, no local QEMU
   build was run, and CI was not polled. Markdown-only CI is expected to skip the
   Linux and Windows jobs on these commits.
+
+
+## Session 84 — Clarify cross-agent handoff and move XP acceptance to owner checklist
+
+- Confirmed the repository already had a shared cross-agent structure: `AGENTS.md` is canonical, with Claude- and Gemini-specific entrypoints; Codex and other agents use the shared policy. Strengthened it to describe sequential provider handoff as the normal workflow and to make clear that agents do not share private runtime memory.
+- Reworked `TASKS.md`: removed the separate T08 boot task and T11 guest-validation task, since XP SP3 boot is already owner-verified and the remaining XP driver/API/game checks require a human operating and visually judging the guest. Combined those checks into a clearly marked owner-run manual checklist, not a claimable AI task. Agents may analyze owner-supplied evidence but cannot certify the guest behavior themselves.
+- Updated T09/T10, HANDOFF references, and the T13 Hitman 2 note to remove stale T08/T11 dependencies. Kept the agent-analyzable capture investigation distinct from owner-only visual acceptance.
+- Removed wxWidgets fallback messaging from the user-facing README and made SDL2 + Dear ImGui the unambiguous frontend direction there. HANDOFF and T12 retain wxWidgets only as a reconsideration fallback, not a parallel target. Updated the debug-setting description to refer to the SDL2 + Dear ImGui frontend.
+- Documentation-only changes. No QEMU source changed, no local QEMU build was run, and CI was not polled.
