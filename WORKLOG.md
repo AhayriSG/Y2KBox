@@ -1905,3 +1905,12 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - The helper still reads the existing `GITHUB_TOKEN` or `GH_TOKEN` environment variable (or falls back to `gh auth token`); no new token, secret, permission, or authentication setup is required. When no token is available, the request remains unauthenticated as before.
 - The change is limited to Claude's CI-status reporting helper; it does not affect GitHub Actions builds or repository authentication used by coding-agent sandboxes.
 - Static shell review only. No token value was accessed or displayed, no live authenticated API request was made, and no CI polling or QEMU build/test was performed.
+
+
+## Session 96 — Move diagnostic logging guidance into the README FAQ
+
+- Moved the existing Ctrl+Alt+L diagnostic-capture instructions out of Download & Usage and into a dedicated README FAQ entry, preserving the opt-in behavior, independent timestamped files, per-capture counter resets, and shell-redirection warning.
+- Documented the expected performance overhead while recording and recommended comparable scenes, settings, and capture durations for performance comparisons.
+- Explained how testers can share `Y2KBOX-PERF` logs to support developer or LLM-assisted bottleneck analysis and targeted follow-up instrumentation; clarified that performance counters alone do not diagnose every graphics issue.
+- Documented `VMVGA_TRACE_DEEP_GB_UPDATE` as an optional compile-time developer trace, disabled by default and intended for targeted VMware SVGA investigations rather than ordinary tester logging.
+- Documentation-only. No emulator source, instrumentation, build, benchmark, functional test, guest test, or CI polling was performed.
