@@ -23,6 +23,10 @@ static const char g_class_name[] = "Y2KBoxGLProbeWindow";
 static LRESULT CALLBACK probe_wndproc(HWND hwnd, UINT message,
                                       WPARAM wparam, LPARAM lparam)
 {
+    (void)hwnd;
+    (void)message;
+    (void)wparam;
+    (void)lparam;
     return DefWindowProcA(hwnd, message, wparam, lparam);
 }
 
