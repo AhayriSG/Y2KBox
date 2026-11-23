@@ -1769,3 +1769,20 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Updated T09/T10, HANDOFF references, and the T13 Hitman 2 note to remove stale T08/T11 dependencies. Kept the agent-analyzable capture investigation distinct from owner-only visual acceptance.
 - Removed wxWidgets fallback messaging from the user-facing README and made SDL2 + Dear ImGui the unambiguous frontend direction there. HANDOFF and T12 retain wxWidgets only as a reconsideration fallback, not a parallel target. Updated the debug-setting description to refer to the SDL2 + Dear ImGui frontend.
 - Documentation-only changes. No QEMU source changed, no local QEMU build was run, and CI was not polled.
+
+
+## Session 85 — Model-specific local build authorization
+
+- Added a standing, narrowly scoped owner authorization for Gemini 4 Neon to run
+  ordinary local QEMU configure/build and relevant standard functional checks
+  while validating its own changes.
+- Kept local builds unauthorized by default for Gemini CLI generally, other
+  Gemini models, Claude, Codex, and other agents unless the owner explicitly
+  approves a task-specific exception.
+- Performance benchmarking and A/B experiments still require explicit owner
+  authorization for every agent, including Gemini 4 Neon. GitHub Actions remains
+  authoritative; local results must be reported separately with exact
+  commands/configuration and cannot be represented as CI success.
+- Updated `AGENTS.md`, `GEMINI.md`, `HANDOFF.md`, `TASKS.md`, and
+  `WORKLOAD_ACTIVE_SESSION.md`. Documentation-only policy change; no QEMU
+  build, benchmark, test, or CI polling was performed.
