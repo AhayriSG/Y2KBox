@@ -33,7 +33,7 @@ have follow-up subsections under the same number.
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
 | F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
 | FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81–89 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–90 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
 
 ## Session 81 note
 
@@ -44,7 +44,7 @@ entirely for Markdown-only commits; only the lightweight detector runs. Any
 non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
 See `.github/workflows/build.yml`.
 
-## Sessions 82–89 note
+## Sessions 82–90 note
 
 Session 82 introduced selective historical reads and the topic index. Session 83
 centralized shared instructions in `AGENTS.md`; Session 84 clarified sequential
@@ -58,5 +58,7 @@ Session 88 reorganized the README so host requirements and the guest RAM
 rationale live in the bottom FAQ, while the Fixed target summary stays guest-only.
 Session 89 rewrote the README introduction to emphasize the XP gaming experience,
 a mid-to-late 2000s performance target, and the distinction from cycle-accurate
-hardware emulation, while acknowledging 86Box's contributors.
-See Sessions 82–89 in `WORKLOG.md` for the policy evolution and related decisions.
+hardware emulation, while acknowledging 86Box's contributors. Session 90 fixed the
+product target to exactly one vCPU, removed QEMU's `-smp` CLI option, and aligned
+T01, T14, README, and HANDOFF with the uniprocessor decision.
+See Sessions 82–90 in `WORKLOG.md` for the policy evolution and related decisions.
