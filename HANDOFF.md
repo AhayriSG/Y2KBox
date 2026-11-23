@@ -140,8 +140,8 @@ uniprocessor ACPI HAL has the least synchronisation overhead; TCG with 1 vCPU ne
 MTTCG cross-vCPU locking/TLB-flush traffic; XP-era software gains little from 2 CPUs
 relative to the emulation cost. `max_cpus` is 2 (XP Pro's licensed socket count) so a 2-vCPU
 mode can be added later; if enabled, the user must choose the *ACPI Multiprocessor PC* HAL
-during setup - document this in the README then. (Unverified: that XP setup auto-selects
-the ACPI uniprocessor HAL for one CPU - verify in T08.) Host threads still matter: QEMU
+during setup - document this in the README then. The owner has booted XP SP3 using the
+ACPI PC HAL; re-check HAL/APIC behavior if the guest CPU topology is changed. Host threads still matter: QEMU
 already runs the vCPU, main-loop/IO, audio and (later) the 3D render on separate host
 threads. **Thread pinning** (vCPU thread on a dedicated fast core, others elsewhere, Windows
 and Linux affinity APIs) is task T14. Note: "host passthrough" CPU models are a KVM
@@ -151,10 +151,10 @@ GPU through our own 3D path.
 
 **Q2 3D method (owner: unsure, then proposed qemu-vmvga).** Decision (updated 2026-11-14):
 **primary = qemu-vmvga (VMware SVGA II + SVGA3D, DXVK backend)**, tasks T09-T11; VBoxVGA 5.2.x
-(Chromium-based host service) is the frozen alternative, task T16. Reasoning in 8a: an
-implementation already exists for the same QEMU generation, GPL-2.0-or-later, XP explicitly
-supported, no 100k-line port of legacy VirtualBox/Chromium code. Still unverified until tested in an
-XP guest (needs T08): D3D9 actually accelerated, D3D8/DirectDraw coverage, Windows-host backend.
+(Chromium-based host service) is the frozen alternative, task T16. Reasoning in 8a: an implementation already exists for the same QEMU generation, GPL-2.0-or-later,
+XP explicitly supported, no 100k-line port of legacy VirtualBox/Chromium code. XP now boots in the
+owner's environment; remaining D3D9 acceleration, D3D8/DirectDraw coverage, and Windows-host
+visual correctness are tracked by T11 and must be verified per workload.
 
 **Q3 NIC / storage drivers (owner proposed VirtIO as a faster path).** The standard XP
 launch profile now uses **VirtIO Net + VirtIO Block**: `virtio-net-pci` for networking and
@@ -172,7 +172,7 @@ queues. The optional `efi-virtio.rom` request was removed because this BIOS-base
 product does not ship a UEFI PXE ROM. Keep Linux KVM and Windows TCG policies unchanged.
 
 Keep **PIIX IDE** and **RTL8139** enabled as independent fallbacks. The future T12
-wxWidgets launcher should expose independent network-adapter and system-disk-controller
+SDL2 + Dear ImGui frontend should expose independent network-adapter and system-disk-controller
 selectors, with VirtIO Net and VirtIO Block as their defaults. The CD-ROM is deliberately
 separate: retain the existing **PIIX IDE CD-ROM** as the default, preserving its optical
 drive emulation behavior. T12 may offer an optional **VirtIO SCSI CD-ROM** choice after
