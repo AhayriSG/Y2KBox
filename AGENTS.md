@@ -73,7 +73,9 @@ sections; do not restart the full-history read.
   detection job. Linux and Windows build/test jobs are skipped. Any non-`.md`
   change and manual `workflow_dispatch` run the normal platform jobs.
 - After pushing, finish the turn immediately. Do not wait for or poll GitHub
-  Actions or Codacy; the configured status hook reports the result.
+  Actions or Codacy. Claude's configured status hook reports results on a later
+  prompt; Gemini/Codex sessions should likewise end without polling and let the
+  owner or a later session review the result.
 - Never claim a test passed, a build compiled, or behavior works unless that
   result was actually observed. A green CI run proves only the checks it ran;
   it does not prove XP guest behavior, visual correctness, or performance gains.
