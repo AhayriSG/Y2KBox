@@ -2,7 +2,11 @@
 
 Follow `AGENTS.md` as the canonical repository policy. It defines the
 project constraints, token-efficient session onboarding, task-claim protocol,
-safe checkpoints, no-local-build rule, CI behavior, and verification standards.
+safe checkpoints, the Gemini 4 Neon-only local-build exception, CI behavior,
+and verification standards. The exception applies only when the active model
+is specifically Gemini 4 Neon; it does not extend to other Gemini models or
+other agents. Performance benchmarking/A-B work still requires explicit owner
+authorization. Report local checks separately from GitHub Actions.
 
 Before starting a task, use the fresh-session reading sequence in `AGENTS.md`:
 read `HANDOFF.md` sections 0-3, the task overview and only the relevant task
