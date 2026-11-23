@@ -3686,7 +3686,8 @@ static bool vmsvga3d_dxvk_materialize_surface_ex(
                 surface->mip_count == 1 && surface->mips != NULL
                     ? surface->mips[0].data : NULL,
                 surface->mip_count == 1 && surface->mips != NULL
-                    ? surface->mips[0].data_size : 0, false)) {
+                    ? surface->mips[0].data_size : 0, false,
+                VMSVGA3D_DXVK_BUFFER_FLUSH_REPLACE)) {
             return false;
         }
         /* Preserve GPU-written RGB contents before changing resource use.
