@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 91–100).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 92–101).
 
 ## How to use this file
 
@@ -38,17 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 91 — Explain Y2KBox's purpose and fixed vCPU target in the README FAQ
-- Moved the former Project goals section into the FAQ and explained why a real
-  Windows XP environment serves a different purpose from compatibility layers.
-- Added a standalone one-vCPU FAQ answer covering era-accurate dual-core XP,
-  workload-dependent TCG/MTTCG coordination overhead, and the distinction
-  between guest vCPUs and host threads.
-- Separated the proprietary hypervisor API rationale into its own FAQ question
-  and retained the preservation-practicality discussion as a closing entry.
-- Clarified HANDOFF's durable vCPU rationale. Documentation-only; no QEMU build,
-  benchmark, functional test, or CI polling.
 
 ### Session 92 — Close T09 integration; keep XP acceptance owner-run
 - T09's qemu-vmvga integration and Linux/Windows CI checks are complete; its task status is DONE.
@@ -100,3 +89,8 @@
 - Corrected the protocol model: Mesa translates OpenGL into SVGA3D commands; there is no separate raw OpenGL FIFO. Y2KBox already whitelists some legacy commands used by SVGA3D, but complete GL 2.1 semantics and caps are unverified.
 - The latest QEMU diagnostic log has no WGL/PFD output. A guest-side probe is needed to enumerate pixel formats, distinguish generic software from ICD formats, and test context creation.
 - Mesa's documented SVGA guest driver stack is Linux-specific; historical Workstation 6 documentation describes XP OpenGL as software-emulated but does not establish VMware Tools 10.0.12 behavior. README Fixed target wording was previewed and awaits owner approval. No source changes, diagnostic utility, builds, tests, guest validation, or CI polling.
+
+### Session 101 — Clarify the guest OpenGL target in the README
+- Updated the README Fixed target to include OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum, explicitly noting that guest OpenGL is not yet implemented.
+- T25 remains an investigation: a complete 2.1 path must also preserve compatibility with older 1.x applications, and the Call of Duty 1 WGL pixel-format failure still needs an XP-side probe.
+- Documentation-only; no emulator source changes, diagnostic utility, build, benchmark, guest test, or CI polling.
