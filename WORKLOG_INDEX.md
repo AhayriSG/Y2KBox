@@ -33,7 +33,7 @@ have follow-up subsections under the same number.
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
 | F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
 | FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81–86 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–88 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
 
 ## Session 81 note
 
@@ -44,7 +44,7 @@ entirely for Markdown-only commits; only the lightweight detector runs. Any
 non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
 See `.github/workflows/build.yml`.
 
-## Sessions 82–87 note
+## Sessions 82–88 note
 
 Session 82 introduced selective historical reads and the topic index. Session 83
 centralized shared instructions in `AGENTS.md`; Session 84 clarified sequential
@@ -54,4 +54,6 @@ exception. Session 86 extended that same model-specific authorization to relevan
 bounded benchmark/A-B work while retaining explicit authorization for every other
 agent. Session 87 clarified the fixed guest RAM rationale, XP x86 virtual/physical
 memory limits, and the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling.
-See Sessions 82–87 in `WORKLOG.md` for the policy evolution and related decisions.
+Session 88 reorganized the README so host requirements and the guest RAM
+rationale live in the bottom FAQ, while the Fixed target summary stays guest-only.
+See Sessions 82–88 in `WORKLOG.md` for the policy evolution and related decisions.
