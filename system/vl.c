@@ -3501,10 +3501,6 @@ void qemu_init(int argc, char **argv)
                     }
                 }
                 break;
-            case QEMU_OPTION_smp:
-                machine_parse_property_opt(qemu_find_opts("smp-opts"),
-                                           "smp", optarg);
-                break;
 #ifdef CONFIG_VNC
             case QEMU_OPTION_vnc:
                 vnc_parse(optarg);
