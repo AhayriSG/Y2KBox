@@ -73,6 +73,11 @@
 - Updated T09/T10 and HANDOFF references, clarified the separate Hitman 2 capture investigation, and removed wxWidgets from README frontend messaging. SDL2 + Dear ImGui is the clear primary frontend direction.
 - No QEMU source changes, local build, or CI polling.
 
+### Session 85 — Model-specific local build authorization
+- Added standing owner authorization for Gemini 4 Neon to run ordinary local QEMU configure/build and relevant standard functional checks while validating its own changes.
+- Other Gemini models, Claude, Codex, and other agents still need explicit authorization before local QEMU builds. Performance benchmarking/A-B work requires explicit authorization for every agent, including Gemini 4 Neon.
+- GitHub Actions remains authoritative; local results must report exact commands/configuration and remain distinct from CI status. Updated shared agent guidance, Gemini entrypoint, handoff, task workflow, and worklog/index. No build, benchmark, or CI polling was performed.
+
 ## Current investigation / next actions
 
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
