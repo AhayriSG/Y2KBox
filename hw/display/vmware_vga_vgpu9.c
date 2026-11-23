@@ -3209,8 +3209,27 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_upload_surface_image(
     }
 
     if (vmsvga3d_d3d9_transfer_buffer(&info)) {
-        if (level != 0 || size == 0 ||
-            !vmsvga3d_dxvk_surface_defer_buffer_range(
+        if (level != 0 || size == 0) {
+            return VMSVGA3D_D3D9_ACCEL_FAILED;
+        }
+
+        /*
+         * Small dynamic buffers use D3D9's driver-managed DISCARD renaming.
+         * Replacing the complete native allocation from the authoritative CPU
+         * shadow preserves untouched bytes while allowing the driver to keep
+         * earlier draw versions alive without waiting for their GPU reads.
+         * The backend requires an exact native-buffer-length match; otherwise
+         * retain the synchronized partial-range path below.
+         */
+        if (surface->storage_bytes <= 64u * 1024u &&
+            surface->storage_bytes == image->data_size &&
+            vmsvga3d_dxvk_surface_upload_buffer_discard_full(
+                s->dxvk, surface->dxvk_surface, image->data,
+                (uint32_t)image->data_size)) {
+            return VMSVGA3D_D3D9_ACCEL_COMPLETE;
+        }
+
+        if (!vmsvga3d_dxvk_surface_defer_buffer_range(
                 surface->dxvk_surface, offset, size)) {
             return VMSVGA3D_D3D9_ACCEL_FAILED;
         }
