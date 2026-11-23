@@ -1821,3 +1821,17 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Updated README.md and recorded the possible future 4 GiB GUI option in
   HANDOFF.md as a consideration, not a current feature or committed plan.
   Documentation-only change; no build, benchmark, or CI polling was performed.
+
+## Session 88 — Reorganize README host and guest-memory guidance
+
+- Removed the duplicate host-platform bullet from the concise Fixed target
+  summary; it now describes only the guest's fixed memory, CPU, and graphics
+  capabilities.
+- Moved the full host requirements content into a new bottom-of-README FAQ
+  entry, rather than repeating it near the top.
+- Moved the 2 GiB guest RAM explanation into the FAQ as well, preserving the
+  XP physical-memory limit, virtual-address split, /3GB and LARGEADDRESSAWARE
+  caveats, and workload-dependent benefits of additional RAM.
+- Documentation-only change. No QEMU build, benchmark, functional test, or CI
+  polling was performed.
+
