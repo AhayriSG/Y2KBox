@@ -113,6 +113,25 @@ usual shared libraries from your distribution, including glib2, pixman,
 libslirp, libfdt, SDL2, and Vulkan (`libvulkan1`, plus `mesa-vulkan-drivers`
 for lavapipe software fallback).
 
+
+
+### Windows XP guest recommendations
+
+- **Display refresh rate:** Set the guest display to **maximum** for the selected resolution and VMware SVGA display mode. In XP, open Display Properties > Settings > Advanced > Monitor.
+- **Mouse:** Y2KBox's supported pointing device is the PC machine's default **PS/2 IntelliMouse**; keep this device and do not attach USB mouse or tablet devices. USB absolute-coordinate/tablet and USB HID mouse paths can cause tracking, camera-recentering, or DirectInput compatibility problems in some XP-era games. In XP, open Control Panel > Mouse > Pointer Options and clear **Enhance pointer precision** to disable mouse acceleration.
+- **Networking and retro web browsing:** The standard launch profile uses `-netdev user,id=net0 -device virtio-net-pci,netdev=net0`. Windows XP needs the XP x86 **NetKVM** driver from `virtio-win-0.1.141_x86.vfd`; install it in the guest before relying on VirtIO networking. RTL8139 remains available as an independent fallback with `-nic user,model=rtl8139` and uses XP's in-box driver. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
+- **CD-ROM and CD images (BIN/CUE):** The emulated CD-ROM stays on the PIIX IDE controller by default (`-drive id=cdrom,if=ide,media=cdrom,readonly=on`), independently of the system-disk controller. Its slower optical-drive behavior and direct control of the emulated CD device are intentional; VirtIO Block does not replace this CD-ROM path. A future frontend option (T12) may offer a VirtIO SCSI CD-ROM as an alternative, but that requires restoring and validating the VirtIO SCSI device and XP driver path first; it is not enabled in current builds. Until Y2KBox's emulated CD-ROM supports the full BIN/CUE format—including the complete set of CUE flags (such as `DCP`)—and supports inserting/ejecting disc images in the emulated drive for multi-disc swapping, we recommend using **Daemon Tools 3.47** inside the Windows XP guest. First transfer the BIN/CUE image files from the host into the XP guest, then mount the image with Daemon Tools.
+
+## FAQ
+
+### What are the host requirements?
+
+- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
+- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
+- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
+
+### How do I capture diagnostic logs and performance information?
+
 Diagnostic logging is an opt-in tester feature and is **off by default**.
 Enable Y2KBox debug mode with `-y2kboxdebugmode on` (or explicitly disable it
 with `-y2kboxdebugmode off`; the default is off). This is the command-line
@@ -134,20 +153,13 @@ for the selected interval. Do **not** use shell-level `2> y2kbox-log.log`
 redirection with this feature: it redirects stderr before QEMU starts and
 defeats interval capture.
 
-### Windows XP guest recommendations
+**Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
 
-- **Display refresh rate:** Set the guest display to **maximum** for the selected resolution and VMware SVGA display mode. In XP, open Display Properties > Settings > Advanced > Monitor.
-- **Mouse:** Y2KBox's supported pointing device is the PC machine's default **PS/2 IntelliMouse**; keep this device and do not attach USB mouse or tablet devices. USB absolute-coordinate/tablet and USB HID mouse paths can cause tracking, camera-recentering, or DirectInput compatibility problems in some XP-era games. In XP, open Control Panel > Mouse > Pointer Options and clear **Enhance pointer precision** to disable mouse acceleration.
-- **Networking and retro web browsing:** The standard launch profile uses `-netdev user,id=net0 -device virtio-net-pci,netdev=net0`. Windows XP needs the XP x86 **NetKVM** driver from `virtio-win-0.1.141_x86.vfd`; install it in the guest before relying on VirtIO networking. RTL8139 remains available as an independent fallback with `-nic user,model=rtl8139` and uses XP's in-box driver. To browse [Protoweb](https://protoweb.org/wiki/servers/) from Internet Explorer, open Tools > Internet Options > Connections > LAN Settings, enable the proxy server, and enter **wayback.protoweb.org** with port **7851** for the current primary HTTP proxy. Protoweb periodically changes its server list, so check its [current server and proxy settings](https://protoweb.org/wiki/servers/) if the address or port stops working; alternate servers and optional automatic proxy configuration are listed there.
-- **CD-ROM and CD images (BIN/CUE):** The emulated CD-ROM stays on the PIIX IDE controller by default (`-drive id=cdrom,if=ide,media=cdrom,readonly=on`), independently of the system-disk controller. Its slower optical-drive behavior and direct control of the emulated CD device are intentional; VirtIO Block does not replace this CD-ROM path. A future frontend option (T12) may offer a VirtIO SCSI CD-ROM as an alternative, but that requires restoring and validating the VirtIO SCSI device and XP driver path first; it is not enabled in current builds. Until Y2KBox's emulated CD-ROM supports the full BIN/CUE format—including the complete set of CUE flags (such as `DCP`)—and supports inserting/ejecting disc images in the emulated drive for multi-disc swapping, we recommend using **Daemon Tools 3.47** inside the Windows XP guest. First transfer the BIN/CUE image files from the host into the XP guest, then mount the image with Daemon Tools.
+**Helping optimize games:** The `Y2KBOX-PERF` statistics in these logs can help developers investigate performance bottlenecks. If a game runs poorly, share the relevant log and describe the game, scene, resolution, settings, and reproduction steps. Developers—or an LLM-assisted coding agent—can analyze the measurements and, when necessary, add targeted profiling counters to investigate areas that the existing statistics do not cover. You do not need to modify the emulator or add instrumentation yourself.
 
-## FAQ
+Performance counters help identify where execution time is being spent, but they do not necessarily explain visual glitches. Graphics problems may require additional diagnostic traces, screenshots, or short captures.
 
-### What are the host requirements?
-
-- **CPU ISA:** x86-64-v3 is the minimum. Older ISA levels are not supported.
-- **Windows:** Windows 10 version 1803 (build 17134) or newer is strongly recommended. Version 1803 is the baseline we are targeting for future Windows TCG memory-management work, including potential use of newer virtual-memory APIs. It may become a formal minimum as those optimizations mature. Earlier Windows versions are not the target for future compatibility work.
-- **Linux:** KVM is mandatory, and the user must have permission to access `/dev/kvm`. There is no supported Linux TCG fallback. Because guest VMware SVGA/vmport backdoor calls go through KVM, enable the host kernel parameter `kvm.enable_vmware_backdoor=1` (for example, add `options kvm enable_vmware_backdoor=1` to `/etc/modprobe.d/kvm.conf` and reload `kvm` / reboot; verify with `cat /sys/module/kvm/parameters/enable_vmware_backdoor`).
+**Advanced graphics diagnostics:** Developers investigating VMware SVGA graphics issues can optionally enable `VMVGA_TRACE_DEEP_GB_UPDATE` at compile time to capture detailed successful GB-UPDATE operations. This trace is **disabled by default** because it can generate substantial logging volume. It is intended for targeted graphics investigations, not ordinary tester logging. The regular diagnostic hotkey does not require this compile-time option.
 
 ### Which version of QEMU is Y2KBox based on?
 
