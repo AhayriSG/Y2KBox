@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 92–101).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 93–102).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is active.** Mesa's SVGA Gallium driver translates OpenGL operations into SVGA3D commands; the host dispatcher already accepts some legacy commands such as DRAW_PRIMITIVES, but its legacy capability profile is documented as D3D9-oriented. Compare the exact Mesa GL 2.1 command/state/capability needs against current handlers. The latest uploaded QEMU log has no WGL/PFD records, so the next diagnostic must run inside XP and enumerate PFDs, generic-vs-ICD classification, pixel-format selection, and WGL context creation.
+4. **T25 guest OpenGL investigation is active.** Mesa's SVGA Gallium driver translates OpenGL operations into SVGA3D commands; the host dispatcher accepts some legacy commands such as DRAW_PRIMITIVES, but its legacy capability profile is documented as D3D9-oriented. Compare the exact Mesa GL 2.1 command/state/capability needs against current handlers. An XP-side probe is now prepared at `xp/tools/glprobe.c`: it reproduces COD1's id Tech 3 `GLW_ChoosePFD` filters/best-match logic, reports rejection reasons for the 32/24/8 and 32/24/0 attempts, tests strict and software-allowed selection, then checks WGL context creation and GL strings. Next: owner runs it in XP and returns the complete output.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -38,12 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 92 — Close T09 integration; keep XP acceptance owner-run
-- T09's qemu-vmvga integration and Linux/Windows CI checks are complete; its task status is DONE.
-- VMware Tools/driver, 2D/display, D3D API, and game compatibility checks remain in the separate owner-run XP guest validation checklist, not as unfinished agent work.
-- HANDOFF wording now distinguishes completed T09 integration from ongoing human acceptance. T10 remains separately paused for its own validation scope.
-- Documentation-only update; no source changes, local build, benchmark, guest test, or CI polling.
 
 ### Session 93 — Move QEMU base and license provenance into the README FAQ
 - Removed the upstream QEMU base/version and GPL-2.0 notice from the Fixed target area.
@@ -94,3 +88,8 @@
 - Updated the README Fixed target to include OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum, explicitly noting that guest OpenGL is not yet implemented.
 - T25 remains an investigation: a complete 2.1 path must also preserve compatibility with older 1.x applications, and the Call of Duty 1 WGL pixel-format failure still needs an XP-side probe.
 - Documentation-only; no emulator source changes, diagnostic utility, build, benchmark, guest test, or CI polling.
+
+### Session 102 — Build an XP-side COD1 WGL pixel-format probe
+- Identified COD1's GLW_ChoosePFD routine as the custom id Tech 3 PFD enumerator, not Windows ChoosePixelFormat. It rejects generic formats by default, requires RGBA/window/OpenGL/double-buffer flags, at least 15 depth bits, and at least 4 stencil bits when stencil is requested.
+- Added xp/tools/glprobe.c and its README. It mirrors the game's filtering/best-match logic for 32/24/8 and 32/24/0, explains per-format rejections, compares software-allowed selection, and tests WGL context creation plus GL vendor/renderer/version.
+- T25 now points to the probe. Next is an owner-run XP capture; the utility has not been compiled or run. No QEMU build, guest test, benchmark, or CI polling.
