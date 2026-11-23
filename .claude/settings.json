@@ -3,7 +3,11 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/session_status.sh\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/session_status.sh\"",
+            "timeout": 10
+          }
         ]
       }
     ],
@@ -11,7 +15,22 @@
       {
         "matcher": "compact",
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/session_status.sh\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/session_status.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/maintain_active_session.py\"",
+            "timeout": 10
+          }
         ]
       }
     ]
