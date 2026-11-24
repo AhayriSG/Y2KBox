@@ -98,6 +98,7 @@ struct vmsvga3d_dxvk_s {
     uint64_t d3d9_ring_vb_extra_bytes;
     VMSVGA3DDxvkSurface *surfaces;
     bool vb_ring_profile_active;
+    bool vb_ring_profile_detail;
     void *d3d11_device;
     void *d3d11_device1;
     void *d3d11_context;
@@ -3952,11 +3953,13 @@ void vmsvga3d_dxvk_surface_destroy(VMSVGA3DDxvkSurface *surface)
     g_free(surface);
 }
 
-void vmsvga3d_dxvk_vb_ring_profile_capture(VMSVGA3DDxvk *dxvk, bool enabled)
+void vmsvga3d_dxvk_vb_ring_profile_capture(VMSVGA3DDxvk *dxvk,
+                                                bool enabled, bool detail)
 {
     VMSVGA3DDxvkSurface *surface;
     if (dxvk == NULL) return;
     dxvk->vb_ring_profile_active = enabled;
+    dxvk->vb_ring_profile_detail = enabled && detail;
     for (surface = dxvk->surfaces; surface != NULL; surface = surface->profile_next) {
         if (enabled) {
             surface->vb_ring_profile_active = true;
@@ -16361,6 +16364,21 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     qemu_perf_stats_add_work(lock_size_stat, size);
 
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
+        if (dxvk->vb_ring_profile_detail) {
+            fprintf(stderr,
+                    "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
+                    "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
+                    "reason=%s flush=%s stage=lock result=FAIL hr=0x%08x\\n",
+                    surface->sid,
+                    surface->d3d9_resource_type ==
+                            VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
+                        ? "vertex" : "index",
+                    offset, size, lock_offset, lock_size, lock_flags,
+                    lock_reason,
+                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW ? "draw" :
+                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT ? "evict" :
+                    "replace", (uint32_t)result);
+        }
         return false;
     }
 
@@ -16743,7 +16761,7 @@ static bool vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
 static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t offset,
     const void *shadow_data, uint32_t shadow_size, uint32_t size,
-    bool allow_async_lock)
+    bool allow_async_lock, VMSVGA3DDxvkBufferFlushReason reason)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     VMSVGA3DDxvkBufferLock lock = NULL;
@@ -16775,6 +16793,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     bool did_overlap_fallback = false;
     bool did_ring_wrap = false;
     bool did_overlap_discard = false;
+    const char *lock_reason;
 
     if (!vmsvga3d_dxvk_ready(dxvk) ||
         !vmsvga3d_dxvk_surface_is_d3d9_buffer(surface) ||
@@ -17043,6 +17062,17 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         did_overlap_fallback = true;
     }
 
+    lock_reason = did_invalidate_discard ? "guest-invalidate" :
+                  did_overlap_discard ? "inflight-overlap-discard" :
+                  did_overlap_fallback ? "inflight-overlap-serialize" :
+                  did_ring_wrap ? "ring-wrap" :
+                  lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE
+                      ? "disjoint-nooverwrite" :
+                  lock_flags == VMSVGA3D_DXVK_D3DLOCK_DISCARD
+                      ? (full_range ? "full-range-discard" : "discard") :
+                  !allow_async_lock ? "ordered-serialization" :
+                  "fallback-serialization";
+
     if (!vmsvga3d_dxvk_get_method(
             surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_LOCK,
             &lock, sizeof(lock)) ||
@@ -17156,6 +17186,26 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     } else if (surface->vb_ring_profile_active && is_ring_vb && lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) {
         surface->vb_ring_profile_allocation_failures++;
     }
+    if (dxvk->vb_ring_profile_detail) {
+        fprintf(stderr,
+                "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
+                "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
+                "mode=%s reason=%s flush=%s ring_base=%u ring_high=%u "
+                "host_capacity=%u copy_bytes=%u result=%s\\n",
+                surface->sid,
+                surface->d3d9_resource_type ==
+                        VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
+                    ? "vertex" : "index",
+                offset, size, lock_offset, lock_size, lock_flags,
+                lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE ? "NOOVERWRITE" :
+                lock_flags == VMSVGA3D_DXVK_D3DLOCK_DISCARD ? "DISCARD" : "NONE",
+                lock_reason,
+                reason == VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW ? "draw" :
+                reason == VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT ? "evict" :
+                "replace", surface->d3d9_ring_base, surface->d3d9_ring_high,
+                host_len, copy_size,
+                vmsvga3d_dxvk_succeeded(result) ? "OK" : "FAIL");
+    }
     return vmsvga3d_dxvk_succeeded(result);
 #else
     (void)dxvk;
@@ -17252,7 +17302,8 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     }
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH);
     success = vmsvga3d_dxvk_surface_upload_buffer_range(
-        dxvk, surface, offset, data, data_size, size, discard_full_range);
+        dxvk, surface, offset, data, data_size, size, discard_full_range,
+        reason);
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, perf_start);
     if (success) {
