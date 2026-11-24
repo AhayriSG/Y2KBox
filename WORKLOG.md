@@ -1996,3 +1996,12 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Paused T25 pending an independent feasibility reassessment. No implementation work is authorized. The next reviewer is explicitly invited to challenge the current standalone-DLL / GL4ES / ANGLE hypothesis and investigate other architectures.
 - Expanded HANDOFF section 8g with the reassessment request, evidence expectations, XP compatibility/licensing/performance review criteria, and a requirement for a smallest decisive validation proposal before any prototype.
 - No agent was actually assigned or dispatched. No guest modification, display-driver replacement, emulator source change, build, benchmark, guest test, or CI polling was performed. Documentation-only.
+
+
+## Session 108 — Record QindieGL as a concrete but unproven OpenGL wrapper lead
+
+- Added QindieGL to the README Fixed target discussion as a source reference for an application-local OpenGL-to-D3D9 wrapper, with an explicit warning that it is not a validated Y2KBox solution and that COD1 startup does not establish correct rendering.
+- Recorded the owner's COD1 test and the source-level cause in HANDOFF section 8h: QindieGL implements/registers `wglGetExtensionsStringARB(HDC)`, but not `wglGetExtensionsStringEXT(void)`; its WGL proc lookup returns a synthetic stub for the unknown EXT name. A registry extension flag cannot supply the missing function.
+- Recorded the historical DxWnd experiment in which a minimal EXT entry point reportedly let COD1 start but left substantial graphics corruption, especially the skybox. This is a startup lead, not a rendering fix.
+- Added the QindieGL source and historical discussion to T25's evidence while preserving its PAUSED status and independent-reassessment gate. Noted QindieGL's GPL-3.0 license for review before any code reuse in Y2KBox (GPL-2.0).
+- Documentation-only. No QindieGL patch, source changes, builds, guest modifications, guest tests, benchmarks, or CI polling were performed.
