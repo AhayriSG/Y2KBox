@@ -3,8 +3,8 @@
 This directory holds selected diagnostic logs captured manually from Y2KBox.
 
 Capture logs normally and add selected captures here as `.log.gz` files.
-Full (`on`) captures are automatically stopped after five seconds (or earlier
-with Ctrl+Alt+L) and compressed by Y2KBox after stderr is restored. Simple
+Full (`on`) captures are automatically stopped after three seconds (or earlier
+with Ctrl+Alt+L) and compressed by Y2KBox after stderr is restored using zlib level 9 (maximum compression). Simple
 captures remain uncompressed `.log` files; compress those manually when they
 are worth keeping. Automatic capture compression writes to the launch working
 directory and does not add files to this repository. These are ordinary text
