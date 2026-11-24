@@ -580,10 +580,11 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 * **Remaining work:** screen-space position bounds and UV ranges are not yet decoded. Draw summaries explicitly emit `position_bounds=unavailable`, `uv_bounds=unavailable`, and `bounds_reason=vertex-decode-not-implemented`; do not treat this as completed geometry profiling. Continue only with safe CPU-shadow/vertex-format decoding, no GPU readback or forced synchronization.
 * **Verification:** static source review only. No QEMU build, local tests, owner capture, or CI was run. Keep T26 IN PROGRESS until the remaining geometry work and owner full-mode capture confirm the records are useful. Simple and inactive/default-off paths are intended to remain unchanged.
 
-* **Session 130 follow-up (2026-11-24):** full captures now have a five-second
+* **Session 130–131 follow-up (2026-11-24):** full captures now have a three-second
   QEMU realtime-timer limit and can still be stopped early with Ctrl+Alt+L.
   After stderr restoration, full-mode `.log` files are compressed in-process
-  with zlib to `.log.gz`; the source is deleted only after successful gzip
-  completion. Compression uses exclusive file creation and preserves the
-  original log on failure. Simple-mode duration and plain-text output are
-  unchanged. Static source review only; no build/runtime/CI validation.
+  with zlib level 9 (maximum compression) to `.log.gz`; the source is deleted
+  only after successful gzip completion. Compression uses exclusive file
+  creation and preserves the original log on failure. Simple-mode duration and
+  plain-text output are unchanged. Static source review only; no build/runtime/CI
+  validation.
