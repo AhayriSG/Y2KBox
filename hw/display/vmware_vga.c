@@ -7721,7 +7721,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 break;
             }
             len -= 1;
-            VPRINT("SVGA_CMD_NOP_ERROR command %u in SVGA command FIFO\n", cmd);
+            VMVGA_TRACE_WARNING("NOP_ERROR command received cmd=%u", cmd);
             break;
         case SVGA_CMD_MAX:
             if (len < 1) {
