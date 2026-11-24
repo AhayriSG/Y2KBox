@@ -436,6 +436,7 @@ struct vmsvga3d_dxvk_surface_s {
     /* Capture-only counters; allocated is successful upload bytes, reused its NOOVERWRITE subset. */
     VMSVGA3DDxvkSurface *profile_next;
     bool vb_ring_profile_active;
+    bool vb_ring_profile_detail;
     bool vb_ring_profile_eligible;
     uint64_t vb_ring_profile_capacity_bytes, vb_ring_profile_allocated_bytes;
     uint64_t vb_ring_profile_reused_bytes, vb_ring_profile_discard_count;
@@ -3648,6 +3649,7 @@ VMSVGA3DDxvkSurface *vmsvga3d_dxvk_surface_create(VMSVGA3DDxvk *dxvk,
     surface->profile_next = dxvk->surfaces;
     dxvk->surfaces = surface;
     surface->vb_ring_profile_active = dxvk->vb_ring_profile_active;
+    surface->vb_ring_profile_detail = dxvk->vb_ring_profile_detail;
 
     return surface;
 }
@@ -3962,6 +3964,7 @@ void vmsvga3d_dxvk_vb_ring_profile_capture(VMSVGA3DDxvk *dxvk,
     dxvk->vb_ring_profile_active = enabled;
     dxvk->vb_ring_profile_detail = enabled && detail;
     for (surface = dxvk->surfaces; surface != NULL; surface = surface->profile_next) {
+        surface->vb_ring_profile_detail = enabled && detail;
         if (enabled) {
             surface->vb_ring_profile_active = true;
             surface->vb_ring_profile_eligible = surface->d3d9_resident &&
@@ -17209,14 +17212,15 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         if (dxvk->vb_ring_profile_detail) {
             fprintf(stderr,
                     "VMVGA-D3D9-BUFFER-UPLOAD seq=%" PRIu64 " sid=%u type=%s guest_offset=%u "
-                    "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
+                    "guest_size=%u deferred_updates=%u lock_offset=%u lock_size=%u flags=0x%x "
                     "mode=%s reason=%s flush=%s stage=lock result=FAIL "
                     "hr=0x%08x\n",
                     dxvk->trace_sequence, surface->sid,
                     surface->d3d9_resource_type ==
                             VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
                         ? "vertex" : "index",
-                    offset, size, lock_offset, lock_size, lock_flags,
+                    offset, size, surface->d3d9_buffer_dirty_updates,
+                    lock_offset, lock_size, lock_flags,
                     lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE ? "NOOVERWRITE" :
                     lock_flags == VMSVGA3D_DXVK_D3DLOCK_DISCARD ? "DISCARD" : "NONE",
                     lock_reason,
@@ -17266,14 +17270,15 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-D3D9-BUFFER-UPLOAD seq=%" PRIu64 " sid=%u type=%s guest_offset=%u "
-                "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
+                "guest_size=%u deferred_updates=%u lock_offset=%u lock_size=%u flags=0x%x "
                 "mode=%s reason=%s flush=%s ring_base=%u ring_high=%u "
                 "host_capacity=%u copy_bytes=%u result=%s\n",
                 dxvk->trace_sequence, surface->sid,
                 surface->d3d9_resource_type ==
                         VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
                     ? "vertex" : "index",
-                offset, size, lock_offset, lock_size, lock_flags,
+                offset, size, surface->d3d9_buffer_dirty_updates,
+                lock_offset, lock_size, lock_flags,
                 lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE ? "NOOVERWRITE" :
                 lock_flags == VMSVGA3D_DXVK_D3DLOCK_DISCARD ? "DISCARD" : "NONE",
                 lock_reason,
@@ -17328,6 +17333,17 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
     }
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED, perf_start);
+    if (surface->vb_ring_profile_detail) {
+        fprintf(stderr,
+                "VMVGA-D3D9-BUFFER-DEFER seq=%" PRIu64 " sid=%u "
+                "guest_offset=%u guest_size=%u merged_offset=%u "
+                "merged_size=%u updates=%u\\n",
+                surface->owner != NULL ? surface->owner->trace_sequence : 0,
+                surface->sid, offset, size, surface->d3d9_buffer_dirty_start,
+                surface->d3d9_buffer_dirty_end -
+                    surface->d3d9_buffer_dirty_start,
+                surface->d3d9_buffer_dirty_updates);
+    }
     return true;
 #else
     (void)surface;
