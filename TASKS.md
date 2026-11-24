@@ -414,7 +414,7 @@ interval across Y2KBox, without continuously generating diagnostic output.
   generate large files. D3D9 `supersede-flip` readback events retain every
   event in full mode; simple mode emits the first two per capture and reports
   the interval total, first/last SID, per-SID counts (up to four distinct SIDs),
-  and overflow count at capture stop.
+  and overflow-event count for SIDs beyond the tracked set at capture stop.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all

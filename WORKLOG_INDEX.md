@@ -169,5 +169,5 @@ See Sessions 82–115 in `WORKLOG.md` for the detailed chronology and evidence.
 
 - **Session 126 — Bound superseded-flip logging and fix BUSY read classification:**
   move unknown-register-read warnings after dispatch; keep every D3D9 supersede-flip
-  event in full mode while simple mode samples two and emits interval/per-SID counts.
+  event in full mode while simple mode samples two and emits interval/per-SID counts plus an overflow-event count.
   Static source review only; no build/runtime/CI/XP verification.

@@ -1380,7 +1380,7 @@ static inline void vmsvga_trace_flight_histogram(struct vmsvga_state_s *s,
 
         fprintf(stderr,
                 "VMVGA-SCREEN-READBACK-STATS reason=%s supersede-flip=%" PRIu64
-                " first-sid=%u last-sid=%u event-lines=%u other-sid=%" PRIu64
+                " first-sid=%u last-sid=%u event-lines=%u other-sid-events=%" PRIu64
                 "\n",
                 reason, trace->screen_readback_supersede,
                 trace->screen_readback_supersede_first_sid,

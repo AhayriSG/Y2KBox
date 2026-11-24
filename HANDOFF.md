@@ -905,7 +905,7 @@ valid-to-valid full-screen flips where obsolete old-frame readback work is
 superseded to avoid synchronous readback/BQL stalls. It is retained per event
 in `on` mode. In `simple` mode, only the first two events per capture are
 printed; capture stop reports the total, first and last old SID, counts for up
-to four distinct SIDs, and an overflow count for additional distinct SIDs.
+to four distinct SIDs, and an event count for SIDs beyond the tracked set.
 This is log-volume control, not a claim that supersession itself is a bottleneck
 or that every superseded readback would otherwise have completed usefully.
 

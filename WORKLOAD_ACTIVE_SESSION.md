@@ -60,7 +60,7 @@
 
 ### Session 126 — Bound superseded-flip logging and fix BUSY read classification
 - Confirmed register index 22 is the valid `SVGA_REG_BUSY`; moved unknown-read warnings into the read switch's `default` case.
-- Simple mode now logs the first two D3D9 supersede-flip events and reports capture totals, first/last SID, a four-SID histogram, and overflow count. Full mode keeps every event.
+- Simple mode now logs the first two D3D9 supersede-flip events and reports capture totals, first/last SID, a four-SID histogram, and overflow-event count for additional SIDs. Full mode keeps every event.
 - This changes diagnostics only, not readback/flip behavior. Static review only; no build, runtime test, CI, or owner retest.
 
 ## Current investigation / next actions
