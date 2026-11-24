@@ -44,7 +44,11 @@ claims and serialize commits.
   supported.
 - **Guest 3D APIs:** Direct3D 9.0c with Shader Model 3.0 as the maximum advertised
   shader model. OpenGL 1.1 is the baseline target, with OpenGL 2.1 as the maximum
-  target; OpenGL support is under investigation and is not currently implemented.
+  target. OpenGL support is not currently implemented and remains a **low-probability
+  research objective**. The standard Windows XP VMware display-driver path appears
+  to expose only Microsoft's GDI Generic software renderer. Alternative approaches,
+  potentially including guest-side application-local wrapper DLLs, have not yet
+  been proven viable. A different solution may exist and remains open to investigation.
   Direct3D 10/11, Shader Model 4.0 or newer, and OpenGL versions newer than 2.1
   are outside the guest-facing graphics target. Host-side rendering may use
   newer APIs internally.
