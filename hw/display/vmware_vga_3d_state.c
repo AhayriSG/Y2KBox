@@ -1314,6 +1314,81 @@ static bool vmsvga3d_state_clear(struct vmsvga_state_s *s, uint32_t cid,
     return valid;
 }
 
+static void vmsvga3d_state_trace_draw_snapshot(
+    struct vmsvga_state_s *s, const VMSVGA3DContext *context, uint32_t cid)
+{
+    uint32_t i;
+    uint32_t stage;
+    uint32_t name;
+    bool first;
+
+    if (!vmsvga_trace_detail_enabled(s) || context == NULL) {
+        return;
+    }
+
+    fprintf(stderr,
+            "VMVGA-D3D9-STATE-SNAPSHOT frame=%" PRIu64
+            " seq=%" PRIu64 " cid=%u viewport_valid=%u "
+            "viewport=%u,%u/%ux%u scissor_valid=%u "
+            "scissor=%u,%u/%ux%u targets=",
+            vmsvga_trace_frame_id(s), vmsvga_trace_event_sequence(s), cid,
+            context->viewport_valid, context->viewport.x, context->viewport.y,
+            context->viewport.w, context->viewport.h, context->scissor_valid,
+            context->scissor.x, context->scissor.y, context->scissor.w,
+            context->scissor.h);
+
+    first = true;
+    for (i = 0; i < SVGA3D_RT_MAX; i++) {
+        const SVGA3dSurfaceImageId *target = &context->render_targets[i];
+
+        if (target->sid == SVGA3D_INVALID_ID) {
+            continue;
+        }
+        fprintf(stderr, "%s%u:%u/%u/%u", first ? "" : ",", i,
+                target->sid, target->face, target->mipmap);
+        first = false;
+    }
+
+    fprintf(stderr, " shaders=");
+    first = true;
+    for (i = 0; i < SVGA3D_NUM_SHADERTYPE_PREDX; i++) {
+        if (context->bound_shader[i] == SVGA3D_INVALID_ID) {
+            continue;
+        }
+        fprintf(stderr, "%s%u:%u", first ? "" : ",", i,
+                context->bound_shader[i]);
+        first = false;
+    }
+
+    fprintf(stderr, " texture_states=");
+    first = true;
+    for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
+        for (name = SVGA3D_TS_MIN; name < SVGA3D_TS_MAX; name++) {
+            const VMSVGA3DStateValue *value =
+                &context->texture_state[stage][name];
+
+            if (!value->valid) {
+                continue;
+            }
+            fprintf(stderr, "%s%u/%u=%08x", first ? "" : ",",
+                    stage, name, value->value);
+            first = false;
+        }
+    }
+
+    fprintf(stderr, " render_states=");
+    first = true;
+    for (i = 0; i < SVGA3D_RS_MAX; i++) {
+        if (!context->render_state[i].valid) {
+            continue;
+        }
+        fprintf(stderr, "%s%u=%08x", first ? "" : ",", i,
+                context->render_state[i].value);
+        first = false;
+    }
+    fprintf(stderr, "\n");
+}
+
 static bool vmsvga3d_state_draw_primitives(
     struct vmsvga_state_s *s, uint32_t cid, uint32_t vertex_decl_count,
     const SVGA3dVertexDecl *vertex_decls, uint32_t range_count,
@@ -1341,6 +1416,8 @@ static bool vmsvga3d_state_draw_primitives(
             return false;
         }
     }
+
+    vmsvga3d_state_trace_draw_snapshot(s, context, cid);
 
     /* Protocol validation completes here; the FIFO handler executes D3D9. */
     return true;
