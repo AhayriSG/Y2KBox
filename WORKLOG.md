@@ -2108,3 +2108,11 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added a narrowly scoped Gemini 4 Neon follow-up to T19: emit one capture-stop `Y2KBOX-PROF subsystem=vmvga.vb_ring` record per eligible dynamic D3D9 VB surface, with explicitly defined capacity, allocation/high-water, successful NOOVERWRITE reuse, successful DISCARD/wrap, overlap-discard, and allocation-failure measurements.
 - Required profiling-only interval baselines/reset at capture start without resetting allocator state; no per-upload logging, no hot-path locks/allocations/I/O, no allocation-policy changes, and no broader ScreenTarget/GART profiler expansion.
 - Documentation-only handoff. No source changes, local build, runtime test, or CI polling. Gemini 4 Neon should implement and validate this focused follow-up before resuming broader optimization work; T19 is not marked DONE.
+
+
+## Session 119 (ChatGPT), 2026-11-24 - Add capture-interval dynamic VB ring pressure profiling
+
+- Added per-surface profiling-only counters and a DXVK surface registry so the existing VMVGA `debug-log` capture transition resets counters at Ctrl+Alt+L start and emits summaries at capture stop. Surfaces created during an active capture inherit the active profiling state.
+- Added one `Y2KBOX-PROF subsystem=vmvga.vb_ring` summary per eligible dynamic D3D9 vertex buffer still live at capture stop. Fields are defined in source and TASKS.md: maximum observed host allocation, cumulative successful uploaded bytes, successful NOOVERWRITE subset, successful DISCARDs, ring-end wraps, maximum absolute host-buffer byte end, overlap-fallback DISCARDs, and failed ring upgrade/NOOVERWRITE operations.
+- Profiling counters reset independently of allocator state. No allocation policy, ring decisions, or Session 115 optimization behavior was intentionally changed. No per-upload formatting/I/O or new locks/allocations were added; only a capture-active branch and counter updates are used while profiling.
+- Static source review only. No local QEMU build or runtime test was run (this agent does not inherit Gemini 4 Neon's standing build authorization). Linux/Windows CI and owner XP capture verification remain pending; T19 stays PAUSED until real capture output and repeated intervals are verified.
