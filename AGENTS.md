@@ -7,7 +7,7 @@ runtime is TCG-only. VMVGA is the sole display/3D path.
 ## Source of truth
 
 - `HANDOFF.md`: owner-approved architecture, constraints, and durable decisions.
-- `TASKS.md`: task queue, claims, status, and exact resume points.
+- `TASKS.md`: task queue, claims, status, and exact resume points. Its colored heading markers are human-only cues; the plain-text `Status:` field immediately below each task heading is authoritative.
 - `WORKLOAD_ACTIVE_SESSION.md`: concise recent-session context.
 - `WORKLOG_INDEX.md`: navigation to relevant historical evidence.
 - `WORKLOG.md`: append-only chronological record; never load it all by default.
