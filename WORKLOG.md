@@ -2037,3 +2037,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Clarified that IMPLEMENTED remains yellow while acceptance evidence is pending, including T24.
 - Updated AGENTS.md with the task-status parsing rule and refreshed the worklog index and rolling active-session summary.
 - Documentation-only. No source changes, builds, guest tests, or CI polling.
+
+
+## Session 112 (ChatGPT), 2026-11-24 - Plan selectable graphics machine profiles in T12
+
+- Expanded T12's future launcher plan from a single fixed VMVGA machine to a profile-based model: each profile binds its graphics backend, matching XP guest-driver environment, and a dedicated system qcow2 image.
+- Kept the existing VMware SVGA II / SVGA3D profile as the active/default Direct3D 9 path. Added the proposed VBoxVGA 5.2.x / Chromium SharedOpenGL profile as a separate, experimental OpenGL-oriented candidate, not an implemented or selectable feature.
+- Explicitly gated the VBox profile on an end-to-end Y2KBox proof of concept and source/licensing audit. VirtualBox's documented experimental Windows XP 3D support is evidence that the upstream guest path existed, not proof that the Y2KBox port works. T16 remains the research/feasibility track.
+- Clarified that graphics backend, guest driver, and system disk must be selected as one consistent profile; removable media and unrelated device selectors remain independent.
+- Documentation-only. No source changes, builds, guest tests, benchmarks, or CI polling.
