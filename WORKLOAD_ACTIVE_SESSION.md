@@ -19,12 +19,6 @@
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
-## Latest ten worklog sessions
-
-### Session 117 — Fix Session 115 D3D9 dynamic vertex-buffer compile failure
-- Added the missing Direct3D 9 `D3DUSAGE_DYNAMIC` value (`0x00000200u`) after Linux and Windows CI caught the undefined constant.
-- No local QEMU build was run; the compile correction was pushed separately.
-
 ### Session 118 — Define narrow VB-ring profiling handoff
 - Defined a focused capture-stop per-surface dynamic D3D9 VB-ring profile and its interval-only counters.
 - Documentation-only handoff; no source/build/runtime validation.
@@ -61,13 +55,18 @@
 ### Session 126 — Bound superseded-flip logging and fix BUSY read classification
 - Confirmed register index 22 is the valid `SVGA_REG_BUSY`; moved unknown-read warnings into the read switch's `default` case.
 - Simple mode now logs the first two D3D9 supersede-flip events and reports capture totals, first/last SID, a four-SID histogram, and overflow-event count for additional SIDs. Full mode keeps every event.
-- This changes diagnostics only, not readback/flip behavior. Static review only; no build, runtime test, CI, or owner retest.
+- This changes diagnostics only, not readback/flip behavior. Static source review only; no build/runtime test or CI.
+
+### Session 127 — Record owner verification and close diagnostic logging follow-up
+- Owner Windows XP captures verified simple mode (about 48 KB; 734 supersede flips, two individual lines, SID counts 367/367) and full mode (about 1.5 MB; 766 supersede flips and 766 individual lines).
+- Both headers confirmed their selected modes, and the false unknown-read warning for valid `SVGA_REG_BUSY` was absent from both captures.
+- Session 126's owner-retest follow-up is closed. T19 remains IMPLEMENTED pending Linux/Windows CI and repeated-interval acceptance; no local build or CI was performed.
 
 ## Current investigation / next actions
 
 1. **T13e-F1 / Windows TCG profiling remains active.** Keep workload and scene identical when comparing captures; distinguish measured facts from attribution hypotheses.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** Analyze owner captures and current VMVGA/D3D8 path; do not infer visual correctness from CI.
-3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Sessions 125–126 corrected false unknown-FIFO, register-write, and register-read warnings; simple mode now bounds repetitive D3D9 supersede-flip output with a capture-stop summary, while full mode retains every event. Re-run the same short simple capture to confirm the BUSY warning is gone and inspect the supersede counts; then verify all levels and repeated intervals in XP. Repeated genuine-warning aggregation remains a separate possible follow-up, not implemented.
+3. **T19 diagnostic capture modes are IMPLEMENTED; owner capture contents are verified, CI/repeated-interval acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Sessions 125–126 corrected false unknown-FIFO, register-write, and register-read warnings. On 2026-11-24, the owner verified a 48 KB simple capture (734 supersede flips, two sampled event lines, SID counts 367/367) and a 1.5 MB full capture (766 supersede flips, all 766 individual lines); both had the expected mode header and neither showed the false `SVGA_REG_BUSY` unknown-read warning. Session 126's owner-retest follow-up is closed. Linux/Windows CI and repeated-interval acceptance remain outstanding. Repeated genuine-warning aggregation remains a separate possible follow-up, not implemented.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check. VMware documents software-emulated OpenGL in XP guests. QindieGL and TitaniumGL remain unproven leads with unresolved compatibility/quality limitations. Do not prototype, modify the guest/driver, build, or test while T25 remains paused.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. **T24 fixed-size SDL display is DONE.** The owner confirmed Linux/Windows SDL CI and all XP acceptance checks: guest-driven resolution changes, Ctrl+Alt+F fullscreen toggle, and mouse tracking. The Windows window is decorated and non-resizable with titlebar maximize disabled.
