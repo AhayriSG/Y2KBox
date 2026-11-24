@@ -417,6 +417,13 @@ interval across Y2KBox, without continuously generating diagnostic output.
   and overflow-event count for SIDs beyond the tracked set at capture stop.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
+* **Full-mode safety limit:** a full (`on`) capture automatically stops after
+  five seconds, including when the tester forgets to press the hotkey again.
+  Ctrl+Alt+L can stop it earlier. After stderr is flushed and restored, the
+  completed full capture is compressed to the same timestamped `.log.gz`
+  filename; the uncompressed `.log` is removed only after gzip succeeds.
+  If compression fails, retain the original `.log`. Simple captures remain
+  manually stopped, uncompressed `.log` files with no duration limit.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
   diagnostic sources are quiet while inactive and stderr is restored on stop;
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
@@ -569,3 +576,11 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 * **Implementation progress (2026-11-24):** Full mode now records each deferred guest buffer range and merged range (`VMVGA-D3D9-BUFFER-DEFER`), plus native full-buffer and range-upload lock mode/flags/reason, byte ranges, capacity and flush cause (`VMVGA-D3D9-BUFFER-UPLOAD`). Guest-backed image/buffer updates emit subresource, box, row/plane layout, byte count and backend after the guest MOB data has reached the CPU shadow (`VMVGA-RESOURCE-UPDATE`). Each D3D9 draw range emits a compact FIFO-sequenced target/viewport/primitive/index/stream summary (`VMVGA-D3D9-GEOMETRY`). Full-only `VMVGA-RENDER-CORRELATION` records connect readback submit/ready/retire events to the last observed FIFO sequence; asynchronous readback polling may make that sequence a nearby correlation hint rather than the originating command.
 * **Remaining work:** screen-space position bounds and UV ranges are not yet decoded. Draw summaries explicitly emit `position_bounds=unavailable`, `uv_bounds=unavailable`, and `bounds_reason=vertex-decode-not-implemented`; do not treat this as completed geometry profiling. Continue only with safe CPU-shadow/vertex-format decoding, no GPU readback or forced synchronization.
 * **Verification:** static source review only. No QEMU build, local tests, owner capture, or CI was run. Keep T26 IN PROGRESS until the remaining geometry work and owner full-mode capture confirm the records are useful. Simple and inactive/default-off paths are intended to remain unchanged.
+
+* **Session 130 follow-up (2026-11-24):** full captures now have a five-second
+  QEMU realtime-timer limit and can still be stopped early with Ctrl+Alt+L.
+  After stderr restoration, full-mode `.log` files are compressed in-process
+  with zlib to `.log.gz`; the source is deleted only after successful gzip
+  completion. Compression uses exclusive file creation and preserves the
+  original log on failure. Simple-mode duration and plain-text output are
+  unchanged. Static source review only; no build/runtime/CI validation.
