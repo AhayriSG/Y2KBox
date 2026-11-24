@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 104–113).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 105–114).
 
 ## How to use this file
 
@@ -20,13 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-
-### Session 104 — Identify the active XP guest OpenGL implementation
-- Owner-run COD1 software-OpenGL testing now reaches successful WGL context creation but fails the game's feature check.
-- GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 and only three extensions: `GL_EXT_bgra`, `GL_EXT_paletted_texture`, and `GL_WIN_swap_hint`. Detailed extension checks and limits are recorded in HANDOFF.md section 8d.
-- Next investigate why VMware Tools/SVGA is not loading a VMware OpenGL ICD. No Visual Studio installation or guest-side compilation is required; do not repeat the GLview test.
-- Documentation-only; no source changes, builds, benchmarks, additional guest tests, or CI polling.
 
 
 ### Session 105 — Establish VMware's documented XP OpenGL limitation
@@ -61,7 +54,7 @@
 
 ### Session 110 — Clarify T24 implementation and verification status
 - The owner confirmed that the Windows build has the intended decorated, non-resizable window and disabled titlebar maximize control. This verifies the fixed-window behavior implemented in Session 62.
-- T24 is now IMPLEMENTED rather than PAUSED: no known source work remains, but Linux/Windows CI and owner XP checks for guest-driven resolution changes, Ctrl+Alt+F fullscreen, and mouse tracking are still outstanding.
+- T24 was initially marked IMPLEMENTED/yellow because CI and the remaining XP acceptance checks had not yet been recorded as verified. Session 114 supersedes that status after the owner confirmed the complete acceptance set.
 - Documentation-only. No source changes, builds, guest tests, or CI polling.
 
 ### Session 111 — Add visual task-status markers
@@ -80,6 +73,11 @@
 - VMVGA/SVGA3D remains the supported path. VBoxVGA 5.2.x/SharedOpenGL is only a future research candidate, gated on an end-to-end proof of concept and licensing/source audit; it is not selectable today.
 - Documentation-only; no source changes, builds, guest tests, benchmarks, or CI polling.
 
+### Session 114 — Complete T24 owner acceptance verification
+- The owner confirmed Linux and Windows SDL CI pass, and XP guest-driven resolution changes, Ctrl+Alt+F fullscreen toggling, and mouse tracking all work.
+- T24 is now DONE/green. TASKS.md records the complete acceptance set and no outstanding checks.
+- Documentation-only; no source changes, builds, guest tests, or CI polling. The verification results are the owner's confirmation.
+
 ## Current investigation / next actions
 
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
@@ -87,7 +85,7 @@
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
-6. **T24 fixed-size SDL display is IMPLEMENTED.** The owner confirmed the Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. Remaining acceptance: Linux/Windows SDL CI plus owner XP checks for guest-driven resolution changes, `Ctrl+Alt+F` fullscreen, and mouse tracking. Do not change source unless a check finds a real defect.
+6. **T24 fixed-size SDL display is DONE.** The owner confirms Linux and Windows SDL CI pass and all XP acceptance checks are verified: guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking. The Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. No further T24 work is pending absent a new reproducible defect.
 7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
 ## Key diagnostic interpretation rules
