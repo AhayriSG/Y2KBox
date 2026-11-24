@@ -468,6 +468,9 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         pixman_image_get_data(linebuf) == NULL) {
         error_report("Full diagnostic PNG snapshot skipped: "
                      "could not allocate the RGB conversion row.");
+        if (linebuf != NULL) {
+            pixman_image_unref(linebuf);
+        }
         g_free(pixels);
         return false;
     }
@@ -657,12 +660,12 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
 #ifdef CONFIG_PNG
         if (debug_detail) {
             fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=one_png_on_stop "
-                            "source=cpu-display-surface\\n");
+                            "source=cpu-display-surface\n");
         }
 #else
         if (debug_detail) {
             fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=unavailable "
-                            "reason=CONFIG_PNG_disabled\\n");
+                            "reason=CONFIG_PNG_disabled\n");
         }
 #endif
         sdl_log_capture_filename = filename;
