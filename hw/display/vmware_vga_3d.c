@@ -20154,7 +20154,9 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
     bool trace_detail;
 
     vmsvga3d_command_buffer_shadow_packet_begin(s, fifo_start);
-    vmsvga3d_dxvk_trace_sequence(s->dxvk, s->trace_activity_seq);
+    if (vmsvga_trace_detail_enabled(s)) {
+        vmsvga3d_dxvk_trace_sequence(s->dxvk, s->trace_activity_seq);
+    }
 
     if (!s->svga3d_capable) {
         /*
