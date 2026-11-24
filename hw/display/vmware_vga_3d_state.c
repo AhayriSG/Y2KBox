@@ -1332,8 +1332,9 @@ static void vmsvga3d_state_trace_draw_snapshot(
             "viewport=%u,%u/%ux%u scissor_valid=%u "
             "scissor=%u,%u/%ux%u targets=",
             vmsvga_trace_frame_id(s), vmsvga_trace_event_sequence(s), cid,
-            context->viewport_valid, context->viewport.x, context->viewport.y,
-            context->viewport.w, context->viewport.h, context->scissor_valid,
+            (unsigned)context->viewport_valid, context->viewport.x,
+            context->viewport.y, context->viewport.w, context->viewport.h,
+            (unsigned)context->scissor_valid,
             context->scissor.x, context->scissor.y, context->scissor.w,
             context->scissor.h);
 
@@ -1370,6 +1371,11 @@ static void vmsvga3d_state_trace_draw_snapshot(
         if (!binding->valid) {
             continue;
         }
+        if (binding->value == SVGA3D_INVALID_ID) {
+            fprintf(stderr, "%s%u:unbound", first ? "" : ",", stage);
+            first = false;
+            continue;
+        }
         if (s->svga3d != NULL &&
             binding->value < SVGA3D_MAX_SURFACE_IDS) {
             surface = s->svga3d->surfaces[binding->value];
@@ -1378,7 +1384,7 @@ static void vmsvga3d_state_trace_draw_snapshot(
             surface->mips != NULL) {
             fprintf(stderr, "%s%u:%u@%ux%u/f%u/m%u", first ? "" : ",",
                     stage, binding->value, surface->mips[0].size.width,
-                    surface->mips[0].size.height, surface->format,
+                    surface->mips[0].size.height, (uint32_t)surface->format,
                     surface->mip_count);
         } else {
             fprintf(stderr, "%s%u:%u@missing", first ? "" : ",",
