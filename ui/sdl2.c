@@ -43,7 +43,7 @@
 #include "qemu/thread.h"
 
 #include <zlib.h>
-#ifdef CONFIG_PNG
+#if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
 #include <png.h>
 #endif
 
@@ -410,7 +410,7 @@ static void sdl_wait_for_log_compression(void)
 }
 
 
-#ifdef CONFIG_PNG
+#if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
 /*
  * Save one CPU-side guest display-surface snapshot after a Full capture.
  * This deliberately avoids SDL_RenderReadPixels/glReadPixels and therefore
@@ -469,7 +469,7 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         error_report("Full diagnostic PNG snapshot skipped: "
                      "could not allocate the RGB conversion row.");
         if (linebuf != NULL) {
-            pixman_image_unref(linebuf);
+            qemu_pixman_image_unref(linebuf);
         }
         g_free(pixels);
         return false;
@@ -486,7 +486,7 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         memcpy(pixels + (size_t)y * row_bytes,
                pixman_image_get_data(linebuf), row_bytes);
     }
-    pixman_image_unref(linebuf);
+    qemu_pixman_image_unref(linebuf);
 
     if (g_str_has_suffix(log_filename, ".log")) {
         base = g_strndup(log_filename, strlen(log_filename) - 4);
@@ -657,7 +657,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         qemu_perf_stats_start();
         fprintf(stderr, "Y2KBOX-DIAG capture_mode=%s\n",
                 debug_detail ? "on" : "simple");
-#ifdef CONFIG_PNG
+#if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
         if (debug_detail) {
             fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=one_png_on_stop "
                             "source=cpu-display-surface\n");
@@ -716,7 +716,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         }
         sdl_log_capture_enabled = false;
         if (debug_detail && sdl_log_capture_filename) {
-#ifdef CONFIG_PNG
+#if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
             sdl_save_log_capture_png(
                 sdl_log_capture_filename,
                 sdl_log_capture_console != NULL ? sdl_log_capture_console : scon);
