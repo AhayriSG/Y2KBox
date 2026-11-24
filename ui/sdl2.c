@@ -275,10 +275,12 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
     int fd;
     int flags = O_WRONLY | O_CREAT | O_EXCL;
     int saved_errno;
+    bool debug_detail;
 
     if (!sdl_debug_mode_enabled(&vmvga)) {
         return;
     }
+    debug_detail = object_property_get_bool(vmvga, "debug-detail", NULL);
 
     if (!sdl_log_capture_enabled) {
         if (sdl_log_capture_saved_stderr < 0) {
@@ -350,6 +352,8 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         }
         sdl_set_debug_trace(true);
         qemu_perf_stats_start();
+        fprintf(stderr, "Y2KBOX-DIAG capture_mode=%s\n",
+                debug_detail ? "detailed" : "summary");
         sdl_log_capture_enabled = true;
     } else {
         fflush(stderr);
@@ -388,6 +392,8 @@ static void sdl_update_caption(struct sdl2_console *scon)
     const char *fullscreen_hotkey = sdl_fullscreen_hotkey();
     Object *vmvga;
     bool debug_available = sdl_debug_mode_enabled(&vmvga);
+    bool debug_detail = debug_available &&
+        object_property_get_bool(vmvga, "debug-detail", NULL);
 
     if (!runstate_is_running()) {
         status = " [Stopped]";
@@ -419,10 +425,12 @@ static void sdl_update_caption(struct sdl2_console *scon)
 
     if (debug_available && sdl_log_capture_enabled) {
         snprintf(log_status, sizeof(log_status),
-                 " - Diagnostic logging (%s to stop)", hotkey);
+                 " - Diagnostic logging (%s mode; %s to stop)",
+                 debug_detail ? "detailed" : "summary", hotkey);
     } else if (debug_available) {
         snprintf(log_status, sizeof(log_status),
-                 " - %s to start diagnostic logging", hotkey);
+                 " - %s to start diagnostic logging (%s mode)", hotkey,
+                 debug_detail ? "detailed" : "summary");
     }
 
     if (qemu_name) {

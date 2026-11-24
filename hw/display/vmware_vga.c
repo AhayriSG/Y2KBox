@@ -609,6 +609,7 @@ struct vmsvga_state_s {
     struct vmsvga3d_dxvk_s *dxvk;
     bool debug;
     bool debug_log;
+    bool debug_detail;
     bool enable_3d;
     char *vgpu;
     enum vmsvga_vgpu_generation_e vgpu_generation;
@@ -652,6 +653,7 @@ struct vmsvga_state_s {
     uint32_t trace_fifo_last_stall_stop;
     uint32_t trace_fifo_last_stall_stage;
     uint64_t trace_fifo_stall_repeat;
+    uint32_t trace_3d_cmd_sample_count;
     uint64_t trace_key_reg_seen[2];
     uint64_t trace_key_reg_write_seen[2];
     uint32_t trace_key_reg_value[128];
@@ -736,6 +738,12 @@ static inline bool vmsvga_trace_flight_enabled(void)
     return VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_FLIGHT);
 }
 
+/* Full per-event VMVGA logging is opt-in; the default capture is summarized. */
+bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s)
+{
+    return s != NULL && s->debug_log && s->debug_detail;
+}
+
 static inline bool vmsvga_trace_reg_read_enabled(void)
 {
     return trace_event_get_state_backends(TRACE_VMWARE_VALUE_READ);
@@ -769,6 +777,7 @@ static inline void vmsvga_trace_flight_reset(struct vmsvga_state_s *s)
 
     s->trace_cmd_count = 0;
     s->trace_devcap_count = 0;
+    s->trace_3d_cmd_sample_count = 0;
     s->trace_activity_seq = 0;
     s->trace_last_report_seq = 0;
     s->trace_last_report_us = 0;
@@ -6137,7 +6146,9 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
         if (vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
             s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(0);
         }
-        if (trace_flight) {
+        if (trace_flight &&
+            (vmsvga_trace_detail_enabled(s) ||
+             s->trace_now.fifo_runs <= 4)) {
             fprintf(stderr,
                     "VMVGA-SYNC fifo-run-end reason=empty sync=%u pending=0 "
                     "busy=0 stop=0x%08x next=0x%08x mask=0x%08x "
@@ -7200,7 +7211,10 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
 #ifndef ANY_FENCE_OFF
               irq_status |= SVGA_IRQFLAG_ANY_FENCE;
 #endif
-              if (trace_flight) {
+              if (trace_flight &&
+                  (vmsvga_trace_detail_enabled(s) ||
+                   s->trace_now.fifo_fences <= 4 ||
+                   (irq_status & SVGA_IRQFLAG_FENCE_GOAL))) {
                   fprintf(stderr,
                           "VMVGA-FENCE value=%u fifo-fence=%u "
                           "fifo-goal-present=%u fifo-goal=%u reg-goal=%u "
@@ -7820,13 +7834,17 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
         uint32_t fifo_goal =
             vmsvga_fifo_has_reg(s, SVGA_FIFO_FENCE_GOAL) ?
             le32_to_cpu(s->fifo[SVGA_FIFO_FENCE_GOAL]) : 0;
-        fprintf(stderr,
-                "VMVGA-SYNC fifo-run-end reason=processed sync=%u pending=%u "
+        if (vmsvga_trace_detail_enabled(s) ||
+            s->trace_now.fifo_runs <= 4 ||
+            vmsvga_fifo_pending(s) || fifo_busy) {
+            fprintf(stderr,
+                    "VMVGA-SYNC fifo-run-end reason=processed sync=%u pending=%u "
                 "busy=%u stop=0x%08x next=0x%08x mask=0x%08x "
                 "status=0x%08x fence=%u fifo-goal=%u reg-goal=%u\n",
                 s->sync, vmsvga_fifo_pending(s), fifo_busy, s->fifo_stop,
                 s->fifo_next, s->irq_mask, s->irq_status, s->fence,
                 fifo_goal, s->fence_goal);
+        }
     }
 }
 
@@ -10077,14 +10095,18 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
               s->fifo != NULL && s->config &&
               vmsvga_fifo_has_reg(s, SVGA_FIFO_FENCE_GOAL) ?
               le32_to_cpu(s->fifo[SVGA_FIFO_FENCE_GOAL]) : 0;
-          fprintf(stderr,
-                  "VMVGA-SYNC value=%u enable=%u config=%u sync-before=%u "
-                  "fifo-stop=0x%08x fifo-next=0x%08x busy=%u fence=%u "
-                  "fifo-goal=%u reg-goal=%u mask=0x%08x status=0x%08x\n",
-                  value, s->enable, s->config, s->sync, s->fifo_stop,
-                  s->fifo_next, fifo_busy, fifo_fence, fifo_goal,
-                  s->fence_goal, s->irq_mask, s->irq_status);
           s->trace_now.sync_writes++;
+          if (vmsvga_trace_detail_enabled(s) ||
+              s->trace_now.sync_writes <= 4 || s->sync != 0 ||
+              !s->enable || !s->config) {
+              fprintf(stderr,
+                      "VMVGA-SYNC value=%u enable=%u config=%u sync-before=%u "
+                      "fifo-stop=0x%08x fifo-next=0x%08x busy=%u fence=%u "
+                      "fifo-goal=%u reg-goal=%u mask=0x%08x status=0x%08x\n",
+                      value, s->enable, s->config, s->sync, s->fifo_stop,
+                      s->fifo_next, fifo_busy, fifo_fence, fifo_goal,
+                      s->fence_goal, s->irq_mask, s->irq_status);
+          }
           if (s->fifo != NULL && s->config &&
               vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
               if (le32_to_cpu(s->fifo[SVGA_FIFO_BUSY])) {
@@ -10111,7 +10133,11 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
               vmsvga_fifo_set_busy(s, false);
           }
       }
-      if (vmsvga_trace_flight_enabled()) {
+      if (vmsvga_trace_flight_enabled() &&
+          (vmsvga_trace_detail_enabled(s) ||
+           s->trace_now.sync_writes <= 4 ||
+           (!sync_scheduled && s->enable && s->config &&
+            vmsvga_fifo_pending(s)) || !s->enable || !s->config)) {
           fprintf(stderr,
                   "VMVGA-SYNC result sync-after=%u scheduled=%u "
                   "mask=0x%08x status=0x%08x\n",
@@ -12127,12 +12153,15 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
         return;
     }
 
-    s->chip.debug_log = enabled;
     if (enabled) {
-        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, true);
+        s->chip.debug_log = true;
         qatomic_inc(&vmvga_trace_debug_capture_devices);
+        vmsvga_trace_flight_reset(&s->chip);
+        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, true);
     } else {
+        vmsvga_trace_flight_histogram(&s->chip, "capture-stop");
         vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, false);
+        s->chip.debug_log = false;
         assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
         qatomic_dec(&vmvga_trace_debug_capture_devices);
     }
@@ -12145,6 +12174,8 @@ static VMVGA_PROPERTY_QUALIFIER Property vga_vmware_properties[] = {
                                     chip.vga.global_vmstate)
       DEFINE_PROP_BOOL("debug", struct pci_vmsvga_state_s,
                        chip.debug, false),
+      DEFINE_PROP_BOOL("debug-detail", struct pci_vmsvga_state_s,
+                       chip.debug_detail, false),
       DEFINE_PROP_BOOL("3d", struct pci_vmsvga_state_s,
                        chip.enable_3d, true),
       DEFINE_PROP_STRING("vgpu", struct pci_vmsvga_state_s, chip.vgpu),

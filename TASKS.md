@@ -374,8 +374,8 @@ they are not assumed to make translated guest instruction execution faster.
 * **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.
 
 
-## T19 (P1) General SDL diagnostic logging capture — 🟡 PAUSED
-**Status:** CLAIMED by ChatGPT 2026-11-24 (compact/detailed VMVGA capture modes and interval summaries)
+## T19 (P1) General SDL diagnostic logging capture — 🟡 IMPLEMENTED
+**Status:** IMPLEMENTED (compact/detailed VMVGA capture modes added; CI and owner XP verification pending)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
@@ -400,8 +400,18 @@ interval across Y2KBox, without continuously generating diagnostic output.
   existing capture. Do not emit routine
   capture start/stop markers or diagnostic output to the console while inactive.
 * Show generic diagnostic-logging availability and active state in the SDL title
-  only when debug mode is enabled. Report actual file/descriptor errors, not
+  only when debug mode is enabled. The title also identifies the selected
+  summary/detailed capture mode. Report actual file/descriptor errors, not
   routine logging status.
+* **Capture verbosity:** summary mode is the default. It samples the first four
+  SYNC writes/results, fence events, and FIFO-run-end records, plus the first
+  eight selected 3D-command records. It preserves FIFO stalls, failures,
+  state-change diagnostics, and fence-goal hits. At capture start, reset the
+  VMVGA flight-recorder interval counters; at stop, emit the final flight
+  summary and FIFO command histogram. Existing `Y2KBOX-PERF command` records
+  retain per-command counts and timing. For full selected per-event VMVGA
+  output, use `-global vmvga.debug-detail=on` at launch; detailed mode is
+  explicitly opt-in and can generate large files.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
@@ -413,7 +423,7 @@ interval across Y2KBox, without continuously generating diagnostic output.
   - Ctrl+Alt+L start resets per-surface profiling-only counters; capture stop emits one `Y2KBOX-PROF subsystem=vmvga.vb_ring` line for each eligible dynamic D3D9 vertex buffer still represented by a live guest surface. Newly created surfaces inherit the active capture state.
   - `capacity_bytes`: largest host D3D9 VB allocation observed during the interval. `allocated_bytes`: cumulative bytes copied by successful uploads during the interval. `reused_bytes`: the subset copied with successful `D3DLOCK_NOOVERWRITE`. `discard_count`: successful `D3DLOCK_DISCARD` uploads. `wrap_count`: successful DISCARDs caused by a ring-end wrap. `high_water_bytes`: greatest absolute host-buffer byte end touched. `overlap_discard_count`: successful DISCARDs selected by the in-flight-overlap fallback. `allocation_failures`: failed ring upgrades and failed NOOVERWRITE lock/unlock attempts.
   - Both full-buffer DISCARD uploads and range-based uploads are included. Renderer teardown/recreation reattaches surfaces to the profiling registry without losing the active capture interval. Counters update only after successful unlock, except explicit allocation/lock failure counts. No per-upload output, allocation, or lock was added; capture-off upload path only checks the profiling-active flag. Allocator decisions and Session 115 behavior are unchanged.
-  - T19 remains PAUSED until owner verifies emitted records, output coverage, and repeated capture intervals in an XP guest. ScreenTarget/GART profiling remains deferred.
+  - T19 remains IMPLEMENTED pending Linux/Windows CI and owner verification of summary and detailed capture contents, including repeated intervals in an XP guest. ScreenTarget/GART profiling remains deferred.
 
 ## T20 (P2) Full BIN/CUE CD-image parsing — 🔴 TODO
 **Status:** TODO

@@ -39,6 +39,8 @@
 
 struct vmsvga_state_s;
 
+bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s);
+
 static bool vmsvga3d_state_context_define(struct vmsvga_state_s *s, uint32_t cid);
 static bool vmsvga3d_state_context_destroy(struct vmsvga_state_s *s, uint32_t cid);
 static bool vmsvga3d_state_dx_context_define(struct vmsvga_state_s *s,

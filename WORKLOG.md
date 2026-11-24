@@ -2129,3 +2129,11 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 
 - Updated the profiling snapshot immediately after a successful ring upgrade, rather than waiting for the subsequent upload to succeed. This keeps `capacity_bytes` accurate when the larger host allocation succeeds but a later NOOVERWRITE lock fails.
 - No allocator behavior changed. Static source inspection only; no build/runtime test. T19 remains PAUSED pending CI and owner XP capture verification.
+
+
+## Session 122 (ChatGPT), 2026-11-24 - Add compact and detailed VMVGA diagnostic capture modes
+
+- Added default summary-mode sampling for repetitive VMVGA event streams: first four SYNC writes/results, fence records, and FIFO-run-end records, plus the first eight selected SVGA3D command records. Detailed event mode preserves the previous per-event SYNC/fence/3D-command output through the opt-in `-global vmvga.debug-detail=on` property. Existing stall, failure, state-change, and fence-goal diagnostics remain active.
+- Made VMVGA flight-recorder counters capture-interval scoped: reset the recorder when Ctrl+Alt+L starts, and emit the final flight summary plus FIFO command histogram when capture stops. The existing `Y2KBOX-PERF command` records continue to provide per-command counts and timing; no command profiling was removed.
+- Added the selected capture mode to the log header and SDL window title. Documented summary and detailed usage in the README and T19 task entry.
+- Static source review only; no QEMU build, CI run, or owner XP capture was performed. T19 is IMPLEMENTED, not DONE, pending Linux/Windows CI and owner verification of both modes and repeated capture intervals.

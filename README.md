@@ -161,6 +161,20 @@ for the selected interval. Do **not** use shell-level `2> y2kbox-log.log`
 redirection with this feature: it redirects stderr before QEMU starts and
 defeats interval capture.
 
+**Capture verbosity:** Ctrl+Alt+L uses **summary mode** by default. It keeps a
+small sample of SYNC, fence, FIFO-run, and 3D-command events, preserves the
+existing stall/failure/state-change diagnostics, and writes interval-scoped
+VMVGA flight-recorder totals when capture stops. The `Y2KBOX-PERF command`
+records retain per-command counts and timing measurements, so suppressing
+repetitive event lines does not discard command-level performance data.
+
+For a focused investigation that needs every selected VMVGA SYNC, fence, and
+3D-command event, launch with the additional QEMU global property
+`-global vmvga.debug-detail=on` alongside `-y2kboxdebugmode on`. The SDL title
+identifies whether the next capture will use summary or detailed mode. Detailed
+captures can still become very large; use them when the extra event sequence is
+needed by a coding agent, rather than as the default log to share.
+
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
 
 **Helping optimize games:** The `Y2KBOX-PERF` statistics in these logs can help developers investigate performance bottlenecks. If a game runs poorly, share the relevant log and describe the game, scene, resolution, settings, and reproduction steps. Developers—or an LLM-assisted coding agent—can analyze the measurements and, when necessary, add targeted profiling counters to investigate areas that the existing statistics do not cover. You do not need to modify the emulator or add instrumentation yourself.

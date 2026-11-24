@@ -20154,6 +20154,7 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
     const VMSVGA3DCommandInfo *info;
     uint32_t payload_size = UINT32_MAX;
     bool trace_3d;
+    bool trace_detail;
 
     vmsvga3d_command_buffer_shadow_packet_begin(s, fifo_start);
 
@@ -20205,6 +20206,7 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
 
     info = vmsvga3d_command_info(cmd);
     trace_3d = VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D);
+    trace_detail = vmsvga_trace_detail_enabled(s);
 
     if (trace_3d && VMVGA_TRACE_DEEP_FIFO) {
         if (*len >= 2) {
@@ -20228,11 +20230,15 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
         return false;
     }
 
-    if (trace_3d && vmsvga3d_trace_fifo_command(cmd)) {
+    if (trace_3d && vmsvga3d_trace_fifo_command(cmd) &&
+        (trace_detail || s->trace_3d_cmd_sample_count < 8)) {
         fprintf(stderr,
                 "VMVGA-3D-CMD path=%s name=%s id=%u action=%s fifo=0x%08x\n",
                 vmsvga3d_trace_command_path(cmd), info->name, cmd,
                 vmsvga3d_trace_command_action(cmd, info), fifo_start);
+        if (!trace_detail) {
+            s->trace_3d_cmd_sample_count++;
+        }
     }
 
     if (info->handler != NULL) {
