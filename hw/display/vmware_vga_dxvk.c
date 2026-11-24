@@ -17337,7 +17337,7 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
         fprintf(stderr,
                 "VMVGA-D3D9-BUFFER-DEFER seq=%" PRIu64 " sid=%u "
                 "guest_offset=%u guest_size=%u merged_offset=%u "
-                "merged_size=%u updates=%u\\n",
+                "merged_size=%u updates=%u\n",
                 surface->owner != NULL ? surface->owner->trace_sequence : 0,
                 surface->sid, offset, size, surface->d3d9_buffer_dirty_start,
                 surface->d3d9_buffer_dirty_end -
