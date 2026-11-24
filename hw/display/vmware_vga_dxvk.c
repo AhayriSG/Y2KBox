@@ -16366,18 +16366,16 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
         if (dxvk->vb_ring_profile_detail) {
             fprintf(stderr,
-                    "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
-                    "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
-                    "reason=%s flush=%s stage=lock result=FAIL hr=0x%08x\n",
+                    "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=0 "
+                    "guest_size=%u lock_offset=0 lock_size=%u flags=0x%x "
+                    "mode=DISCARD reason=full-buffer-upload stage=lock "
+                    "result=FAIL hr=0x%08x\n",
                     surface->sid,
                     surface->d3d9_resource_type ==
                             VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
                         ? "vertex" : "index",
-                    offset, size, lock_offset, lock_size, lock_flags,
-                    lock_reason,
-                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW ? "draw" :
-                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT ? "evict" :
-                    "replace", (uint32_t)result);
+                    size, size, VMSVGA3D_DXVK_D3DLOCK_DISCARD,
+                    (uint32_t)result);
         }
         return false;
     }
@@ -17146,6 +17144,24 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         if (surface->vb_ring_profile_active && is_ring_vb &&
             lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) {
             surface->vb_ring_profile_allocation_failures++;
+        }
+        if (dxvk->vb_ring_profile_detail) {
+            fprintf(stderr,
+                    "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
+                    "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
+                    "mode=%s reason=%s flush=%s stage=lock result=FAIL "
+                    "hr=0x%08x\n",
+                    surface->sid,
+                    surface->d3d9_resource_type ==
+                            VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
+                        ? "vertex" : "index",
+                    offset, size, lock_offset, lock_size, lock_flags,
+                    lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE ? "NOOVERWRITE" :
+                    lock_flags == VMSVGA3D_DXVK_D3DLOCK_DISCARD ? "DISCARD" : "NONE",
+                    lock_reason,
+                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW ? "draw" :
+                    reason == VMSVGA3D_DXVK_BUFFER_FLUSH_EVICT ? "evict" :
+                    "replace", (uint32_t)result);
         }
         return false;
     }
