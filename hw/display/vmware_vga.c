@@ -749,6 +749,11 @@ static inline bool vmsvga_trace_flight_enabled(void)
     return VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_FLIGHT);
 }
 
+bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s);
+uint64_t vmsvga_trace_event_sequence(const struct vmsvga_state_s *s);
+void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
+                                             uint32_t old_sid);
+
 /* Full per-event VMVGA logging is opt-in; the default capture is summarized. */
 bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s)
 {
