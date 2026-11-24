@@ -171,3 +171,8 @@ See Sessions 82–115 in `WORKLOG.md` for the detailed chronology and evidence.
   move unknown-register-read warnings after dispatch; keep every D3D9 supersede-flip
   event in full mode while simple mode samples two and emits interval/per-SID counts plus an overflow-event count.
   Static source review only; no build/runtime/CI/XP verification.
+
+
+## Session 127
+
+- **Session 127 — Owner verification of diagnostic capture modes:** recorded the Windows XP simple/full capture sizes, sampled-versus-full supersede event counts, mode headers, and absence of the false `SVGA_REG_BUSY` unknown-read warning. Session 126's owner-retest follow-up is closed; T19 remains IMPLEMENTED pending Linux/Windows CI and repeated-interval acceptance.
