@@ -575,6 +575,24 @@ static bool sdl_save_log_capture_png(const char *log_filename,
 }
 #endif /* CONFIG_PNG && CONFIG_PIXMAN */
 
+static void sdl_log_capture_snapshot_result(const char *log_filename,
+                                            const char *status)
+{
+    FILE *fp = g_fopen(log_filename, "a");
+
+    if (fp == NULL) {
+        error_report("Could not append PNG snapshot status to %s: %s",
+                     log_filename, strerror(errno));
+        return;
+    }
+
+    fprintf(fp, "Y2KBOX-DIAG pixel_snapshot_result=%s\n", status);
+    if (fclose(fp) != 0) {
+        error_report("Could not finish PNG snapshot status in %s: %s",
+                     log_filename, strerror(errno));
+    }
+}
+
 static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
 static void sdl_log_capture_timeout(void *opaque)
@@ -738,12 +756,18 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         sdl_log_capture_enabled = false;
         if (debug_detail && sdl_log_capture_filename) {
 #if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
-            sdl_save_log_capture_png(
+            sdl_log_capture_snapshot_result(
                 sdl_log_capture_filename,
-                sdl_log_capture_console != NULL ? sdl_log_capture_console : scon);
+                sdl_save_log_capture_png(
+                    sdl_log_capture_filename,
+                    sdl_log_capture_console != NULL ? sdl_log_capture_console :
+                                                       scon) ?
+                "saved" : "not-saved");
 #else
             error_report("Full diagnostic PNG snapshot unavailable: "
                          "this build was configured without libpng or Pixman.");
+            sdl_log_capture_snapshot_result(sdl_log_capture_filename,
+                                            "unavailable");
 #endif
             sdl_start_log_compression(sdl_log_capture_filename);
             sdl_log_capture_filename = NULL;
