@@ -211,8 +211,13 @@ jobs:
           fi
       - name: Verify diagnostic PNG prerequisites
         run: |
-          grep -qx '#define CONFIG_PNG 1' build/config-host.h
-          grep -qx '#define CONFIG_PIXMAN 1' build/config-host.h
+          for feature in PNG PIXMAN; do
+            if ! grep -Eq "^#define CONFIG_${feature}([[:space:]]|$)" build/config-host.h; then
+              echo "::error::CONFIG_${feature} is not enabled in build/config-host.h"
+              grep -E '^(#define|#undef) CONFIG_(PNG|PIXMAN)' build/config-host.h || true
+              exit 1
+            fi
+          done
       - name: Build
         run: |
           set +e
