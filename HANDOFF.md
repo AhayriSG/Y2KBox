@@ -554,6 +554,22 @@ The earlier proposal of a conventional XP OpenGL ICD that can simply be register
 
 **Decision gate:** do not begin a full ICD or renderer implementation. First prove only that COD1 can load a separate standalone DLL and that this DLL can create and present a Direct3D 9 HAL device through the existing VMware XP driver. If either fails, stop. If both pass, build the smallest GL/WGL compatibility slice needed to test COD1's reported requirements before considering broader OpenGL 1.1–2.1 coverage. No VMware driver replacement, WINVBE installation, guest modification, emulator source change, build, or guest test was performed in this investigation.
 
+## 8g. T25 paused pending independent OpenGL feasibility reassessment (2026-11-24)
+
+The current OpenGL investigation has reached a low-confidence feasibility point. **T25 is paused; no implementation work is authorized.** The goal remains OpenGL 1.1 baseline / OpenGL 2.1 maximum while preserving the existing VMware XP display-driver and D3D9 path, but the available research does not establish a viable accelerated OpenGL architecture.
+
+The previous section's standalone-DLL route is only one possible lead. It must not be treated as the answer, the only possible architecture, or an instruction for the next contributor to continue that specific design. A guest-side application-local wrapper DLL could potentially bypass the conventional XP ICD discovery path, but neither its compatibility with COD1's exact renderer nor an accelerated D3D9-backed implementation has been demonstrated. GL4ES plus historical ANGLE D3D9 is likewise speculative. A future reviewer may reject these ideas entirely and propose a better route.
+
+**Request for the next independent reviewer:**
+
+- Reassess the problem from first principles. Verify the XP graphics-driver and WGL constraints, the exact COD1 renderer behavior where relevant, and the existing VMware D3D9 acceleration path.
+- Explore alternative architectures, including but not limited to application-local wrappers, translation layers, and other guest-side approaches that preserve the VMware display driver. Do not assume the current candidates are exhaustive.
+- Separate proven facts, product/documentation constraints, unverified hypotheses, and practical unknowns. Evaluate Windows XP compatibility, required APIs/toolchains, application coverage, performance prospects, maintenance burden, and licensing.
+- Deliver a concise architecture proposal with evidence, feasibility/risk assessment, and the smallest decisive validation experiment. Explain why rejected alternatives fail.
+- Do not write implementation code, modify the guest, install or replace display drivers, change the host renderer, or run builds/tests as part of the reassessment unless the owner separately authorizes a specific experiment.
+
+The owner asked for a fresh independent assessment, not an automatic handoff to a named agent. No other agent has been assigned by this update. The project documentation should make it easy for a future contributor or model to take up the question without inheriting the current hypothesis as a requirement.
+
 ## 9. References and resources for development
 
 QEMU-based x86 emulation
