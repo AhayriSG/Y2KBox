@@ -522,6 +522,21 @@ COD1's software-allowed path successfully selected a generic pixel format, creat
 
 **Next step:** investigate why the XP VMware Tools/SVGA driver stack loads GDI Generic rather than a VMware OpenGL ICD, including driver installation and ICD registration. Do not require the owner to install Visual Studio or compile the optional `xp/tools/glprobe.c` utility in the guest. GPU Caps Viewer is optional corroboration; the GLview test need not be repeated. A Mesa Windows software renderer, if tried, must remain app-local and be treated as a software fallback, not as proof of SVGA3D acceleration.
 
+
+### 8e. VMware's documented XP OpenGL limitation and software fallback research (2026-11-24)
+
+The owner's GLview result (section 8d) is consistent with VMware's documented product behavior, not evidence of an incomplete VMware Tools installation:
+
+- VMware Workstation Player 15 User's Manual, **Using Accelerated 3D Graphics**, states that DirectX 9 accelerated graphics apply to Windows XP, Vista, and 7 guests, while **OpenGL applications run in software-emulation mode**: https://sw5-prod-media-files.s3.eu-central-1.amazonaws.com/media/pdf/3d/31/4a/workstation-player-15-windows-user-guide.pdf
+- VMware Workstation 6 User's Manual documents the same limitation for its experimental 3D support for Windows 2000/XP guests: OpenGL applications run in software emulation mode: https://ist.mit.edu/sites/default/files/migration/products/vmware/ws6-manual.pdf
+- Broadcom's legacy-guest support article confirms VMware Tools 10.0.12 is the final Tools release supporting Windows 2000, XP, and Server 2003: https://knowledge.broadcom.com/external/article/316388
+
+Taken together with the owner's Microsoft / GDI Generic / OpenGL 1.1.0 report, this strongly indicates the expected XP OpenGL path is Microsoft's generic software implementation, not a missing VMware ICD. The Workstation Player manual is product-level evidence; it does not document every internal detail of the exact VMware Tools 10.0.12 package. Nonetheless, **do not ask the owner to reinstall VMware Tools, hunt for `vm3dgl.dll`, or repeat GLview absent new contradictory evidence.** The supported XP configuration provides DirectX 9 acceleration but not accelerated VMware OpenGL.
+
+**Potential software-only diagnostic:** [WINVBE](https://github.com/ages2001/WINVBE) v1.3 documents Windows XP support and an OpenGL 2.1 / GLSL 1.20 ICD (`WVBGL32.DLL`) built around Mesa 7.8.2. Its README says the ICD replaces the GDI Generic 1.1 implementation and supports programs that require multitexturing or shaders. However, WINVBE is a complete alternate VBE display-driver stack, not an app-local ICD DLL that can simply be dropped into the VMware driver installation. Its documented NT install replaces the active display driver; its known limitations explicitly say Direct3D and OpenGL run on the CPU and that there is no hardware 2D/3D acceleration. It could be evaluated only in a disposable VM snapshot as a software-OpenGL compatibility experiment; it is not a solution for Y2KBox's SVGA3D acceleration goal and may displace the existing VMware D3D9 path. WINVBE's overall license is GPL-3.0, while its embedded Mesa 7.8.2 code is MIT; do not reuse WINVBE code in this GPL-2.0-only project without a separate licensing review.
+
+**Updated architectural conclusion:** the host SVGA3D implementation cannot make OpenGL appear inside XP by itself. A Windows XP-compatible guest-side OpenGL ICD is required to translate WGL/OpenGL calls into the SVGA3D protocol. Mesa's current `vmwgfx`/Gallium SVGA driver is Linux-specific and remains a reference for command translation and semantics, not a drop-in XP ICD. T25 should focus on the feasibility and scope of that guest ICD plus the host SVGA3D state/command coverage it requires.
+
 ## 9. References and resources for development
 
 QEMU-based x86 emulation
