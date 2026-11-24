@@ -375,7 +375,7 @@ they are not assumed to make translated guest instruction execution faster.
 
 
 ## T19 (P1) General SDL diagnostic logging capture — 🟡 IMPLEMENTED
-**Status:** IMPLEMENTED (owner XP capture contents verified; Linux/Windows CI and repeated-interval acceptance remain pending)
+**Status:** CLAIMED by GPT-6 diagnostic-detail follow-up 2026-11-24 (full-mode graphics-event coverage for NFSU2 minimap flicker)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
