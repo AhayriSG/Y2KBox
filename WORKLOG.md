@@ -2092,3 +2092,11 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Reworked the topic map to include the recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
 - Replaced the dense Sessions 82–115 prose block with a concise, consistently formatted chronological list. The index remains a navigation summary; detailed evidence and history stay in the append-only WORKLOG.md.
 - Preserved the Session 81 CI note and all existing historical session references. No source changes, builds, tests, or CI polling.
+
+
+## Session 117 (ChatGPT), 2026-11-24 - Fix Session 115 D3D9 dynamic vertex-buffer compile failure
+
+- Linux and Windows CI both failed compiling `hw/display/vmware_vga_dxvk.c` because Session 115 referenced `VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC` in the new dynamic D3D9 vertex-buffer ring code without defining the D3D9 usage flag.
+- Added the missing D3D9 `D3DUSAGE_DYNAMIC` definition with its Direct3D 9 value, `0x00000200u`, alongside the existing D3D9 usage constants. Kept the D3D9 checks on the D3D9 flag; did not substitute the unrelated D3D11 `D3D11_USAGE_DYNAMIC` enum (value 2).
+- This is a minimal compile fix; no ring-buffer behavior or other Session 115 logic was changed.
+- No local QEMU build was run in this session. The source fix was pushed to `main`; GitHub Actions results remain pending and were not polled.
