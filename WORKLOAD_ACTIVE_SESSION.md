@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 99–108).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 100–109).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** COD1 with `+set r_allowSoftwareGL 1` creates/makes-current a WGL context, then fails its feature check; GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 with only three extensions (HANDOFF.md 8d / WORKLOG Session 104). VMware Workstation Player 15 explicitly documents software-emulated OpenGL in XP guests (HANDOFF.md 8e / Session 105). A conventional XP ICD requires the active display driver to advertise it through OPENGL_GETINFO; a registry-only DLL cannot simply be installed beside VMware's driver (HANDOFF.md 8f / Session 106). Do not reinstall Tools, hunt for `vm3dgl.dll`, modify/replace the VMware display driver, or install WINVBE. An application-local wrapper DLL and GL4ES / historical ANGLE D3D9 are speculative leads only; a future reviewer should independently investigate other architectures and may reject these candidates. QindieGL is now documented as a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical experimental patch reportedly got COD1 to start with severe graphics corruption. No prototype, guest modification, or build is authorized. See HANDOFF.md 8g–8h / WORKLOG Sessions 107–108.
+4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -38,11 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 99 — Add guest OpenGL investigation to the task queue
-- Added T25 to investigate a Windows XP guest OpenGL path through VMware SVGA3D, targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
-- The task begins with WGL pixel-format and ICD diagnostics for Call of Duty 1, audits the guest/host SVGA3D protocol, evaluates an XP-compatible guest ICD, and requires incremental context/rendering tests while preserving D3D9.
-- Key distinction: Mesa demonstrates OpenGL 2.1 over VMware SVGA3D, but that does not prove VMware Tools 10.0.12 supplies accelerated OpenGL for Windows XP. No emulator source changes, builds, tests, guest validation, or CI polling.
 
 ### Session 100 — Start guest OpenGL investigation and audit the SVGA3D path
 - Began T25 (IN PROGRESS), targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
@@ -91,3 +86,13 @@
 - README now describes OpenGL as a low-probability research objective and mentions application-local wrapper DLLs only as one unproven possibility.
 - T25 is PAUSED pending an independent reassessment. The next reviewer should challenge the current hypotheses and investigate alternative architectures before proposing a prototype.
 - HANDOFF section 8g records the reassessment brief and makes clear that no agent has been assigned or dispatched. No guest changes, builds, tests, or CI polling.
+
+### Session 108 — Record QindieGL as a concrete but unproven OpenGL wrapper lead
+- Added QindieGL to T25's technical research record, including its missing `wglGetExtensionsStringEXT` implementation and the owner's COD1 failure.
+- Recorded the historical experiment that reportedly allowed COD1 to start but left substantial graphical corruption, and flagged GPL-3.0 compatibility review before any code reuse.
+- T25 remained PAUSED; no patch, build, guest modification, or test was authorized.
+
+### Session 109 — Record TitaniumGL as a separate OpenGL wrapper research lead
+- Removed the QindieGL-specific paragraph from README.md while preserving the generic statement that application-local wrapper DLLs remain an unproven alternative.
+- Added TitaniumGL's COD1 OpenGL 1.4/context/extension observations, the unresolved `0 PFDs found` line, and the same broad rejection in hardware and software modes to TASKS.md and HANDOFF.md section 8i.
+- Kept TitaniumGL separate from QindieGL and T25 PAUSED. Documentation-only; no source changes, builds, guest modifications, additional guest tests, benchmarks, or CI polling.
