@@ -97,3 +97,8 @@
 - PNG creation uses exclusive file creation and preserves the log if snapshot creation fails. The screenshot is written after stderr restoration; log gzip compression remains asynchronous.
 - This supersedes Session 134's interim decision to defer pixel snapshots. The snapshot represents the last CPU-side guest display surface at capture stop, not a video recording or a host-window screenshot.
 - Static source review only. No local build, runtime capture, XP validation, or CI was run. Owner should verify that the Windows build has CONFIG_PNG/CONFIG_PIXMAN and inspect the PNG alongside the two-second NFSU2 Full log; Linux/Windows CI remains required. T26 remains IN PROGRESS.
+
+### Session 136 — Joint Operations D3D8 canopy diagnostics
+- T26 continued with Full-mode-only texgen state tracing: WORLD/VIEW/TEXTURE0 matrices, texture-transform/coordinate-generation flags, material and enabled-light values, and level-zero cube-map CPU-shadow face metadata/FNV-1a checksums (2 MiB hashing cap per record).
+- Correlation fields include guest frame, event/FIFO seq, context, stage and SID. CPU-shadow hashes do not establish GPU-current texture contents or correct face orientation. Simple/off modes and renderer scheduling are unchanged.
+- Static source review only; no build, CI, owner capture, or visual validation. Next: take a Full capture of Joint Operations and correlate the reported draw seq 60582 / cube SID 25 with the missing windshield. T26 remains IN PROGRESS.
