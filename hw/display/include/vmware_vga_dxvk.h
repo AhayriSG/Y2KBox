@@ -83,6 +83,7 @@ struct vmsvga3d_d3d10_input_element_s;
 struct vmsvga3d_d3d10_shader_info_s;
 struct vmsvga3d_d3d10_shader_output_semantic_s;
 struct vmsvga3d_d3d10_stream_output_plan_s;
+struct vmsvga3d_d3d10_pipeline_variant_key_s;
 struct vmsvga3d_d3d10_blend_desc_s;
 struct vmsvga3d_d3d10_depth_stencil_desc_s;
 struct vmsvga3d_d3d10_rasterizer_desc_s;
