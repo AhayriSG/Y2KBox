@@ -2171,3 +2171,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Confirmed `vmsvga3d_screen_target_try_supersede_flip_live()` is an intentional optimization for eligible D3D9 valid-to-valid full-screen flips: it avoids synchronous readback of an obsolete frame and the associated BQL stall. Replaced unconditional simple-mode event output with first-two sampling plus capture-stop totals, first/last SID, a four-distinct-SID histogram, and overflow-event count for SIDs beyond the tracked set. Full `on` mode retains every supersede event.
 - Updated T19, HANDOFF, WORKLOG_INDEX, and the rolling active-session summary. This changes diagnostic output only; it does not alter flip/readback scheduling or renderer behavior.
 - Static source/documentation review only. No local build, runtime test, CI run, or owner XP retest was performed. The owner should repeat the same short simple capture and confirm the BUSY false warning is gone and the supersede summary matches the event pattern; full mode should still show every supersede event.
+
+
+## Session 127 (ChatGPT), 2026-11-24 - Record owner verification and close diagnostic logging follow-up
+
+- Recorded the owner's Windows XP capture results for Session 126: the approximately 48 KB `simple` capture reported 734 superseded flips with two sampled event lines and a 367/367 SID 2/SID 1 split; the approximately 1.5 MB `on` capture reported 766 superseded flips and 766 individual event lines.
+- The capture headers confirmed the selected modes (`capture_mode=simple` and `capture_mode=on`). The owner confirmed the false unknown-register-read warning for valid `SVGA_REG_BUSY` was absent from both captures.
+- Closed the Session 126 owner-retest follow-up. No source behavior changed; future profiling remains targeted to concrete investigations rather than adding speculative instrumentation.
+- Updated T19 and handoff records with the owner evidence. T19 remains IMPLEMENTED, not DONE: Linux/Windows CI and repeated-interval acceptance are not established by these two captures.
+- Documentation-only update. No local build, runtime test, or CI run was performed.
