@@ -1334,7 +1334,7 @@ static void vmsvga3d_state_trace_matrix(
     if (transform == NULL || !transform->valid) {
         fprintf(stderr,
                 "VMVGA-D3D9-TEXGEN-MATRIX frame=%" PRIu64
-                " seq=%" PRIu64 " cid=%u name=%s valid=0\\n",
+                " seq=%" PRIu64 " cid=%u name=%s valid=0\n",
                 frame, seq, cid, name);
         return;
     }
@@ -1347,7 +1347,7 @@ static void vmsvga3d_state_trace_matrix(
         fprintf(stderr, "%s%.9g", i == 0 ? "" : ",",
                 (double)transform->matrix[i]);
     }
-    fprintf(stderr, "\\n");
+    fprintf(stderr, "\n");
 }
 
 static void vmsvga3d_state_trace_cube_shadow(
@@ -1395,16 +1395,22 @@ static void vmsvga3d_state_trace_cube_shadow(
                     image->pitch, image->data_size, hash);
         }
     }
-    fprintf(stderr, "\\n");
+    fprintf(stderr, "\n");
 }
 
 static void vmsvga3d_state_trace_texgen(
     struct vmsvga_state_s *s, const VMSVGA3DContext *context, uint32_t cid)
 {
     uint32_t stage;
-    uint64_t frame = vmsvga_trace_frame_id(s);
-    uint64_t seq = vmsvga_trace_event_sequence(s);
+    uint64_t frame;
+    uint64_t seq;
     bool trace = false;
+
+    if (!vmsvga_trace_detail_enabled(s)) {
+        return;
+    }
+    frame = vmsvga_trace_frame_id(s);
+    seq = vmsvga_trace_event_sequence(s);
 
     for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
         const VMSVGA3DStateValue *flags =
@@ -1441,7 +1447,7 @@ static void vmsvga3d_state_trace_texgen(
                 " seq=%" PRIu64 " cid=%u face=%u valid=1 "
                 "diffuse=%.7g,%.7g,%.7g,%.7g ambient=%.7g,%.7g,%.7g,%.7g "
                 "specular=%.7g,%.7g,%.7g,%.7g emissive=%.7g,%.7g,%.7g,%.7g "
-                "power=%.7g\\n",
+                "power=%.7g\n",
                 frame, seq, cid, face,
                 (double)material->material.diffuse[0],
                 (double)material->material.diffuse[1],
@@ -1473,7 +1479,7 @@ static void vmsvga3d_state_trace_texgen(
                 " seq=%" PRIu64 " cid=%u index=%u enabled=1 "
                 "data_valid=%u type=%u pos=%.7g,%.7g,%.7g "
                 "dir=%.7g,%.7g,%.7g diffuse=%.7g,%.7g,%.7g,%.7g "
-                "ambient=%.7g,%.7g,%.7g,%.7g specular=%.7g,%.7g,%.7g,%.7g\\n",
+                "ambient=%.7g,%.7g,%.7g,%.7g specular=%.7g,%.7g,%.7g,%.7g\n",
                 frame, seq, cid, light, (unsigned)state->data_valid,
                 (unsigned)data->type,
                 (double)data->position[0], (double)data->position[1],
@@ -1505,7 +1511,7 @@ static void vmsvga3d_state_trace_texgen(
         fprintf(stderr,
                 "VMVGA-D3D9-TEXGEN-STATE frame=%" PRIu64
                 " seq=%" PRIu64 " cid=%u stage=%u sid=%u "
-                "transformflags=%s%08x texcoordgen=%s%08x\\n",
+                "transformflags=%s%08x texcoordgen=%s%08x\n",
                 frame, seq, cid, stage,
                 binding->valid ? binding->value : SVGA3D_INVALID_ID,
                 flags->valid ? "" : "invalid/", flags->value,
