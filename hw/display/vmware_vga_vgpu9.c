@@ -28,6 +28,7 @@
 #include "include/vmware_vga_video.h"
 #include "qemu/perf-stats.h"
 
+#include <math.h>
 #include <string.h>
 
 /* D3D9 ABI values used by the protocol translator. */
@@ -4867,6 +4868,248 @@ static bool vmsvga3d_d3d9_scan_index_bounds(const void *data,
     return true;
 }
 
+typedef struct VMSVGA3DD3D9VertexBounds {
+    float min[4];
+    float max[4];
+    uint32_t samples;
+    uint32_t components;
+    bool valid;
+} VMSVGA3DD3D9VertexBounds;
+
+static bool vmsvga3d_d3d9_decode_float_element(
+    const uint8_t *data, uint32_t decl_type, float values[4],
+    uint32_t *component_count)
+{
+    uint32_t count;
+    uint32_t i;
+
+    switch (decl_type) {
+    case 0: count = 1; break; /* FLOAT1 */
+    case 1: count = 2; break; /* FLOAT2 */
+    case 2: count = 3; break; /* FLOAT3 */
+    case 3: count = 4; break; /* FLOAT4 */
+    default:
+        return false;
+    }
+
+    for (i = 0; i < count; i++) {
+        memcpy(&values[i], data + i * sizeof(float), sizeof(float));
+        if (!isfinite(values[i])) {
+            return false;
+        }
+    }
+    *component_count = count;
+    return true;
+}
+
+static bool vmsvga3d_d3d9_vertex_element_values(
+    VMSVGA3DSurface *const *stream_surfaces,
+    const VMSVGA3DD3D9VertexStream *streams,
+    const VMSVGA3DD3D9VertexElement *element,
+    uint32_t vertex_index, float values[4], uint32_t *component_count)
+{
+    VMSVGA3DSurface *surface;
+    uint64_t offset;
+
+    if (element->stream >= SVGA3D_MAX_VERTEX_ARRAYS ||
+        streams[element->stream].stride == 0) {
+        return false;
+    }
+    surface = stream_surfaces[element->stream];
+    if (surface == NULL || surface->mip_count != 1 ||
+        surface->mips == NULL || surface->mips[0].data == NULL) {
+        return false;
+    }
+
+    offset = (uint64_t)streams[element->stream].source_offset +
+             (uint64_t)vertex_index * streams[element->stream].stride +
+             element->offset;
+    if (offset > surface->mips[0].data_size ||
+        vmsvga3d_d3d9_decl_type_size(element->type) >
+            surface->mips[0].data_size - offset) {
+        return false;
+    }
+
+    return vmsvga3d_d3d9_decode_float_element(
+        (const uint8_t *)surface->mips[0].data + offset,
+        element->type, values, component_count);
+}
+
+static void vmsvga3d_d3d9_bounds_add(
+    VMSVGA3DD3D9VertexBounds *bounds, const float values[4],
+    uint32_t component_count)
+{
+    uint32_t i;
+
+    if (!bounds->valid) {
+        for (i = 0; i < component_count; i++) {
+            bounds->min[i] = values[i];
+            bounds->max[i] = values[i];
+        }
+        bounds->valid = true;
+        bounds->components = component_count;
+    } else {
+        for (i = 0; i < component_count; i++) {
+            bounds->min[i] = MIN(bounds->min[i], values[i]);
+            bounds->max[i] = MAX(bounds->max[i], values[i]);
+        }
+    }
+    bounds->samples++;
+}
+
+static bool vmsvga3d_d3d9_decode_geometry_bounds(
+    VMSVGA3DSurface *const *stream_surfaces,
+    const VMSVGA3DD3D9VertexStream *streams,
+    const VMSVGA3DD3D9VertexElement *elements,
+    const SVGA3dVertexDecl *decls, uint32_t decl_count,
+    const VMSVGA3DD3D9DrawRangePlan *plan,
+    const SVGA3dPrimitiveRange *range, VMSVGA3DSurface *index_surface,
+    uint32_t stream_count, VMSVGA3DD3D9VertexBounds *position,
+    VMSVGA3DD3D9VertexBounds *uv, const char **reason)
+{
+    int position_element = -1;
+    int uv_element = -1;
+    uint32_t vertex_count;
+    uint32_t i;
+    uint32_t index_width = range->indexWidth;
+    uint32_t start_index = plan->action == VMSVGA3D_D3D9_DRAW_ACTION_INDEXED
+                               ? plan->indexed.start_index : 0;
+
+    memset(position, 0, sizeof(*position));
+    memset(uv, 0, sizeof(*uv));
+    *reason = "no-position-or-texcoord-declaration";
+
+    for (i = 0; i < decl_count; i++) {
+        if (position_element < 0 &&
+            (decls[i].identity.usage == SVGA3D_DECLUSAGE_POSITION ||
+             decls[i].identity.usage == SVGA3D_DECLUSAGE_POSITIONT)) {
+            position_element = (int)i;
+        }
+        if (uv_element < 0 &&
+            decls[i].identity.usage == SVGA3D_DECLUSAGE_TEXCOORD &&
+            decls[i].identity.usageIndex == 0) {
+            uv_element = (int)i;
+        }
+    }
+
+    if (position_element < 0 && uv_element < 0) {
+        return false;
+    }
+    if (stream_count == 0) {
+        *reason = "no-vertex-streams";
+        return false;
+    }
+    for (i = 0; i < stream_count; i++) {
+        if (streams[i].frequency != 1u) {
+            *reason = "instanced-stream-unsupported";
+            return false;
+        }
+        if (stream_surfaces[i] == NULL ||
+            stream_surfaces[i]->mip_count != 1 ||
+            stream_surfaces[i]->mips == NULL ||
+            stream_surfaces[i]->mips[0].data == NULL) {
+            *reason = "cpu-shadow-unavailable";
+            return false;
+        }
+    }
+
+    if (plan->action == VMSVGA3D_D3D9_DRAW_ACTION_INDEXED) {
+        vertex_count = vmsvga3d_d3d9_primitive_vertex_count(
+            plan->primitive_type, plan->indexed.primitive_count);
+        if (index_surface == NULL || index_surface->mip_count != 1 ||
+            index_surface->mips == NULL || index_surface->mips[0].data == NULL) {
+            *reason = "index-cpu-shadow-unavailable";
+            return false;
+        }
+        if (index_width != sizeof(uint16_t) &&
+            index_width != sizeof(uint32_t)) {
+            *reason = "unsupported-index-width";
+            return false;
+        }
+    } else {
+        vertex_count = vmsvga3d_d3d9_primitive_vertex_count(
+            plan->primitive_type, plan->primitive_count);
+    }
+
+    if (vertex_count == 0) {
+        *reason = "empty-or-unsupported-primitive";
+        return false;
+    }
+    if (vertex_count > 65536u) {
+        *reason = "vertex-decode-limit";
+        return false;
+    }
+
+    for (i = 0; i < vertex_count; i++) {
+        uint32_t vertex_index;
+        float values[4];
+        uint32_t components;
+
+        if (plan->action == VMSVGA3D_D3D9_DRAW_ACTION_INDEXED) {
+            uint64_t index_offset = ((uint64_t)start_index + i) * index_width;
+            uint32_t raw_index;
+            int64_t effective_index;
+
+            if (index_offset > index_surface->mips[0].data_size ||
+                index_width > index_surface->mips[0].data_size - index_offset) {
+                *reason = "index-buffer-out-of-bounds";
+                return false;
+            }
+            if (index_width == sizeof(uint16_t)) {
+                uint16_t value;
+                memcpy(&value,
+                       (const uint8_t *)index_surface->mips[0].data +
+                           index_offset, sizeof(value));
+                raw_index = value;
+            } else {
+                memcpy(&raw_index,
+                       (const uint8_t *)index_surface->mips[0].data +
+                           index_offset, sizeof(raw_index));
+            }
+            effective_index = (int64_t)plan->indexed.base_vertex_index +
+                              raw_index;
+            if (effective_index < 0 || effective_index > UINT32_MAX) {
+                *reason = "vertex-index-out-of-range";
+                return false;
+            }
+            vertex_index = (uint32_t)effective_index;
+        } else {
+            if (plan->start_vertex > UINT32_MAX - i) {
+                *reason = "vertex-index-overflow";
+                return false;
+            }
+            vertex_index = plan->start_vertex + i;
+        }
+
+        if (position_element >= 0) {
+            if (!vmsvga3d_d3d9_vertex_element_values(
+                    stream_surfaces, streams, &elements[position_element],
+                    vertex_index, values, &components) || components < 2) {
+                *reason = "position-format-or-shadow-unavailable";
+                return false;
+            }
+            vmsvga3d_d3d9_bounds_add(position, values, MIN(components, 3u));
+        }
+        if (uv_element >= 0) {
+            if (!vmsvga3d_d3d9_vertex_element_values(
+                    stream_surfaces, streams, &elements[uv_element],
+                    vertex_index, values, &components) || components < 2) {
+                *reason = "uv-format-or-shadow-unavailable";
+                return false;
+            }
+            vmsvga3d_d3d9_bounds_add(uv, values, 2);
+        }
+    }
+
+    if ((!position->valid && position_element >= 0) ||
+        (!uv->valid && uv_element >= 0)) {
+        *reason = "no-vertices-decoded";
+        return false;
+    }
+    *reason = "ok";
+    return true;
+}
+
 static void vmsvga3d_d3d9_mark_streams_inflight(
     VMSVGA3DSurface *const *stream_surfaces,
     const VMSVGA3DD3D9VertexStream *streams,
@@ -5229,14 +5472,30 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
         }
 
         if (vmsvga_trace_detail_enabled(s)) {
+            VMSVGA3DD3D9VertexBounds position_bounds = { 0 };
+            VMSVGA3DD3D9VertexBounds uv_bounds = { 0 };
+            VMSVGA3DSurface *geometry_index_surface = NULL;
+            const char *bounds_reason;
+            bool bounds_ok;
+
+            if (plan.action == VMSVGA3D_D3D9_DRAW_ACTION_INDEXED &&
+                plan.index_surface_id < SVGA3D_MAX_SURFACE_IDS) {
+                geometry_index_surface =
+                    s->svga3d->surfaces[plan.index_surface_id];
+            }
+            bounds_ok = vmsvga3d_d3d9_decode_geometry_bounds(
+                stream_surfaces, streams, elements, vertex_decls,
+                vertex_decl_count, &plan, &ranges[i],
+                geometry_index_surface, stream_count, &position_bounds,
+                &uv_bounds, &bounds_reason);
+
             fprintf(stderr,
                     "VMVGA-D3D9-GEOMETRY seq=%" PRIu64 " cid=%u range=%u "
                     "target=%u:%u:%u viewport=%u,%u/%ux%u "
                     "prim=%u count=%u indexed=%u start_vertex=%u "
                     "min_vertex=%u vertex_count=%u index_sid=%u "
                     "index_offset=%u index_width=%u streams=%u "
-                    "position_bounds=unavailable uv_bounds=unavailable "
-                    "bounds_reason=vertex-decode-not-implemented\n",
+                    "position_bounds=",
                     vmsvga_trace_event_sequence(s), cid, i,
                     context->render_targets[SVGA3D_RT_COLOR0].sid,
                     context->render_targets[SVGA3D_RT_COLOR0].face,
@@ -5249,6 +5508,29 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                     plan.indexed.num_vertices, plan.index_surface_id,
                     ranges[i].indexArray.offset, ranges[i].indexWidth,
                     stream_count);
+            if (position_bounds.valid) {
+                fprintf(stderr, "x=%.6g..%.6g,y=%.6g..%.6g",
+                        position_bounds.min[0], position_bounds.max[0],
+                        position_bounds.min[1], position_bounds.max[1]);
+                if (position_bounds.components >= 3) {
+                    fprintf(stderr, ",z=%.6g..%.6g",
+                            position_bounds.min[2], position_bounds.max[2]);
+                }
+            } else {
+                fprintf(stderr, "unavailable");
+            }
+            fprintf(stderr, " uv_bounds=");
+            if (uv_bounds.valid) {
+                fprintf(stderr, "u=%.6g..%.6g,v=%.6g..%.6g",
+                        uv_bounds.min[0], uv_bounds.max[0],
+                        uv_bounds.min[1], uv_bounds.max[1]);
+            } else {
+                fprintf(stderr, "unavailable");
+            }
+            fprintf(stderr, " decoded=%u bounds_ok=%u bounds_reason=%s\\n",
+                    position_bounds.samples > uv_bounds.samples
+                        ? position_bounds.samples : uv_bounds.samples,
+                    bounds_ok, bounds_reason);
         }
 
         if (deep_draw) {
