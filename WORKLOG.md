@@ -2123,3 +2123,9 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Corrected the initial profiling integration so range-only lock failure counters are confined to the range allocator; full-buffer uploads now also contribute their successful DISCARD bytes and high-water to the same per-surface interval summary.
 - Count ring wraps only when a larger host ring actually runs out of append capacity; ordinary invalidation/overlap DISCARDs remain distinct. Added renderer surface-list unlink/relink handling and restored the active capture flag when the DXVK renderer is recreated, preserving per-surface counters across renderer replacement.
 - Static source-path checks confirmed the full-buffer path has no references to range-local variables and that both upload paths feed the counters. No QEMU build or runtime test was run. CI and owner XP capture verification remain pending; T19 remains PAUSED.
+
+
+## Session 121 (ChatGPT), 2026-11-24 - Preserve observed VB-ring capacity on failed appends
+
+- Updated the profiling snapshot immediately after a successful ring upgrade, rather than waiting for the subsequent upload to succeed. This keeps `capacity_bytes` accurate when the larger host allocation succeeds but a later NOOVERWRITE lock fails.
+- No allocator behavior changed. Static source inspection only; no build/runtime test. T19 remains PAUSED pending CI and owner XP capture verification.
