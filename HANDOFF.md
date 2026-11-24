@@ -914,10 +914,17 @@ error-reporting paths that write to stderr remain in the capture independently
 of simple-mode event sampling, but internal fallbacks that return silently
 cannot be guaranteed to appear. Repeated-warning aggregation is not yet
 implemented; a genuinely unsupported command that repeats can still produce
-repeated lines. Full source-wide severity audit and owner capture verification
-remain necessary.
+repeated lines. Full source-wide severity audit remains future work.
 
-The generalized naming, debug-mode separation, and targeted warning-retention
-changes are implemented, but no local build/test was run and CI or XP guest
-verification has not yet been reported. Keep T19 IMPLEMENTED pending
-Linux/Windows CI and owner XP guest verification.
+Owner-run Windows XP captures on 2026-11-24 verified both capture levels:
+the approximately 48 KB simple capture identified `capture_mode=simple` and
+reported 734 superseded flips with `event-lines=2` (SID 2: 367; SID 1: 367).
+The approximately 1.5 MB full capture identified `capture_mode=on` and
+reported 766 superseded flips with `event-lines=766`, confirming every event
+was retained individually. The owner also confirmed that the false unknown
+register-read warning for valid `SVGA_REG_BUSY` was absent from both captures.
+These are separate runs, so their event totals are not expected to match.
+
+This is owner-side Windows XP capture verification, not CI evidence. No local
+build/test was run for Sessions 124–127. Keep T19 IMPLEMENTED pending
+Linux/Windows CI and any remaining repeated-interval acceptance checks.
