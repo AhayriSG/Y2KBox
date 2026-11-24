@@ -83,3 +83,10 @@
 - Full-mode `VMVGA-D3D9-GEOMETRY` now decodes raw vertex-input position and TEXCOORD0 UV bounds from the CPU shadow for indexed and non-indexed draws using FLOAT1–FLOAT4 declaration elements. The decoder validates little-endian indices and float components, base-vertex addressing, stream offsets/strides, buffer bounds and finite values; it rejects instanced streams and caps work at 65,536 vertex references per draw.
 - Records report separate position/UV reference counts, `bounds_ok`, and an explicit `bounds_reason`. No GPU readback, forced synchronization, or rendering behavior change was added.
 - Static source review only; no QEMU build, runtime test, owner XP capture, or CI. Next owner step: take one Full-mode NFSU2 capture spanning the minimap flicker and inspect the newly decoded bounds alongside surface updates and render/readback correlation. T26 remains IN PROGRESS pending useful capture evidence and Linux/Windows build/CI.
+
+### Session 134 — Add guest frame IDs and effective D3D9 draw-state snapshots
+- Added capture-local `VMVGA-FRAME` boundaries for guest `SVGA_3D_CMD_PRESENT` commands. Each boundary records the frame being closed and advances the ID for subsequent draws; it is explicitly not a host SDL/vblank frame identifier.
+- Added `VMVGA-D3D9-STATE-SNAPSHOT` once per validated draw, recording context, render targets, viewport/scissor, shader bindings, all valid texture/sampler and render states, and bound texture SIDs with live dimensions, format and mip count. Each snapshot carries both `frame` and the existing event/FIFO correlation `seq`.
+- Corrected the SDL title to advertise the already-enforced two-second Full-mode limit.
+- No PNG/JPEG snapshot was added: no existing encoder was found in the current SDL/GLib/zlib path, and no new dependency was introduced.
+- Static source/documentation review only. No local QEMU build, runtime test, owner XP capture, or CI was run. Next: inspect one two-second NFSU2 Full capture and validate the frame/state/resource correlations; Linux/Windows CI remains required. T26 stays IN PROGRESS.
