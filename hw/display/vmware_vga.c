@@ -755,6 +755,11 @@ bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s)
     return s != NULL && s->debug_log && s->debug_detail;
 }
 
+uint64_t vmsvga_trace_event_sequence(const struct vmsvga_state_s *s)
+{
+    return s != NULL ? s->trace_activity_seq : 0;
+}
+
 /* Keep every superseded-flip event in full mode, but bound simple-mode
  * output and retain interval totals plus a small per-SID histogram. */
 void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
@@ -12255,10 +12260,12 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
         s->chip.debug_log = true;
         qatomic_inc(&vmvga_trace_debug_capture_devices);
         vmsvga_trace_flight_reset(&s->chip);
-        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, true);
+        vmsvga3d_dxvk_vb_ring_profile_capture(
+            s->chip.dxvk, true, s->chip.debug_detail);
     } else {
         vmsvga_trace_flight_histogram(&s->chip, "capture-stop");
-        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, false);
+        vmsvga3d_dxvk_vb_ring_profile_capture(
+            s->chip.dxvk, false, false);
         s->chip.debug_log = false;
         assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
         qatomic_dec(&vmvga_trace_debug_capture_devices);
