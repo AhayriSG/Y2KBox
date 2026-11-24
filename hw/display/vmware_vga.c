@@ -808,7 +808,7 @@ void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
         if (vmsvga_trace_detail_enabled(s)) {
             fprintf(stderr,
                     "VMVGA-RENDER-CORRELATION event=screen-readback-supersede "
-                    "last_fifo_seq=%" PRIu64 " sid=%u\\n",
+                    "last_fifo_seq=%" PRIu64 " sid=%u\n",
                     s->trace_activity_seq, old_sid);
         }
     }
