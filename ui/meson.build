@@ -164,7 +164,7 @@ endif
 
 if sdl.found()
   sdl_ss = ss.source_set()
-  sdl_ss.add(sdl, sdl_image, pixman, glib, files(
+  sdl_ss.add(sdl, sdl_image, pixman, glib, zlib, files(
     'sdl2-2d.c',
     'sdl2-input.c',
     'sdl2.c',
