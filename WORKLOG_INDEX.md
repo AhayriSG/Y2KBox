@@ -25,16 +25,17 @@ have follow-up subsections under the same number.
 | Topic | Relevant worklog sessions | Use these when investigating |
 |---|---:|---|
 | Repository bootstrap, pruning, fixed XP platform and build configuration | 1, 10–11, 13, 16–20, 28–29 | Original project decisions, removed QEMU subsystems, Linux KVM / Windows TCG split, build dependencies and platform-specific regressions |
-| TCG performance, x87, XMM/SSE and benchmark methodology | 2–9, 19–28, 68, 73–80 | T04/T13 benchmark setup, x87 fast paths, XMM caching, TCG helper costs, differential testing and measured performance changes |
-| VMware SVGA / SVGA3D, DXVK, D3D and guest OpenGL | 12, 29–32, 65–67, 80, 99–109 | VMVGA integration, display/scanout issues, D3D9/D3D8 translation, shader/state compatibility, rendering regressions, and the guest OpenGL/SVGA3D investigation, including QindieGL and TitaniumGL wrapper experiments (Sessions 99–109) |
-| SDL windowing, fullscreen, input and diagnostic capture | 33–36, 60–64 | Capture hotkey/file lifecycle, debug-mode controls, guest-driven window sizing, fullscreen behavior and diagnostic logging |
+| TCG performance, x87, XMM/SSE and benchmark methodology | 2–9, 19–28, 68, 73–80, 115 | T04/T13 benchmark setup, x87 fast paths, XMM caching, TCG helper costs, differential testing and measured performance changes |
+| VMware SVGA / SVGA3D, DXVK, D3D and guest OpenGL | 12, 29–32, 65–67, 80, 99–109, 115 | VMVGA integration, display/scanout issues, D3D9/D3D8 translation, shader/state compatibility, rendering regressions, guest OpenGL research, and Session 115's ScreenTarget/DXVK changes |
+| SDL windowing, fullscreen, input and diagnostic capture | 33–36, 60–64, 110, 114 | Capture hotkey/file lifecycle, debug-mode controls, guest-driven window sizing, fullscreen behavior, mouse tracking and T24 acceptance verification |
 | Launcher architecture and user-managed VM instances | 112–113 | T12's planned SDL2/Dear ImGui instance manager, independently persisted per-instance virtual hardware and GPU choice, and the conditional VBoxVGA 5.2.x / SharedOpenGL research path |
 | VirtIO Block / Net and supported guest devices | 37–44 | VirtIO source restoration, Linux host-backend build gates, device defaults and PS/2 pointing-device policy |
-| Scene-stall profiling, VMVGA FIFO, GART and FlatView | 45–59, 68–80 | T13e investigation history, instrumentation semantics, GART and memory transactions, FlatView algorithms, BQL contention and performance hypotheses |
-| D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, merge/flush cadence and measured lock improvements |
-| F1 Challenge performance investigation | 45–47, 68–79 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and later shifts in bottlenecks |
-| FIFA 2003 performance investigation | 45, 48–59, 80 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs and Session 80 optimizations |
-| CI workflow, documentation and session-continuity automation | 35–36, 81–98 | Documentation changes, Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, and model-specific local-build authorization |
+| Scene-stall profiling, VMVGA FIFO, GART and FlatView | 45–59, 68–80, 115 | T13e investigation history, instrumentation semantics, GART and memory transactions, FlatView algorithms, BQL contention, ScreenTarget readback stalls and performance hypotheses |
+| D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80, 115 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, ring sub-allocation, merge/flush cadence and measured lock improvements |
+| F1 Challenge performance investigation | 45–47, 68–79, 115 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and Session 115's dynamic vertex-buffer DISCARD investigation |
+| FIFA 2003 performance investigation | 45, 48–59, 80, 115 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs, Session 80 optimizations and Session 115 validation/fixes |
+| Hitman 2: Silent Assassin performance and rendering | 115 | Sicily fade-in/out ScreenTarget readback stalls and dynamic vertex-buffer upload behavior |
+| CI workflow, documentation and session-continuity automation | 35–36, 81–98, 111, 114–115 | Markdown-only CI job skipping, shared agent instructions, selective context loading, session-continuity automation, task-status markers, T24 verification record and performance-change verification notes |
 
 ## Session 81 note
 
@@ -45,24 +46,85 @@ entirely for Markdown-only commits; only the lightweight detector runs. Any
 non-Markdown change and manual `workflow_dispatch` run the full platform jobs.
 See `.github/workflows/build.yml`.
 
-## Sessions 82–114 note
+## Sessions 82–115
 
-Session 82 introduced selective historical reads and the topic index. Session 83
-centralized shared instructions in `AGENTS.md`; Session 84 clarified sequential
-multi-agent handoff and moved XP guest acceptance to an owner-run checklist.
-Session 85 added the owner-approved Gemini 4 Neon-only ordinary local-build
-exception. Session 86 extended that same model-specific authorization to relevant,
-bounded benchmark/A-B work while retaining explicit authorization for every other
-agent. Session 87 clarified the fixed guest RAM rationale, XP x86 virtual/physical
-memory limits, and the guest-facing Direct3D 9.0c / Shader Model 3.0 ceiling.
-Session 88 reorganized the README so host requirements and the guest RAM
-rationale live in the bottom FAQ, while the Fixed target summary stays guest-only.
-Session 89 rewrote the README introduction to emphasize the XP gaming experience,
-a mid-to-late 2000s performance target, and the distinction from cycle-accurate
-hardware emulation, while acknowledging 86Box's contributors. Session 90 fixed the
-product target to exactly one vCPU, removed QEMU's `-smp` CLI option, and aligned
-T01, T14, README, and HANDOFF with the uniprocessor decision. Session 91 moved
-the project-purpose material into the FAQ, distinguished Y2KBox from compatibility
-layers, documented the one-vCPU/TCG trade-off, and separated the proprietary
-hypervisor API rationale into its own FAQ entry.
-Session 92 closed T09's integration/CI task while keeping XP driver, display/2D, D3D API, and game acceptance in the owner-run manual checklist; T10 remains separately paused. Session 93 moved the upstream QEMU 11.1.90 base commit and unchanged GPL-2.0 notice from the README Fixed target area into a dedicated provenance FAQ entry. Session 94 re-audited all 16 Markdown files and reconciled skill authorization, Claude-specific CI hook wording, serialized-write instructions, and Gemini 4 Neon-only local benchmark/build permission. Session 95 fixed the optional GitHub PAT Authorization-header argument in `scripts/session_status.sh`; this affects Claude's CI-status API reporting only, not sandbox GitHub authentication or GitHub Actions. Session 96 moved diagnostic logging guidance into the README FAQ, documented recording overhead and the tester profiling workflow, and clarified the optional compile-time VMVGA deep-trace switch. Session 97 merged the preservation-practicality rationale into the compatibility-layer FAQ, removing the separate closing entry while retaining the project's practical preservation and usability arguments. Session 98 moved that merged project-purpose answer to the final FAQ position, leaving the technical questions together above it. Session 99 added T25 to investigate guest OpenGL over VMware SVGA3D, with OpenGL 1.1 as the baseline and 2.1 as the maximum target; it distinguishes the Mesa SVGA guest GL protocol path from the separate Windows XP VMware Tools driver capability question. Session 100 began that investigation, clarified that Mesa translates GL operations into SVGA3D commands rather than using a separate OpenGL FIFO, identified existing legacy-command overlap in Y2KBox, and established that the supplied QEMU log cannot diagnose WGL/PFD selection. Session 101 clarified the README target as OpenGL 1.1 baseline / 2.1 maximum, with older 1.x compatibility included and guest OpenGL still unimplemented. Session 102 traced COD1's GLW_ChoosePFD failure to the id Tech 3 custom pixel-format selection path and added an XP-side probe that reproduces its filters and best-match rules. Session 103 matched Mesa's VGPU9 minimum hardware version and Shader Model 3.0 requirements against Y2KBox's advertised profile, identified remaining state-capability questions, and added a quick COD1 software-OpenGL test using `r_allowSoftwareGL 1`. Session 104 recorded the owner's GLview result: Windows XP is exposing Microsoft GDI Generic OpenGL 1.1.0 with only three extensions, and COD1 now passes WGL context creation before failing its feature check. Session 105 found VMware Workstation documentation explicitly stating that OpenGL apps in XP guests run in software-emulation mode, making GDI Generic expected rather than evidence of a broken Tools install. It identified WINVBE as a possible XP software-OpenGL 2.1 experiment, but not an accelerated or drop-in solution. Session 106 established that a conventional XP ICD requires the active display driver to advertise it through OPENGL_GETINFO, so a registry-only DLL install cannot preserve the VMware driver unless it already supports that escape. It recorded application-local standalone DLLs and a D3D9 translation stack only as speculative leads, not a known solution. Session 107 marked T25 paused for an independent reassessment that may challenge or replace those hypotheses; the README now describes OpenGL as a low-probability research objective. Session 108 added QindieGL as a concrete application-local OpenGL-to-D3D9 wrapper reference, documented its missing `wglGetExtensionsStringEXT` entry point and the owner's COD1 startup failure, and recorded a historical minimal-entry-point experiment that reached startup but retained severe graphics corruption. It also flagged QindieGL's GPL-3.0 license for review before any code reuse. Session 109 removed project-specific wrapper names from the README while retaining its generic unproven-wrapper wording, and added TitaniumGL as a separate T25 lead: COD1 created/made-current an OpenGL 1.4 context and saw numerous extensions, but still rejected the graphics card; hardware and software modes showed the same broad result. The `0 PFDs found` line and actual failed capability check remain unresolved. T25 remains paused. Session 110 clarified T24 as IMPLEMENTED: the owner confirmed the Windows window is non-resizable with its titlebar maximize control disabled; Linux/Windows CI and remaining XP checks for guest-driven resolution, Ctrl+Alt+F fullscreen, and mouse tracking are still outstanding. Session 111 added red/yellow/green visual status markers to all TASKS.md headings while retaining a canonical plain-text Status field below each heading; AGENTS.md now instructs agents to treat that field as authoritative. Session 112 initially described T12 as a choice between predefined graphics profiles. Session 113 corrected that interpretation: T12 is a user-managed instance manager, with users creating independent XP VMs and choosing virtual hardware, including the GPU, per instance. VMVGA/SVGA3D remains the supported path; VBoxVGA 5.2.x/SharedOpenGL remains a conditional research candidate, not an available option. Session 114 corrected T24 to DONE after the owner confirmed Linux/Windows SDL CI and all XP acceptance checks (guest-driven resolution, Ctrl+Alt+F fullscreen, and mouse tracking) were already verified. Session 115 recorded owner post-Session 80 Windows TCG captures (FIFA 2003 playable at ~85.7 FPS; Hitman 2 Sicily fade stalling on 2,913 unpresented sync ScreenTarget readbacks; F1 '99-'02 spending 3.711 s in 71,979 VB INVALIDATE DISCARD renames) and implemented steady-state FIFO D3D9 flip supersession with eager retired staging transfer, per-surface dynamic VB ring sub-allocation + guarded 2 MiB overlap-DISCARD, and O(1) GART alias unparent + FIFO-pass GART transaction batching (standalone local tests passed; CI and owner re-captures pending). See Sessions 82–115 in `WORKLOG.md` for details.
+The entries below are a chronological navigation summary, not a replacement for
+the detailed records. Open the matching heading in `WORKLOG.md` for full context.
+
+- **Session 82 — Selective historical reads and topic index:** Introduced the
+  worklog navigation model and selective historical lookup.
+- **Session 83 — Shared agent instructions:** Centralized common operating policy
+  in `AGENTS.md`.
+- **Session 84 — Multi-agent handoff and XP acceptance:** Clarified sequential
+  agent handoff and moved XP guest acceptance to an owner-run checklist.
+- **Session 85 — Local build authorization:** Added the owner-approved Gemini 4
+  Neon-only exception for ordinary local QEMU builds.
+- **Session 86 — Benchmark authorization:** Extended that model-specific
+  authorization to relevant, bounded benchmark/A-B work.
+- **Session 87 — Fixed guest target constraints:** Clarified guest RAM rationale,
+  XP x86 virtual/physical memory limits, and Direct3D 9.0c / Shader Model 3.0 ceiling.
+- **Session 88 — README FAQ organization:** Moved host requirements and RAM
+  rationale into the FAQ while keeping the Fixed target summary guest-focused.
+- **Session 89 — README project introduction:** Emphasized the XP gaming target,
+  mid-to-late-2000s performance goal, and distinction from cycle-accurate emulation.
+- **Session 90 — One-vCPU target:** Fixed the product target at one vCPU, removed
+  QEMU's `-smp` option, and aligned T01, T14, README and HANDOFF.
+- **Session 91 — Project-purpose FAQ:** Distinguished Y2KBox from compatibility
+  layers, explained the one-vCPU/TCG trade-off, and separated the proprietary
+  hypervisor API rationale.
+- **Session 92 — T09 closure:** Closed integration/CI work while retaining XP
+  driver, display, D3D API and game acceptance in the manual checklist; T10 stayed paused.
+- **Session 93 — QEMU provenance:** Moved the upstream QEMU 11.1.90 base commit
+  and unchanged GPL-2.0 notice into a dedicated README FAQ entry.
+- **Session 94 — Documentation and policy audit:** Reconciled agent skill
+  authorization, CI hook wording, serialized writes and model-specific permissions.
+- **Session 95 — CI status script:** Fixed optional GitHub PAT Authorization-header
+  handling in `scripts/session_status.sh`.
+- **Session 96 — Diagnostic logging FAQ:** Documented opt-in logging, recording
+  overhead, tester profiling workflow and optional VMVGA deep trace.
+- **Session 97 — Preservation rationale merge:** Merged the preservation-practicality
+  rationale into the compatibility-layer FAQ.
+- **Session 98 — README FAQ ordering:** Moved the merged project-purpose answer
+  to the final FAQ position.
+- **Session 99 — Guest OpenGL investigation:** Added T25 for investigating XP
+  guest OpenGL over VMware SVGA3D, with OpenGL 1.1 baseline and 2.1 maximum.
+- **Session 100 — OpenGL architecture research:** Clarified Mesa's SVGA3D command
+  path, existing legacy-command overlap and limits of the available QEMU log.
+- **Session 101 — OpenGL target wording:** Clarified the README's OpenGL 1.1
+  baseline / 2.1 maximum target; guest OpenGL remained unimplemented.
+- **Session 102 — COD1 WGL probe:** Traced `GLW_ChoosePFD` behavior and added
+  an XP-side probe matching the game's pixel-format filters and best-match rules.
+- **Session 103 — VGPU9 requirements:** Compared Mesa's VGPU9 baseline with the
+  advertised profile and added a COD1 software-OpenGL test path.
+- **Session 104 — XP OpenGL baseline:** Recorded GDI Generic OpenGL 1.1.0 and
+  COD1's successful context creation followed by its feature-check failure.
+- **Session 105 — VMware XP OpenGL limitation:** Established that VMware documents
+  software-emulated OpenGL in XP guests; WINVBE was noted as a software-only experiment.
+- **Session 106 — XP ICD discovery:** Documented the active display driver's
+  `OPENGL_GETINFO` requirement and speculative application-local wrapper alternatives.
+- **Session 107 — Pause T25:** Paused guest OpenGL work for independent reassessment
+  and characterized the objective as low probability.
+- **Session 108 — QindieGL lead:** Recorded its missing `wglGetExtensionsStringEXT`
+  implementation, COD1 startup failure, historical corruption and GPL-3.0 concern.
+- **Session 109 — TitaniumGL lead:** Recorded COD1's OpenGL 1.4 context and
+  extension observations, unresolved `0 PFDs found` output and continued rejection.
+- **Session 110 — T24 implementation status:** Recorded the verified Windows
+  non-resizable window behavior; at that point, CI and remaining XP acceptance
+  checks had not yet been confirmed.
+- **Session 111 — Visual task-status markers:** Added red/yellow/green heading
+  markers while keeping the plain-text Status field authoritative; updated
+  `AGENTS.md` with the parsing rule.
+- **Session 112 — Initial T12 graphics-profile proposal:** Proposed separate
+  VMVGA/SVGA3D and experimental VBoxVGA/SharedOpenGL graphics profiles.
+- **Session 113 — T12 instance-manager correction:** Reframed T12 as user-created,
+  independently configured XP instances rather than application-defined presets.
+- **Session 114 — T24 acceptance completion:** The owner confirmed Linux/Windows
+  SDL CI and all XP checks (guest-driven resolution, Ctrl+Alt+F fullscreen and
+  mouse tracking); T24 was changed to DONE/green.
+- **Session 115 — T13e performance work:** Recorded owner Windows TCG captures
+  for FIFA 2003, Hitman 2 and F1, then implemented ScreenTarget flip supersession,
+  dynamic D3D9 vertex-buffer ring sub-allocation and O(1) GART alias removal /
+  FIFO-pass transaction batching. Standalone local checks passed; Linux/Windows
+  CI and owner in-game re-captures remained pending at the time of the entry.
+
+See Sessions 82–115 in `WORKLOG.md` for the detailed chronology and evidence.
