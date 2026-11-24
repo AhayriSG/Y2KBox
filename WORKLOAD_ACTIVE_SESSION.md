@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 100–109).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 102–111).
 
 ## How to use this file
 
@@ -21,29 +21,6 @@
 
 ## Latest ten worklog sessions
 
-## Current investigation / next actions
-
-1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
-2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
-3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
-5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
-6. **T24 fixed-size SDL display is IMPLEMENTED.** The owner confirmed the Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. Remaining acceptance: Linux/Windows SDL CI plus owner XP checks for guest-driven resolution changes, `Ctrl+Alt+F` fullscreen, and mouse tracking. Do not change source unless a check finds a real defect.
-7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
-
-## Key diagnostic interpretation rules
-
-- Performance counters can be nested. Do not add child phase totals to enclosing command/FIFO totals.
-- Counters whose implementation uses `qemu_perf_stats_mark()` measure intervals between marks (event cadence), not operation execution time.
-- Overlapping lock dimensions (aggregate, vertex/index, full/partial, flags, size buckets) are not additive.
-- A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
-- Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
-
-
-### Session 101 — Clarify the guest OpenGL target in the README
-- Updated the README Fixed target to include OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum, explicitly noting that guest OpenGL is not yet implemented.
-- T25 remains an investigation: a complete 2.1 path must also preserve compatibility with older 1.x applications, and the Call of Duty 1 WGL pixel-format failure still needs an XP-side probe.
-- Documentation-only; no emulator source changes, diagnostic utility, build, benchmark, guest test, or CI polling.
 
 ### Session 102 — Build an XP-side COD1 WGL pixel-format probe
 - Identified COD1's GLW_ChoosePFD routine as the custom id Tech 3 PFD enumerator, not Windows ChoosePixelFormat. It rejects generic formats by default, requires RGBA/window/OpenGL/double-buffer flags, at least 15 depth bits, and at least 4 stencil bits when stencil is requested.
@@ -97,3 +74,27 @@
 - The owner confirmed that the Windows build has the intended decorated, non-resizable window and disabled titlebar maximize control. This verifies the fixed-window behavior implemented in Session 62.
 - T24 is now IMPLEMENTED rather than PAUSED: no known source work remains, but Linux/Windows CI and owner XP checks for guest-driven resolution changes, Ctrl+Alt+F fullscreen, and mouse tracking are still outstanding.
 - Documentation-only. No source changes, builds, guest tests, or CI polling.
+
+### Session 111 — Add visual task-status markers
+- Added red/yellow/green markers to all 23 TASKS.md headings, matching TODO, in-progress/partial states, and DONE respectively.
+- Moved each complete canonical status into a plain-text Status field directly below its heading; heading colors are visual-only and must never drive agent decisions.
+- IMPLEMENTED remains yellow until acceptance checks are complete. AGENTS.md now states the authoritative-field rule.
+- Documentation-only; no source changes, builds, guest tests, or CI polling.
+
+## Current investigation / next actions
+
+1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
+2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
+3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
+4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
+5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
+6. **T24 fixed-size SDL display is IMPLEMENTED.** The owner confirmed the Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. Remaining acceptance: Linux/Windows SDL CI plus owner XP checks for guest-driven resolution changes, `Ctrl+Alt+F` fullscreen, and mouse tracking. Do not change source unless a check finds a real defect.
+7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
+
+## Key diagnostic interpretation rules
+
+- Performance counters can be nested. Do not add child phase totals to enclosing command/FIFO totals.
+- Counters whose implementation uses `qemu_perf_stats_mark()` measure intervals between marks (event cadence), not operation execution time.
+- Overlapping lock dimensions (aggregate, vertex/index, full/partial, flags, size buckets) are not additive.
+- A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
+- Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
