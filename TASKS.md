@@ -581,7 +581,7 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 * **Remaining work:** owner full-mode NFSU2 capture must confirm useful decoded values for the flickering minimap. Add other vertex declaration formats only when captures show they are needed. T26 remains IN PROGRESS until capture evidence plus Linux/Windows CI/build validation; simple and inactive/default-off paths must remain unchanged.
 * **Verification:** static source review only. No QEMU build, local tests, owner capture, or CI was run. Keep T26 IN PROGRESS until the remaining geometry work and owner full-mode capture confirm the records are useful. Simple and inactive/default-off paths are intended to remain unchanged.
 
-* **Session 130–131 follow-up (2026-11-24):** full captures now have a three-second
+* **Session 130–131 follow-up (2026-11-24):** full captures now have a two-second
   QEMU realtime-timer limit and can still be stopped early with Ctrl+Alt+L.
   After stderr restoration, full-mode `.log` files are compressed asynchronously in a background worker
   with zlib level 9 (maximum compression) to `.log.gz`; the source is deleted
