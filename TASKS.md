@@ -375,7 +375,7 @@ they are not assumed to make translated guest instruction execution faster.
 
 
 ## T19 (P1) General SDL diagnostic logging capture — 🟡 PAUSED
-**Status:** PAUSED (CI and basic repeated-capture behavior verified; capture-content coverage still under investigation)
+**Status:** CLAIMED by ChatGPT 2026-11-24 (compact/detailed VMVGA capture modes and interval summaries)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
