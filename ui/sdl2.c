@@ -433,11 +433,18 @@ static bool sdl_save_log_capture_png(const char *log_filename,
     int y;
 
     if (scon == NULL || scon->surface == NULL ||
-        scon->surface->image == NULL || scon->has_dmabuf) {
+        scon->surface->image == NULL) {
         error_report("Full diagnostic PNG snapshot skipped: "
                      "no CPU-backed display surface is available.");
         return false;
     }
+#ifdef CONFIG_OPENGL
+    if (scon->opengl && scon->scanout_mode) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "the active display is using direct GPU scanout.");
+        return false;
+    }
+#endif
 
     width = surface_width(scon->surface);
     height = surface_height(scon->surface);
@@ -455,9 +462,10 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         return false;
     }
     image_bytes = row_bytes * (size_t)height;
-    pixels = g_malloc(image_bytes);
+    pixels = g_try_malloc(image_bytes);
     linebuf = qemu_pixman_linebuf_create(PIXMAN_BE_r8g8b8, width);
-    if (linebuf == NULL) {
+    if (pixels == NULL || linebuf == NULL ||
+        pixman_image_get_data(linebuf) == NULL) {
         error_report("Full diagnostic PNG snapshot skipped: "
                      "could not allocate the RGB conversion row.");
         g_free(pixels);
@@ -646,6 +654,17 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         qemu_perf_stats_start();
         fprintf(stderr, "Y2KBOX-DIAG capture_mode=%s\n",
                 debug_detail ? "on" : "simple");
+#ifdef CONFIG_PNG
+        if (debug_detail) {
+            fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=one_png_on_stop "
+                            "source=cpu-display-surface\\n");
+        }
+#else
+        if (debug_detail) {
+            fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=unavailable "
+                            "reason=CONFIG_PNG_disabled\\n");
+        }
+#endif
         sdl_log_capture_filename = filename;
         sdl_log_capture_console = scon;
         sdl_log_capture_enabled = true;
