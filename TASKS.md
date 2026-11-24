@@ -419,6 +419,11 @@ interval across Y2KBox, without continuously generating diagnostic output.
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
 
+* **Simple-mode warning retention hardening (Session 124; static review only):**
+  - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unknown/invalid commands and escapes, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
+  - Added explicit warning records for SVGA3D command IDs outside the known range and in-range IDs with no command metadata. Existing 3D stall, FIFO stall, fence-goal, and abnormal SYNC/FIFO conditions remain independently visible.
+  - This is targeted retention, not a universal severity framework. QEMU/DXVK errors emitted through their own stderr/error-reporting paths are not controlled by the VMVGA event sampler; full source-wide severity audit and repeated-warning aggregation remain future work. No build/runtime/CI validation yet.
+  
 * **Focused VB-ring pressure profiling implemented (Session 119; owner verification pending):**
   - Ctrl+Alt+L start resets per-surface profiling-only counters; capture stop emits one `Y2KBOX-PROF subsystem=vmvga.vb_ring` line for each eligible dynamic D3D9 vertex buffer still represented by a live guest surface. Newly created surfaces inherit the active capture state.
   - `capacity_bytes`: largest host D3D9 VB allocation observed during the interval. `allocated_bytes`: cumulative bytes copied by successful uploads during the interval. `reused_bytes`: the subset copied with successful `D3DLOCK_NOOVERWRITE`. `discard_count`: successful `D3DLOCK_DISCARD` uploads. `wrap_count`: successful DISCARDs caused by a ring-end wrap. `high_water_bytes`: greatest absolute host-buffer byte end touched. `overlap_discard_count`: successful DISCARDs selected by the in-flight-overlap fallback. `allocation_failures`: failed ring upgrades and failed NOOVERWRITE lock/unlock attempts.

@@ -883,7 +883,23 @@ host key chord; it does not inject Ctrl+Alt+L into XP. No separate
 when using this feature, because QEMU must control stderr redirection for the
 capture interval. Exceptional file/descriptor errors are still reported.
 
-The generalized naming and debug-mode separation are implemented, but no local
-build/test was run and CI or XP guest verification has not yet been reported.
-Keep T19 PAUSED until Linux/Windows CI and owner XP guest verification are
-reported.
+Simple-mode sampling is not intended to suppress explicit warnings. The VMVGA
+legacy FIFO path emits capture-gated `VMVGA-WARN` records for identified invalid,
+unknown, rejected, and allocation-failure cases that were previously only
+`VPRINT` diagnostics (and therefore normally compiled out). The SVGA3D
+dispatcher also records out-of-range command IDs and in-range IDs without
+metadata. Existing FIFO/3D stalls and abnormal SYNC/fence conditions retain
+their independent reporting paths.
+
+This is targeted coverage, not a universal severity classifier. QEMU/DXVK
+error-reporting paths that write to stderr remain in the capture independently
+of simple-mode event sampling, but internal fallbacks that return silently
+cannot be guaranteed to appear. Repeated-warning aggregation is not yet
+implemented; a guest that triggers a warning on every iteration can still
+produce repeated lines. Full source-wide audit and owner capture verification
+remain necessary.
+
+The generalized naming, debug-mode separation, and targeted warning-retention
+changes are implemented, but no local build/test was run and CI or XP guest
+verification has not yet been reported. Keep T19 IMPLEMENTED pending
+Linux/Windows CI and owner XP guest verification.

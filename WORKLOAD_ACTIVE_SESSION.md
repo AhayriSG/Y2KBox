@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 114–123).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 115–124).
 
 ## How to use this file
 
@@ -99,3 +99,8 @@
 - `-y2kboxdebugmode off|simple|on`: off disables diagnostics, simple uses compact sampled capture, on restores full selected per-event logging. Default remains off.
 - Removed the user-facing VMVGA `-global` instruction. The parser maps the Y2KBox-wide setting internally; SDL title and capture header identify simple/full mode.
 - Static review only; no build, runtime test, or CI run. Owner verification of all three values and both capture outputs remains pending.
+
+### Session 124 — Preserve explicit VMVGA warnings in simple captures
+- Routed identified invalid/unknown/rejected legacy FIFO and register cases, cursor payload/allocation failures, and invalid GMR2/Screen inputs through capture-gated `VMVGA-WARN` records; added equivalent warnings for unknown SVGA3D command IDs/metadata.
+- Existing stall, fence-goal, and abnormal SYNC/FIFO records remain independently visible. Routine repetitive events stay sampled.
+- Targeted coverage only: no universal severity classifier or repeated-warning aggregation yet. Static review only; no build/runtime/CI/XP verification.

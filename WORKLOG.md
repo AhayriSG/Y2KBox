@@ -2144,3 +2144,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Replaced the user-facing two-state debug switch with `-y2kboxdebugmode off|simple|on`: `off` disables diagnostics, `simple` selects compact sampled capture, and `on` selects the previous full selected per-event VMVGA logging. The default remains `off`.
 - The command-line parser maps the selected level internally; users do not need any QEMU `-global` option or VMVGA-specific logging flag. Updated SDL title/log mode labels, command-line help, README, T12/T19 task wording, and HANDOFF.
 - No QEMU build, runtime test, or CI run performed. Owner should verify all three values, including invalid-value rejection, and compare simple/full captures.
+
+
+## Session 124 (ChatGPT), 2026-11-24 - Preserve explicit VMVGA warnings in simple captures
+
+- Added a capture-gated `VMVGA-WARN` diagnostic path and routed identified legacy VMVGA warning/failure messages through it instead of the `VPRINT` macro. These cases were previously normally compiled out unless `VERBOSE` was enabled, so compact captures could miss them entirely.
+- Covered unknown/invalid FIFO commands and VMware escapes, invalid/rejected 2D geometry/ROP/surface operations, invalid/oversized cursor payloads, cursor allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
+- Added explicit warning records when the SVGA3D dispatcher receives an out-of-range command ID or an in-range command ID with no metadata. Existing FIFO/3D stall, fence-goal, and abnormal SYNC/FIFO diagnostics remain on their existing paths.
+- This is targeted hardening, not a universal severity framework. QEMU/DXVK stderr error-reporting remains captured independently of VMVGA event sampling, but silent internal fallbacks are not guaranteed to be visible. Repeated-warning aggregation is not implemented and pathological repeated warnings can still generate repeated lines. A broader source-wide severity audit remains open.
+- Static source review only. No QEMU build, runtime test, CI run, or owner XP capture was performed. T19 remains IMPLEMENTED pending platform CI and owner verification of simple/full captures and repeated intervals.

@@ -146,9 +146,18 @@ default is `off`):
 
 - `off`: diagnostics disabled; Ctrl+Alt+L is unavailable.
 - `simple`: compact capture with bounded samples of repetitive VMVGA events
-  and interval summaries.
+  and interval summaries. Explicit VMVGA warnings for malformed/unknown commands,
+  rejected operations, invalid register accesses, and allocation failures are
+  emitted independently of routine-event sampling.
 - `on`: full selected per-event VMVGA logging, preserving the detailed mode
   used before compact capture was introduced.
+
+Simple mode reduces normal repetition; it is not intended to filter warnings or
+errors. Some malformed FIFO packets are reported through the existing
+`VMVGA-FIFO-STALL` diagnostics, while routine SYNC/fence/command events remain
+sampled. This is targeted warning coverage, not a claim that every internal
+fallback or unexpected condition throughout QEMU/DXVK has a universal severity
+classification.
 
 This is the command-line equivalent of the future T12 GUI's diagnostic-level
 setting.
