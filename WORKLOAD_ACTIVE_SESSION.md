@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 102–111).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 103–112).
 
 ## How to use this file
 
@@ -21,11 +21,6 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 102 — Build an XP-side COD1 WGL pixel-format probe
-- Identified COD1's GLW_ChoosePFD routine as the custom id Tech 3 PFD enumerator, not Windows ChoosePixelFormat. It rejects generic formats by default, requires RGBA/window/OpenGL/double-buffer flags, at least 15 depth bits, and at least 4 stencil bits when stencil is requested.
-- Added xp/tools/glprobe.c and its README. It mirrors the game's filtering/best-match logic for 32/24/8 and 32/24/0, explains per-format rejections, compares software-allowed selection, and tests WGL context creation plus GL vendor/renderer/version.
-- T25 now points to the probe. Next is an owner-run XP capture; the utility has not been compiled or run. No QEMU build, guest test, benchmark, or CI polling.
 
 ### Session 103 — Match Mesa's VGPU9 baseline and identify the COD1 software fallback
 - Mesa VGPU9 reports GLSL 1.20 and requires SVGA hardware version WS8_B1 plus VS/PS 3.0. Y2KBox advertises WS8_B1 and SM3.0 and implements handlers for the core legacy SVGA3D command family; semantic/capability completeness remains unproven.
@@ -80,6 +75,12 @@
 - Moved each complete canonical status into a plain-text Status field directly below its heading; heading colors are visual-only and must never drive agent decisions.
 - IMPLEMENTED remains yellow until acceptance checks are complete. AGENTS.md now states the authoritative-field rule.
 - Documentation-only; no source changes, builds, guest tests, or CI polling.
+
+### Session 112 — Plan selectable graphics machine profiles in T12
+- T12 now describes a future profile-based launcher: each graphics profile binds its backend, matching XP guest-driver environment, and dedicated system qcow2 image.
+- The existing VMware SVGA II / SVGA3D profile remains the active/default Direct3D 9 path. VBoxVGA 5.2.x / Chromium SharedOpenGL is recorded only as a proposed, experimental OpenGL-oriented second profile.
+- The VBox profile is not implemented or selectable; it requires a minimal end-to-end Y2KBox proof of concept and source/licensing audit. T16 remains the research/feasibility track.
+- Documentation-only; no source changes, builds, guest tests, benchmarks, or CI polling.
 
 ## Current investigation / next actions
 
