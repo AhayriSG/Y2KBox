@@ -411,7 +411,10 @@ interval across Y2KBox, without continuously generating diagnostic output.
   summary and FIFO command histogram. Existing `Y2KBOX-PERF command` records
   retain per-command counts and timing. Use `-y2kboxdebugmode on` for full
   selected per-event VMVGA output; full mode is explicitly opt-in and can
-  generate large files.
+  generate large files. D3D9 `supersede-flip` readback events retain every
+  event in full mode; simple mode emits the first two per capture and reports
+  the interval total, first/last SID, per-SID counts (up to four distinct SIDs),
+  and overflow count at capture stop.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
@@ -422,6 +425,7 @@ interval across Y2KBox, without continuously generating diagnostic output.
 * **Simple-mode warning retention and dispatch classification (Sessions 124–125; static review only):**
   - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unhandled commands/escapes, `NOP_ERROR`, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
   - Session 125 corrected two misplaced warnings discovered in an owner simple-mode capture: the generic FIFO warning now occurs only after the legacy switch and SVGA3D dispatcher both decline an unhandled non-3D command; SVGA3D keeps its own unknown-command diagnostics. The unknown-register-write warning now lives only in the register switch's `default` case. Recognized FIFO commands and valid register writes are no longer mislabeled as unknown.
+  - Session 126 moved unknown-register-read warnings into the register-read switch's `default` case after the owner capture exposed index 22 (`SVGA_REG_BUSY`) being mislabeled as unknown. Simple mode now bounds repeated D3D9 `supersede-flip` event lines to the first two per capture and emits a capture-stop count/per-SID summary; full mode retains every event. Static review only; build/runtime/CI and owner retest remain pending.
   - Added explicit warning records for SVGA3D command IDs outside the known range and in-range IDs with no command metadata. Existing 3D stall, FIFO stall, fence-goal, and abnormal SYNC/FIFO conditions remain independently visible.
   - This is targeted retention, not a universal severity framework. QEMU/DXVK errors emitted through their own stderr/error-reporting paths are not controlled by the VMVGA event sampler; full source-wide severity audit and repeated-warning aggregation remain future work. No build/runtime/CI validation yet.
   

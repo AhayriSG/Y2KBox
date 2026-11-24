@@ -2162,3 +2162,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Moved the generic FIFO warning into the final unhandled-command path, after the legacy switch and SVGA3D dispatcher decline the command, and limited it to non-3D commands so the SVGA3D-specific unknown-command diagnostics remain authoritative. Moved the unknown-register-write warning into the register switch's `default` case.
 - Updated T19 task and handoff guidance to document the owner-capture finding and corrected classification. Repeated-warning aggregation remains a separate possible improvement; it was not implemented in this correction.
 - Static source/documentation review only. No local build, runtime test, CI run, or post-fix owner capture was performed. The owner should repeat the same short simple-mode capture to confirm valid SYNC writes and handled FIFO commands no longer generate unknown warnings.
+
+
+## Session 126 (ChatGPT), 2026-11-24 - Bound superseded-flip logging and fix BUSY read classification
+
+- Reviewed the owner's compact and full captures after Session 125. The simple capture fell to 96 KB in under one second; repeated D3D9 `supersede-flip` records were the most visible remaining repetitive event. The full capture retained detailed CLEAR/FENCE/SYNC/readback activity.
+- Confirmed in `svga_reg.h` that register index 22 is `SVGA_REG_BUSY`, and in `vmsvga_value_read()` that BUSY already has a valid read handler. The unknown-register-read warning was emitted before the switch, so it incorrectly labelled BUSY reads as unknown. Moved that warning into the switch's `default` case.
+- Confirmed `vmsvga3d_screen_target_try_supersede_flip_live()` is an intentional optimization for eligible D3D9 valid-to-valid full-screen flips: it avoids synchronous readback of an obsolete frame and the associated BQL stall. Replaced unconditional simple-mode event output with first-two sampling plus capture-stop totals, first/last SID, a four-distinct-SID histogram, and overflow count. Full `on` mode retains every supersede event.
+- Updated T19, HANDOFF, WORKLOG_INDEX, and the rolling active-session summary. This changes diagnostic output only; it does not alter flip/readback scheduling or renderer behavior.
+- Static source/documentation review only. No local build, runtime test, CI run, or owner XP retest was performed. The owner should repeat the same short simple capture and confirm the BUSY false warning is gone and the supersede summary matches the event pattern; full mode should still show every supersede event.

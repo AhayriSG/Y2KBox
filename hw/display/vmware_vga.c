@@ -409,6 +409,14 @@ struct vmsvga_trace_counters_s {
     uint64_t busy_reads;
     uint64_t dirty_pages;
     uint64_t damage_rects;
+    uint64_t screen_readback_supersede;
+    uint32_t screen_readback_supersede_first_sid;
+    uint32_t screen_readback_supersede_last_sid;
+    uint32_t screen_readback_supersede_sid_count;
+    uint32_t screen_readback_supersede_sid[4];
+    uint64_t screen_readback_supersede_sid_hits[4];
+    uint64_t screen_readback_supersede_other_sid;
+    uint32_t screen_readback_supersede_event_lines;
 };
 
 struct vmsvga_trace_cmd_counter_s {
@@ -745,6 +753,54 @@ static inline bool vmsvga_trace_flight_enabled(void)
 bool vmsvga_trace_detail_enabled(const struct vmsvga_state_s *s)
 {
     return s != NULL && s->debug_log && s->debug_detail;
+}
+
+/* Keep every superseded-flip event in full mode, but bound simple-mode
+ * output and retain interval totals plus a small per-SID histogram. */
+void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
+                                             uint32_t old_sid)
+{
+    struct vmsvga_trace_counters_s *trace;
+    uint32_t i;
+    bool sid_tracked = false;
+
+    if (s == NULL || !VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D)) {
+        return;
+    }
+
+    trace = &s->trace_now;
+    if (trace->screen_readback_supersede == 0) {
+        trace->screen_readback_supersede_first_sid = old_sid;
+    }
+    trace->screen_readback_supersede_last_sid = old_sid;
+    trace->screen_readback_supersede++;
+
+    for (i = 0; i < trace->screen_readback_supersede_sid_count; i++) {
+        if (trace->screen_readback_supersede_sid[i] == old_sid) {
+            trace->screen_readback_supersede_sid_hits[i]++;
+            sid_tracked = true;
+            break;
+        }
+    }
+    if (!sid_tracked) {
+        if (trace->screen_readback_supersede_sid_count <
+            ARRAY_SIZE(trace->screen_readback_supersede_sid)) {
+            i = trace->screen_readback_supersede_sid_count++;
+            trace->screen_readback_supersede_sid[i] = old_sid;
+            trace->screen_readback_supersede_sid_hits[i] = 1;
+        } else {
+            trace->screen_readback_supersede_other_sid++;
+        }
+    }
+
+    if (vmsvga_trace_detail_enabled(s) ||
+        trace->screen_readback_supersede_event_lines < 2) {
+        VMVGA_TRACE_LOCAL(
+            VMVGA_TRACE_3D,
+            "SCREEN-READBACK backend=d3d9 phase=supersede-flip old-sid=%u",
+            old_sid);
+        trace->screen_readback_supersede_event_lines++;
+    }
 }
 
 static inline bool vmsvga_trace_reg_read_enabled(void)
@@ -1318,6 +1374,26 @@ static inline void vmsvga_trace_flight_histogram(struct vmsvga_state_s *s,
     }
 
     vmsvga_trace_flight_report(s, reason, true);
+
+    if (s->trace_now.screen_readback_supersede != 0) {
+        const struct vmsvga_trace_counters_s *trace = &s->trace_now;
+
+        fprintf(stderr,
+                "VMVGA-SCREEN-READBACK-STATS reason=%s supersede-flip=%" PRIu64
+                " first-sid=%u last-sid=%u event-lines=%u other-sid=%" PRIu64
+                "\n",
+                reason, trace->screen_readback_supersede,
+                trace->screen_readback_supersede_first_sid,
+                trace->screen_readback_supersede_last_sid,
+                trace->screen_readback_supersede_event_lines,
+                trace->screen_readback_supersede_other_sid);
+        for (i = 0; i < trace->screen_readback_supersede_sid_count; i++) {
+            fprintf(stderr,
+                    "VMVGA-SCREEN-READBACK-STATS sid=%u count=%" PRIu64 "\n",
+                    trace->screen_readback_supersede_sid[i],
+                    trace->screen_readback_supersede_sid_hits[i]);
+        }
+    }
 
     for (i = 0; i < s->trace_cmd_count; i++) {
         const char *name = vmsvga_trace_fifo_cmd_name(s->trace_cmd[i].cmd);
@@ -9395,8 +9471,6 @@ static uint32_t vmsvga_value_read(void *opaque, uint32_t address)
         return ret;
     }
 
-    VMVGA_TRACE_WARNING("unknown register read index=%u", s->index);
-
     switch (s->index) {
     case SVGA_REG_FENCE_GOAL:
         ret = 0;
@@ -9860,6 +9934,7 @@ static uint32_t vmsvga_value_read(void *opaque, uint32_t address)
                s->index, ret);
         break;
     default:
+        VMVGA_TRACE_WARNING("unknown register read index=%u", s->index);
         ret = 0;
         VPRINT("default register %u with the return of %u\n", s->index, ret);
         break;

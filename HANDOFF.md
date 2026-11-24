@@ -894,8 +894,20 @@ in-range IDs without metadata. Unknown register writes are warned only from
 the register switch's `default` case. This placement matters: warnings before
 dispatch incorrectly labelled recognized commands and valid register writes
 as unknown, producing a large warning flood in the owner's 2026-11-24 simple
-capture. Session 125 corrected those two placements. Existing FIFO/3D stalls
-and abnormal SYNC/fence conditions retain their independent reporting paths.
+capture. Session 125 corrected those two placements. Session 126 also moved
+unknown-register-read warnings into the read switch's `default` case: register
+index 22 is `SVGA_REG_BUSY`, which already has a valid handler, so it must not
+be reported as unknown. Existing FIFO/3D stalls and abnormal SYNC/fence
+conditions retain their independent reporting paths.
+
+The D3D9 `SCREEN-READBACK phase=supersede-flip` event is emitted for eligible
+valid-to-valid full-screen flips where obsolete old-frame readback work is
+superseded to avoid synchronous readback/BQL stalls. It is retained per event
+in `on` mode. In `simple` mode, only the first two events per capture are
+printed; capture stop reports the total, first and last old SID, counts for up
+to four distinct SIDs, and an overflow count for additional distinct SIDs.
+This is log-volume control, not a claim that supersession itself is a bottleneck
+or that every superseded readback would otherwise have completed usefully.
 
 This is targeted coverage, not a universal severity classifier. QEMU/DXVK
 error-reporting paths that write to stderr remain in the capture independently

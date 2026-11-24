@@ -27,7 +27,7 @@ have follow-up subsections under the same number.
 | Repository bootstrap, pruning, fixed XP platform and build configuration | 1, 10–11, 13, 16–20, 28–29 | Original project decisions, removed QEMU subsystems, Linux KVM / Windows TCG split, build dependencies and platform-specific regressions |
 | TCG performance, x87, XMM/SSE and benchmark methodology | 2–9, 19–28, 68, 73–80, 115 | T04/T13 benchmark setup, x87 fast paths, XMM caching, TCG helper costs, differential testing and measured performance changes |
 | VMware SVGA / SVGA3D, DXVK, D3D and guest OpenGL | 12, 29–32, 65–67, 80, 99–109, 115 | VMVGA integration, display/scanout issues, D3D9/D3D8 translation, shader/state compatibility, rendering regressions, guest OpenGL research, and Session 115's ScreenTarget/DXVK changes |
-| SDL windowing, fullscreen, input and diagnostic capture | 33–36, 60–64, 110, 114, 122–125 | Capture hotkey/file lifecycle, debug-mode controls, guest-driven window sizing, fullscreen behavior, mouse tracking and T24 acceptance verification |
+| SDL windowing, fullscreen, input and diagnostic capture | 33–36, 60–64, 110, 114, 122–126 | Capture hotkey/file lifecycle, debug-mode controls, guest-driven window sizing, fullscreen behavior, mouse tracking and T24 acceptance verification |
 | Launcher architecture and user-managed VM instances | 112–113 | T12's planned SDL2/Dear ImGui instance manager, independently persisted per-instance virtual hardware and GPU choice, and the conditional VBoxVGA 5.2.x / SharedOpenGL research path |
 | VirtIO Block / Net and supported guest devices | 37–44 | VirtIO source restoration, Linux host-backend build gates, device defaults and PS/2 pointing-device policy |
 | Scene-stall profiling, VMVGA FIFO, GART and FlatView | 45–59, 68–80, 115 | T13e investigation history, instrumentation semantics, GART and memory transactions, FlatView algorithms, BQL contention, ScreenTarget readback stalls and performance hypotheses |
@@ -163,3 +163,11 @@ See Sessions 82–115 in `WORKLOG.md` for the detailed chronology and evidence.
   case. The owner capture showed valid SYNC writes and handled FIFO commands
   being mislabeled as unknown. Static review only; no build/runtime/CI/XP
   verification.
+
+
+## Session 126
+
+- **Session 126 — Bound superseded-flip logging and fix BUSY read classification:**
+  move unknown-register-read warnings after dispatch; keep every D3D9 supersede-flip
+  event in full mode while simple mode samples two and emits interval/per-SID counts.
+  Static source review only; no build/runtime/CI/XP verification.

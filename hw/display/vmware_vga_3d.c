@@ -18192,10 +18192,7 @@ static bool vmsvga3d_screen_target_try_supersede_flip_live(
            sizeof(state->screen_target_dirty_rects));
     state->screen_target_full_present_pending = false;
     vmsvga3d_screen_target_write_tracking_reset_live(s, false);
-    VMVGA_TRACE_LOCAL(
-        VMVGA_TRACE_3D,
-        "SCREEN-READBACK backend=d3d9 phase=supersede-flip old-sid=%u",
-        old_sid);
+    vmsvga_trace_screen_readback_supersede(s, old_sid);
     return true;
 }
 

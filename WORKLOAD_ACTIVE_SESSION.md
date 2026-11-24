@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 116–125).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 117–126).
 
 ## How to use this file
 
@@ -20,10 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-### Session 116 — Reorganize WORKLOG_INDEX for scanability and coverage
-- Updated the topic map to include recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
-- Documentation-only; no source changes, builds, tests, or CI polling.
 
 ### Session 117 — Fix Session 115 D3D9 dynamic vertex-buffer compile failure
 - Added the missing Direct3D 9 `D3DUSAGE_DYNAMIC` value (`0x00000200u`) after Linux and Windows CI caught the undefined constant.
@@ -62,11 +58,16 @@
 - Generic FIFO warning now runs only after the legacy switch and SVGA3D dispatcher decline an unhandled non-3D command; unknown register warning now runs only in the register switch's `default` case.
 - Updated T19 task/handoff documentation. Static review only; no build, runtime test, CI, or post-fix XP capture.
 
+### Session 126 — Bound superseded-flip logging and fix BUSY read classification
+- Confirmed register index 22 is the valid `SVGA_REG_BUSY`; moved unknown-read warnings into the read switch's `default` case.
+- Simple mode now logs the first two D3D9 supersede-flip events and reports capture totals, first/last SID, a four-SID histogram, and overflow count. Full mode keeps every event.
+- This changes diagnostics only, not readback/flip behavior. Static review only; no build, runtime test, CI, or owner retest.
+
 ## Current investigation / next actions
 
 1. **T13e-F1 / Windows TCG profiling remains active.** Keep workload and scene identical when comparing captures; distinguish measured facts from attribution hypotheses.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** Analyze owner captures and current VMVGA/D3D8 path; do not infer visual correctness from CI.
-3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Session 125 corrected warning placement after the owner capture exposed false unknown-FIFO and unknown-register warnings. Re-run the same short simple capture; then verify all levels, log content/size, and repeated intervals in XP. Repeated genuine-warning aggregation remains a possible follow-up, not implemented.
+3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Sessions 125–126 corrected false unknown-FIFO, register-write, and register-read warnings; simple mode now bounds repetitive D3D9 supersede-flip output with a capture-stop summary, while full mode retains every event. Re-run the same short simple capture to confirm the BUSY warning is gone and inspect the supersede counts; then verify all levels and repeated intervals in XP. Repeated genuine-warning aggregation remains a separate possible follow-up, not implemented.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check. VMware documents software-emulated OpenGL in XP guests. QindieGL and TitaniumGL remain unproven leads with unresolved compatibility/quality limitations. Do not prototype, modify the guest/driver, build, or test while T25 remains paused.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. **T24 fixed-size SDL display is DONE.** The owner confirmed Linux/Windows SDL CI and all XP acceptance checks: guest-driven resolution changes, Ctrl+Alt+F fullscreen toggle, and mouse tracking. The Windows window is decorated and non-resizable with titlebar maximize disabled.
