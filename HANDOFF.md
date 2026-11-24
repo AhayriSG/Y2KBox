@@ -474,6 +474,20 @@ idempotent (`git checkout` touched files first).
   coverage unknown (owner-run validation: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
   under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.
 
+### 8d. Windows XP guest OpenGL diagnostic result (owner-run, 2026-11-24)
+
+The owner tested COD1 with `+set r_allowSoftwareGL 1` and inspected the guest with GLview's OpenGL and Extensions tabs. The active implementation is **Microsoft / GDI Generic / OpenGL 1.1.0**. It exposes only three extensions: `GL_EXT_bgra`, `GL_EXT_paletted_texture`, and `GL_WIN_swap_hint`. This is Microsoft's generic software OpenGL implementation, not a VMware OpenGL ICD and not evidence that guest OpenGL calls are reaching Y2KBox's accelerated SVGA3D path.
+
+COD1's software-allowed path successfully selected a generic pixel format, created a WGL context, and made it current, then shut down with its missing-video-card-features fatal error. The failure is therefore past pixel-format selection and WGL context creation; the exposed GL implementation lacks functionality COD1 requires. This does not identify a defect in the host SVGA3D renderer because the guest is not currently exposing an accelerated OpenGL implementation.
+
+**GLview-reported details** (owner transcription; pixel-format tab was not captured):
+
+- Extension-check groups: OpenGL 1.1 group 0/2 (`GL_EXT_vertex_array`, `GL_EXT_texture_object`; transcribed as `GL_EX_texture_object` by the owner); 1.2 group 1/11 (only `GL_EXT_bgra` supported; unsupported: `GL_EXT_texture3d`, `GL_EXT_packed_pixels`, `GL_EXT_rescale_normal`, `GL_EXT_separate_specular_color`, `GL_EXT_texture_edge_clamp`, `GL_SGIS_texture_lod`, `GL_EXT_draw_range_elements`, `GL_EXT_blend_color`, `GL_EXT_blend_subtract`, `GL_EXT_blend_minmax`); 1.4 group 1/15 (only `GL_WIN_swap_hint` supported); 1.3, 1.5, 2.0, and 2.1 groups all 0 supported. These are the viewer's extension checks, not a formal conformance certification.
+- Limits: maximum viewport 16384x16384; maximum texture size 1024x1024; auxiliary buffers 0; sub-pixel bits 3; attribute stack 16; model-view stack 32; name stack 128; projection and texture stacks 10 each; six clip planes; eight light sources; display-list nesting 64; pixel-map table 65536; evaluator order 30.
+- Line width and point size ranges are both 0.5–10.0 with 0.125 granularity. Texture environment modes: `GL_EYE_LINEAR`, `GL_SPHERE_MAP`; texture-environment combine modes: `GL_MODULATE`, `GL_DECAL`, `GL_BLEND`, `GL_REPLACE`.
+
+**Next step:** investigate why the XP VMware Tools/SVGA driver stack loads GDI Generic rather than a VMware OpenGL ICD, including driver installation and ICD registration. Do not require the owner to install Visual Studio or compile the optional `xp/tools/glprobe.c` utility in the guest. GPU Caps Viewer is optional corroboration; the GLview test need not be repeated. A Mesa Windows software renderer, if tried, must remain app-local and be treated as a software fallback, not as proof of SVGA3D acceleration.
+
 ### 8b. ALTERNATIVE (frozen, task T16): VBoxVGA 5.2.x
 * 86Box PR #6183 ("Add Initial Support for VBoxVGA Emulation") extends the Bochs
   VBE device; it is early/stalled, shows no 3D, XP BSODs without one register; it
