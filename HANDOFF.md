@@ -985,7 +985,6 @@ the opt-in `on` capture:
   performs no GPU readback or forced synchronization.
 - `VMVGA-FRAME` marks guest `SVGA_3D_CMD_PRESENT` command boundaries with a capture-local frame ID. The marker names the frame being closed and advances the ID for subsequent draws. This is a guest command boundary, not a host SDL presentation/vblank frame; retain the separate FIFO/event `seq`.
 - `VMVGA-D3D9-STATE-SNAPSHOT` emits one effective guest-context snapshot per validated D3D9 draw. It includes render-target SIDs with live dimensions/format, viewport/scissor, shader IDs, every valid texture/sampler and render state, and bound texture SIDs with live dimensions, format and mip count. It carries both `frame` and `seq`; it describes guest state at draw submission, not proof that native host state application succeeded.
-- No PNG/JPEG snapshot is currently captured. The existing SDL/GLib/zlib path has no identified PNG/JPEG encoder, and this diagnostic extension deliberately adds no image dependency.
 - Full-mode capture also writes one PNG beside the log when the build already has optional libpng and Pixman (`CONFIG_PNG` and `CONFIG_PIXMAN`). It copies the last CPU-side guest DisplaySurface to RGB and does not force SDL/OpenGL GPU readback; active direct GPU scanout is skipped. Builds without those existing features record that the snapshot is unavailable. No image dependency was added.
 - `VMVGA-RENDER-CORRELATION` adds full-only readback submit/ready/retire
   markers carrying the last observed FIFO sequence. Because readback completion
