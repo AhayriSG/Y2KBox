@@ -588,7 +588,7 @@ SRST
     that interval; the VM is not restarted. Enabling diagnostic mode does not
     start capture; use the shortcut to start and stop each capture interval.
     Simple captures remain manual and uncompressed. Full captures stop after
-    three seconds (or earlier with the shortcut) and use zlib level 9 gzip.
+    two seconds (or earlier with the shortcut) and use zlib level 9 gzip in a background worker after capture stops.
 
 ERST
 SRST
