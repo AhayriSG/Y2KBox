@@ -39,6 +39,7 @@
 #include "trace/control.h"
 #include "qemu-main.h"
 #include "qemu/timer.h"
+#include "qemu/thread.h"
 
 #include <zlib.h>
 
@@ -65,8 +66,12 @@ static int sdl_log_capture_saved_stderr = -1;
 static char *sdl_log_capture_filename;
 static struct sdl2_console *sdl_log_capture_console;
 static QEMUTimer *sdl_log_capture_timer;
+static QemuMutex sdl_log_compress_mutex;
+static QemuCond sdl_log_compress_cond;
+static bool sdl_log_compress_sync_initialized;
+static unsigned int sdl_log_compress_workers;
 
-#define SDL_LOG_CAPTURE_FULL_LIMIT_MS 3000
+#define SDL_LOG_CAPTURE_FULL_LIMIT_MS 2000
 static SDL_Cursor *sdl_cursor_normal;
 static SDL_Cursor *sdl_cursor_hidden;
 static int absolute_enabled;
@@ -365,6 +370,53 @@ out:
     return success;
 }
 
+static void *sdl_log_compress_worker(void *opaque)
+{
+    char *filename = opaque;
+
+    sdl_compress_log_capture(filename);
+    g_free(filename);
+
+    qemu_mutex_lock(&sdl_log_compress_mutex);
+    assert(sdl_log_compress_workers > 0);
+    sdl_log_compress_workers--;
+    qemu_cond_broadcast(&sdl_log_compress_cond);
+    qemu_mutex_unlock(&sdl_log_compress_mutex);
+    return NULL;
+}
+
+static void sdl_start_log_compression(char *filename)
+{
+    QemuThread thread;
+
+    if (!sdl_log_compress_sync_initialized) {
+        qemu_mutex_init(&sdl_log_compress_mutex);
+        qemu_cond_init(&sdl_log_compress_cond);
+        sdl_log_compress_sync_initialized = true;
+    }
+
+    qemu_mutex_lock(&sdl_log_compress_mutex);
+    sdl_log_compress_workers++;
+    qemu_mutex_unlock(&sdl_log_compress_mutex);
+
+    qemu_thread_create(&thread, "sdl-log-compress",
+                       sdl_log_compress_worker, filename,
+                       QEMU_THREAD_DETACHED);
+}
+
+static void sdl_wait_for_log_compression(void)
+{
+    if (!sdl_log_compress_sync_initialized) {
+        return;
+    }
+
+    qemu_mutex_lock(&sdl_log_compress_mutex);
+    while (sdl_log_compress_workers != 0) {
+        qemu_cond_wait(&sdl_log_compress_cond, &sdl_log_compress_mutex);
+    }
+    qemu_mutex_unlock(&sdl_log_compress_mutex);
+}
+
 static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
 static void sdl_log_capture_timeout(void *opaque)
@@ -372,7 +424,7 @@ static void sdl_log_capture_timeout(void *opaque)
     (void)opaque;
 
     if (sdl_log_capture_enabled && sdl_log_capture_console) {
-        error_report("Full diagnostic capture reached its 3-second limit; "
+        error_report("Full diagnostic capture reached its 2-second limit; "
                      "stopping and compressing the log.");
         sdl_toggle_log_capture(sdl_log_capture_console);
     }
@@ -517,7 +569,8 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         sdl_log_capture_enabled = false;
         sdl_log_capture_console = NULL;
         if (debug_detail && sdl_log_capture_filename) {
-            sdl_compress_log_capture(sdl_log_capture_filename);
+            sdl_start_log_compression(sdl_log_capture_filename);
+            sdl_log_capture_filename = NULL;
         }
         g_clear_pointer(&sdl_log_capture_filename, g_free);
     }
@@ -1291,6 +1344,8 @@ static void sdl_cleanup(void)
         timer_free(sdl_log_capture_timer);
         sdl_log_capture_timer = NULL;
     }
+    /* Do not let detached compression workers outlive QEMU shutdown. */
+    sdl_wait_for_log_compression();
 
     if (!sdl2_console) {
         return;
