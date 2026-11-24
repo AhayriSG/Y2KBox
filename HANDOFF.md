@@ -890,7 +890,11 @@ in-process with zlib and saves it as `y2kbox-log-YYYYMMDD-HHMMSS.log.gz`
 (with the same collision suffix policy). The original `.log` is removed only
 after compression succeeds; if compression fails, it is retained for recovery.
 The SDL title indicates the three-second auto-stop while a full capture is active.
-Simple captures are unchanged: no automatic timeout and no automatic compression.\nThe gzip stream uses zlib compression level 9 (`wb9`, maximum compression).\nFor performance investigations, start with Simple mode: its PERFSTATS and\n`Y2KBOX-PERF` aggregate summaries may be sufficient to identify a major\nbottleneck; use Full mode when per-event detail is needed.
+Simple captures are unchanged: no automatic timeout and no automatic compression.
+The gzip stream uses zlib compression level 9 (`wb9`, maximum compression).
+For performance investigations, start with Simple mode: its PERFSTATS and
+`Y2KBOX-PERF` aggregate summaries may be sufficient to identify a major
+bottleneck; use Full mode when per-event detail is needed.
 
 Simple-mode sampling is not intended to suppress explicit warnings. The VMVGA
 legacy FIFO path emits capture-gated `VMVGA-WARN` records for identified invalid,
