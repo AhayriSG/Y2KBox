@@ -3931,6 +3931,8 @@ void vmsvga3d_dxvk_surface_set_renderer(VMSVGA3DDxvkSurface *surface,
         }
     }
     surface->owner = dxvk;
+    surface->vb_ring_profile_detail =
+        dxvk != NULL && dxvk->vb_ring_profile_detail;
     surface->profile_next = NULL;
     if (dxvk != NULL) {
         surface->profile_next = dxvk->surfaces;
