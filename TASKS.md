@@ -418,12 +418,15 @@ interval across Y2KBox, without continuously generating diagnostic output.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * **Full-mode safety limit:** a full (`on`) capture automatically stops after
-  five seconds, including when the tester forgets to press the hotkey again.
+  three seconds, including when the tester forgets to press the hotkey again.
   Ctrl+Alt+L can stop it earlier. After stderr is flushed and restored, the
   completed full capture is compressed to the same timestamped `.log.gz`
-  filename; the uncompressed `.log` is removed only after gzip succeeds.
+  filename using zlib compression level 9 (maximum); the uncompressed `.log` is removed only after gzip succeeds.
   If compression fails, retain the original `.log`. Simple captures remain
-  manually stopped, uncompressed `.log` files with no duration limit.
+  manually stopped, uncompressed `.log` files with no duration limit. For
+  performance investigations, start with Simple mode: its PERFSTATS and
+  `Y2KBOX-PERF` aggregate summaries may be sufficient in some cases; use Full
+  mode when detailed per-event correlation is required.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
   diagnostic sources are quiet while inactive and stderr is restored on stop;
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
