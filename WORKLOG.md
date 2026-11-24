@@ -2217,3 +2217,10 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Changed in-process gzip output from zlib's default compression level to level 9 (`wb9`, maximum compression). The existing failure handling remains: remove the original `.log` only after successful compression, and preserve it if compression fails.
 - Updated README, HANDOFF, TASKS, command-line help, and `logs/captures/README.md` to document the three-second limit and level-9 compression. Added guidance to begin performance investigations with Simple-mode PERFSTATS / `Y2KBOX-PERF` aggregate summaries, which may be sufficient in some cases; use Full mode when per-event correlation is needed.
 - Static source/documentation review only. No local build, runtime test, XP capture, or CI was run. Owner verification and Linux/Windows CI remain outstanding.
+
+
+## Session 132 (GPT-6), 2026-11-24 - Shorten full captures and move gzip off the VM execution path
+- Reduced the full-mode automatic capture limit from three seconds to two seconds. Simple-mode capture behavior is unchanged.
+- Full capture now stops diagnostics, flushes the file, restores stderr, and transfers ownership of the completed `.log` path to a detached QEMU worker thread. The worker performs zlib level-9 gzip compression without occupying the QEMU main thread.
+- The worker deletes the original `.log` only after successful compression; failures preserve the original and remove an incomplete `.gz`. SDL shutdown waits for outstanding compression workers so they cannot outlive QEMU.
+- Updated README, HANDOFF, TASKS, command-line help, capture documentation, and the active-session summary. Static source review only; owner runtime verification and Linux/Windows CI remain outstanding.
