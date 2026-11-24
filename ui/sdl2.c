@@ -611,7 +611,7 @@ static void sdl_update_caption(struct sdl2_console *scon)
     if (debug_available && sdl_log_capture_enabled) {
         if (debug_detail) {
             snprintf(log_status, sizeof(log_status),
-                     " - Diagnostic logging (full; auto-stops at 3s; %s to stop)",
+                     " - Diagnostic logging (full; auto-stops at 2s; %s to stop)",
                      hotkey);
         } else {
             snprintf(log_status, sizeof(log_status),
