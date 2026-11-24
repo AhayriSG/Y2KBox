@@ -976,9 +976,13 @@ the opt-in `on` capture:
   has updated the CPU shadow but before native upload completion. No pixel data
   is dumped.
 - `VMVGA-D3D9-GEOMETRY` adds a per-range summary correlated with the FIFO
-  sequence, target, viewport, primitive/index range and stream count. Vertex
-  position and UV bounds are deliberately reported as unavailable until a safe
-  CPU-shadow/vertex-format decoder is implemented.
+  sequence, target, viewport, primitive/index range and stream count. It now
+  decodes vertex-space position and TEXCOORD0 UV bounds from the CPU shadow for
+  indexed and non-indexed draws using FLOAT1–FLOAT4 declaration elements. These
+  are vertex-space values, not transformed screen-space coordinates. Unsupported
+  formats, unavailable shadows, instancing, invalid indices and oversized draws
+  report an explicit `bounds_reason`; decoding is capped at 65,536 vertices and
+  performs no GPU readback or forced synchronization.
 - `VMVGA-RENDER-CORRELATION` adds full-only readback submit/ready/retire
   markers carrying the last observed FIFO sequence. Because readback completion
   can be asynchronous, this is a nearby correlation hint, not a guaranteed
