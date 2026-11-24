@@ -1988,3 +1988,11 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - A standalone layer could potentially translate GL to GLES2 and reuse the existing XP Direct3D 9 / VMware accelerated path. Microsoft documents D3D9 on XPDM, and Workstation Player 15 documents D3D9 acceleration for XP guests. GL4ES is a possible GL 1.5/2.1-to-GLES2 frontend with Windows support but lacks WGL integration; ANGLE's old D3D9 backend has been removed from current ANGLE and Qt warns ANGLE is not fully reliable on XP. No known-good assembled stack was found; this remains high risk.
 - T25 now has a strict feasibility gate: first prove standalone DLL loading and D3D9 HAL device creation/Present through the existing VMware driver. Only then consider a minimal COD1-focused GL compatibility slice. If either prerequisite fails, stop rather than build a full driver or replace VMware's display driver.
 - Documentation-only. No emulator source changes, guest modifications, driver installation, builds, benchmarks, guest tests, or CI polling.
+
+
+## Session 107 — Pause guest OpenGL work for independent reassessment
+
+- Updated the README Fixed target to describe guest OpenGL as a low-probability research objective. It notes that XP's standard VMware display-driver path appears to expose GDI Generic software OpenGL and that application-local wrapper DLLs are only one unproven alternative.
+- Paused T25 pending an independent feasibility reassessment. No implementation work is authorized. The next reviewer is explicitly invited to challenge the current standalone-DLL / GL4ES / ANGLE hypothesis and investigate other architectures.
+- Expanded HANDOFF section 8g with the reassessment request, evidence expectations, XP compatibility/licensing/performance review criteria, and a requirement for a smallest decisive validation proposal before any prototype.
+- No agent was actually assigned or dispatched. No guest modification, display-driver replacement, emulator source change, build, benchmark, guest test, or CI polling was performed. Documentation-only.
