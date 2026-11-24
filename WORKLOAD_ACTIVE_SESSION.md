@@ -74,6 +74,6 @@
 
 ### Session 131 — Shorten full diagnostic captures and maximize gzip compression
 - Reduced the full-mode automatic capture limit from five seconds to two seconds; manual early stop and the simple-mode behavior are unchanged.
-- Moved gzip compression to a detached background worker and retained to zlib level 9 (`wb9`, maximum compression). The worker only receives the completed log after stderr is restored; it removes the source only after successful compression. The existing safety rule remains: delete the source `.log` only after successful compression; preserve it on failure.
+- Moved gzip compression to a detached background worker while retaining zlib level 9 (`wb9`, maximum compression). The worker only receives the completed log after stderr is restored; it removes the source only after successful compression. The worker avoids writing status messages to redirected stderr, so it cannot contaminate a newer capture. It deletes the source `.log` only after successful compression and preserves it on failure.
 - Updated README, HANDOFF, TASKS, command-line help, and capture documentation to describe the three-second limit, maximum compression, and the guidance to start performance investigations with Simple-mode PERFSTATS/`Y2KBOX-PERF` summaries, which may be sufficient before enabling Full mode.
 - Static source/documentation review only. No local build, runtime test, XP capture, or CI was run; owner verification and Linux/Windows CI remain outstanding.
