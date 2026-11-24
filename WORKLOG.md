@@ -2116,3 +2116,10 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added one `Y2KBOX-PROF subsystem=vmvga.vb_ring` summary per eligible dynamic D3D9 vertex buffer still live at capture stop. Fields are defined in source and TASKS.md: maximum observed host allocation, cumulative successful uploaded bytes, successful NOOVERWRITE subset, successful DISCARDs, ring-end wraps, maximum absolute host-buffer byte end, overlap-fallback DISCARDs, and failed ring upgrade/NOOVERWRITE operations.
 - Profiling counters reset independently of allocator state. No allocation policy, ring decisions, or Session 115 optimization behavior was intentionally changed. No per-upload formatting/I/O or new locks/allocations were added; only a capture-active branch and counter updates are used while profiling.
 - Static source review only. No local QEMU build or runtime test was run (this agent does not inherit Gemini 4 Neon's standing build authorization). Linux/Windows CI and owner XP capture verification remain pending; T19 stays PAUSED until real capture output and repeated intervals are verified.
+
+
+## Session 120 (ChatGPT), 2026-11-24 - Complete VB-ring profile lifecycle accounting
+
+- Corrected the initial profiling integration so range-only lock failure counters are confined to the range allocator; full-buffer uploads now also contribute their successful DISCARD bytes and high-water to the same per-surface interval summary.
+- Count ring wraps only when a larger host ring actually runs out of append capacity; ordinary invalidation/overlap DISCARDs remain distinct. Added renderer surface-list unlink/relink handling and restored the active capture flag when the DXVK renderer is recreated, preserving per-surface counters across renderer replacement.
+- Static source-path checks confirmed the full-buffer path has no references to range-local variables and that both upload paths feed the counters. No QEMU build or runtime test was run. CI and owner XP capture verification remain pending; T19 remains PAUSED.
