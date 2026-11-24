@@ -12245,26 +12245,6 @@ static bool vmsvga3d_d3d10_update_subresource_live_impl(
     qemu_perf_stats_end(QEMU_PERF_VMVGA_GB_UPDATE_LAYOUT,
                         perf_layout_start);
 
-    if (vmsvga_trace_detail_enabled(s)) {
-        uint64_t update_bytes = (uint64_t)layout.row_bytes *
-                                layout.row_count * layout.depth_count;
-        fprintf(stderr,
-                "VMVGA-RESOURCE-UPDATE seq=%" PRIu64 " kind=%s sid=%u "
-                "subresource=%u format=%u box=%u,%u,%u/%ux%ux%u "
-                "row_bytes=%u rows=%u depth=%u pitch=%u plane=%u "
-                "array_elements=%u subresources=%u bytes=%" PRIu64 " "
-                "image=%ux%ux%u result=CPU-SHADOW-UPDATED\n",
-                vmsvga_trace_event_sequence(s),
-                surface->format == SVGA3D_BUFFER ? "buffer" : "image",
-                command->sid, command->subResource, surface->format,
-                layout.box.x, layout.box.y, layout.box.z, layout.box.w,
-                layout.box.h, layout.box.d, layout.row_bytes,
-                layout.row_count, layout.depth_count, image->pitch,
-                image->plane_size, surface->array_elements, surface->mip_count,
-                update_bytes, image->size.width,
-                image->size.height, image->size.depth);
-    }
-
     perf_backend_start = qemu_perf_stats_begin(
         QEMU_PERF_VMVGA_GB_UPDATE_BACKEND);
     d3d9_resident =
@@ -12396,6 +12376,29 @@ static bool vmsvga3d_d3d10_update_subresource_live_impl(
     qemu_perf_stats_add_work(
         QEMU_PERF_VMVGA_GB_UPDATE_MOB_READ,
         (uint64_t)layout.row_bytes * layout.row_count * layout.depth_count);
+
+    if (vmsvga_trace_detail_enabled(s)) {
+        uint64_t update_bytes = (uint64_t)layout.row_bytes *
+                                layout.row_count * layout.depth_count;
+        fprintf(stderr,
+                "VMVGA-RESOURCE-UPDATE seq=%" PRIu64 " kind=%s sid=%u "
+                "subresource=%u format=%u box=%u,%u,%u/%ux%ux%u "
+                "row_bytes=%u rows=%u depth=%u pitch=%u plane=%u "
+                "array_elements=%u subresources=%u bytes=%" PRIu64 " "
+                "image=%ux%ux%u backend=%s result=CPU-SHADOW-UPDATED\n",
+                vmsvga_trace_event_sequence(s),
+                surface->format == SVGA3D_BUFFER ? "buffer" : "image",
+                command->sid, command->subResource, surface->format,
+                layout.box.x, layout.box.y, layout.box.z, layout.box.w,
+                layout.box.h, layout.box.d, layout.row_bytes,
+                layout.row_count, layout.depth_count, image->pitch,
+                image->plane_size, surface->array_elements, surface->mip_count,
+                update_bytes, image->size.width,
+                image->size.height, image->size.depth,
+                d3d9_resident ? "d3d9" :
+                (d3d11_resident ? "d3d11" : "cpu"));
+    }
+
 
     native_box.left = layout.box.x;
     native_box.top = layout.box.y;
