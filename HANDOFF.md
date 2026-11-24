@@ -570,6 +570,70 @@ The previous section's standalone-DLL route is only one possible lead. It must n
 
 The owner asked for a fresh independent assessment, not an automatic handoff to a named agent. No other agent has been assigned by this update. The project documentation should make it easy for a future contributor or model to take up the question without inheriting the current hypothesis as a requirement.
 
+## 8h. QindieGL application-local wrapper lead and COD1 result (2026-11-24)
+
+[QindieGL](https://github.com/crystice-softworks/QindieGL) is an application-local
+OpenGL wrapper that translates to Microsoft Direct3D 9.0c. Its source is a useful
+concrete reference for the standalone `opengl32.dll` architecture, but it is an
+older, limited OpenGL implementation (up to OpenGL 1.4) and is not established as
+a supported COD1 configuration. Its repository is GPL-3.0; do not copy or adapt
+its code into Y2KBox without an explicit license-compatibility review, because
+Y2KBox is GPL-2.0.
+
+**Owner-run COD1 test in Y2KBox (2026-11-24):** the owner imported QindieGL's
+registry settings, placed its Win32 `opengl32.dll` beside the COD1 executable,
+and tried both safe-mode and normal launch shortcuts. Both silently exited to
+the desktop. The QindieGL log showed Direct3D initialization, adapter-mode and
+format enumeration, accepted depth/texture formats, and then:
+
+```text
+wglCreatecontext: creating pure device with hardware vertex processing
+WARNING: wglGetProcaAddress: queried unknown proc 'wglGetExtensionsStringExT' (stub = 0xBAD00001)
+```
+
+The log's procedure-name spelling/capitalization may itself be a formatting
+artifact; the relevant WGL procedure is `wglGetExtensionsStringEXT`. Do not
+overstate this log as proof that a D3D9 device was successfully created or that
+a frame was presented. It shows the wrapper reached context-creation setup and
+then returned a stub for an unrecognized WGL procedure.
+
+**Source-level cause:** QindieGL's `code/d3d_extension.cpp` implements
+`wglGetExtensionsStringARB(HDC)` and registers that ARB entry point in its
+`glext_EntryPoints` table. It does not implement or register
+`wglGetExtensionsStringEXT(void)`, and its generated WGL extension strings
+advertise `WGL_ARB_extensions_string` and `WGL_EXT_swap_control`, but not
+`WGL_EXT_extensions_string`. Its `wglGetProcAddress` wrapper logs unknown
+names and returns a synthetic stub address. The owner's addition of a
+`WGL_EXT_extensions_string` registry flag did not alter the warning or launch
+result. A registry value cannot create a missing function implementation or
+entry-point mapping.
+
+**Historical COD1 experiment:** a [DxWnd discussion](https://sourceforge.net/p/dxwnd/discussion/general/thread/307b85b604/)
+records the same missing-`wglGetExtensionsStringEXT` warning. A participant
+produced an experimental QindieGL rebuild with a minimal EXT entry point; the
+tester reported that COD1 then started, but in-game graphics were substantially
+corrupted, especially the skybox. Treat this only as evidence that the missing
+entry point can block startup. It is not a validated fix, and getting past
+startup did not produce correct rendering.
+
+**Research implications and limits:**
+
+- Inspect the historical experimental patch and compare its implementation
+  with the EXT function's semantics before considering any change. The EXT
+  function has no HDC parameter and is not automatically interchangeable with
+  the ARB function's HDC-taking signature; context/DC handling and extension
+  advertisement need deliberate review.
+- The next useful research step, if T25 is later reopened, is to inspect the
+  historical patch and QindieGL's current lifecycle/extension handling, then
+  determine whether a narrowly scoped isolated experiment is justified. Do not
+  assume the minimal stub is sufficient or that it addresses the reported
+  rendering corruption.
+- Keep startup, context creation, successful D3D9 device creation, frame
+  presentation, and correct in-game rendering as separate validation gates.
+- This discovery does not change T25's PAUSED status or authorize a patch,
+  build, guest modification, or test. It is a concrete lead for the independent
+  reassessment, not a reason to resume implementation automatically.
+
 ## 9. References and resources for development
 
 QEMU-based x86 emulation
