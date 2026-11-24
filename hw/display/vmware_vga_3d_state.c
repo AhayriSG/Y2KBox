@@ -1341,12 +1341,24 @@ static void vmsvga3d_state_trace_draw_snapshot(
     first = true;
     for (i = 0; i < SVGA3D_RT_MAX; i++) {
         const SVGA3dSurfaceImageId *target = &context->render_targets[i];
+        VMSVGA3DSurface *surface = NULL;
 
         if (target->sid == SVGA3D_INVALID_ID) {
             continue;
         }
-        fprintf(stderr, "%s%u:%u/%u/%u", first ? "" : ",", i,
-                target->sid, target->face, target->mipmap);
+        if (s->svga3d != NULL && target->sid < SVGA3D_MAX_SURFACE_IDS) {
+            surface = s->svga3d->surfaces[target->sid];
+        }
+        if (surface != NULL && surface->mip_count != 0 &&
+            surface->mips != NULL) {
+            fprintf(stderr, "%s%u:%u/%u/%u@%ux%u/f%u",
+                    first ? "" : ",", i, target->sid, target->face,
+                    target->mipmap, surface->mips[0].size.width,
+                    surface->mips[0].size.height, (uint32_t)surface->format);
+        } else {
+            fprintf(stderr, "%s%u:%u/%u/%u@missing", first ? "" : ",", i,
+                    target->sid, target->face, target->mipmap);
+        }
         first = false;
     }
 
