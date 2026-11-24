@@ -282,6 +282,7 @@ static bool sdl_compress_log_capture(const char *filename)
     uint8_t buffer[65536];
     size_t count;
     bool success = false;
+    bool compressed_created = false;
 
 #ifdef O_BINARY
     flags |= O_BINARY;
@@ -292,6 +293,7 @@ static bool sdl_compress_log_capture(const char *filename)
                      compressed, strerror(errno));
         goto out;
     }
+    compressed_created = true;
 
     output = gzdopen(fd, "wb");
     if (!output) {
@@ -349,7 +351,9 @@ out:
         g_close(fd, NULL);
     }
     if (!success) {
-        g_unlink(compressed);
+        if (compressed_created) {
+            g_unlink(compressed);
+        }
     } else if (g_unlink(filename) != 0) {
         error_report("Compressed diagnostic log is %s, but the original %s "
                      "could not be removed: %s",
