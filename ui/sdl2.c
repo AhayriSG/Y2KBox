@@ -310,7 +310,7 @@ static bool sdl_compress_log_capture(const char *filename)
     }
 
     while ((count = fread(buffer, 1, sizeof(buffer), input)) != 0) {
-        if (gzwrite(output, buffer, count) != count) {
+        if (gzwrite(output, buffer, count) != (int)count) {
             error_report("Could not write compressed diagnostic log %s",
                          compressed);
             goto out;
@@ -365,6 +365,8 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
 static void sdl_log_capture_timeout(void *opaque)
 {
+    (void)opaque;
+
     if (sdl_log_capture_enabled && sdl_log_capture_console) {
         error_report("Full diagnostic capture reached its 5-second limit; "
                      "stopping and compressing the log.");
@@ -561,9 +563,14 @@ static void sdl_update_caption(struct sdl2_console *scon)
     }
 
     if (debug_available && sdl_log_capture_enabled) {
-        snprintf(log_status, sizeof(log_status),
-                 " - Diagnostic logging (%s mode; %s to stop)",
-                 debug_detail ? "full" : "simple", hotkey);
+        if (debug_detail) {
+            snprintf(log_status, sizeof(log_status),
+                     " - Diagnostic logging (full; auto-stops at 5s; %s to stop)",
+                     hotkey);
+        } else {
+            snprintf(log_status, sizeof(log_status),
+                     " - Diagnostic logging (simple mode; %s to stop)", hotkey);
+        }
     } else if (debug_available) {
         snprintf(log_status, sizeof(log_status),
                  " - %s to start diagnostic logging (%s mode)", hotkey,
@@ -1271,11 +1278,13 @@ static void sdl_cleanup(void)
 
     if (sdl_log_capture_timer) {
         timer_del(sdl_log_capture_timer);
-        timer_free(sdl_log_capture_timer);
-        sdl_log_capture_timer = NULL;
     }
     if (sdl_log_capture_enabled && sdl_log_capture_console) {
         sdl_toggle_log_capture(sdl_log_capture_console);
+    }
+    if (sdl_log_capture_timer) {
+        timer_free(sdl_log_capture_timer);
+        sdl_log_capture_timer = NULL;
     }
 
     if (!sdl2_console) {
