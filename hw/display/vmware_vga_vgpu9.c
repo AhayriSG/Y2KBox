@@ -4893,7 +4893,12 @@ static bool vmsvga3d_d3d9_decode_float_element(
     }
 
     for (i = 0; i < count; i++) {
-        memcpy(&values[i], data + i * sizeof(float), sizeof(float));
+        const uint8_t *component = data + i * sizeof(float);
+        uint32_t bits = (uint32_t)component[0] |
+                        ((uint32_t)component[1] << 8) |
+                        ((uint32_t)component[2] << 16) |
+                        ((uint32_t)component[3] << 24);
+        memcpy(&values[i], &bits, sizeof(bits));
         if (!isfinite(values[i])) {
             return false;
         }
