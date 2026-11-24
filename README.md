@@ -53,12 +53,6 @@ claims and serialize commits.
   are outside the guest-facing graphics target. Host-side rendering may use
   newer APIs internally.
 
-  One research lead is [QindieGL](https://github.com/crystice-softworks/QindieGL), an
-  application-local OpenGL-to-Direct3D 9 wrapper. Its source is useful reference
-  material, but it is not a validated Y2KBox solution: an owner-run Call of Duty 1
-  test reached a missing `wglGetExtensionsStringEXT` entry point, and a historical
-  experimental patch reportedly let the game start while leaving substantial
-  graphical corruption. Startup alone is not evidence of correct rendering.
 
 
 | Windows XP SP3 Desktop (ACPI PC HAL)<br/>VMware SVGA II (Experimental) | F1 Challenge '99-'02 | Joint Operations: Typhoon Rising 1.4.3.0
