@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 94–103).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 95–104).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is active.** Mesa's VGPU9 path reports GLSL 1.20, requires SVGA hardware version WS8_B1 and VS/PS 3.0; Y2KBox advertises those baseline versions and has handlers for the core legacy commands. This is promising protocol overlap, not proof of complete GL state semantics. Review candidates include line stipple and logic operations. An XP-side probe is prepared at `xp/tools/glprobe.c`, reproducing COD1's id Tech 3 `GLW_ChoosePFD` filters/best-match logic and checking WGL context creation/GL strings. First quick test: launch COD1 with `+set r_allowSoftwareGL 1` to see whether generic software formats get past selection; then run the probe to identify the installed XP driver's actual PFD/ICD behavior. VMware Workstation Player 15 documentation says OpenGL apps in XP guests use software emulation, but exact VMware Tools 10.0.12 behavior remains to be verified.
+4. **T25 guest OpenGL investigation is active.** Owner-run COD1 testing with `+set r_allowSoftwareGL 1` now successfully creates/makes-current a WGL context, then fails COD1's feature check. GLview independently identifies the active XP implementation as Microsoft / GDI Generic / OpenGL 1.1.0 with only `GL_EXT_bgra`, `GL_EXT_paletted_texture`, and `GL_WIN_swap_hint`; full reported limits and extension checks are in HANDOFF.md section 8d / WORKLOG.md Session 104. This is generic software OpenGL, not a VMware ICD or proof of guest access to accelerated SVGA3D. Next investigate VMware Tools/SVGA driver installation and OpenGL ICD registration. Do not ask the owner to install Visual Studio or compile `xp/tools/glprobe.c` in the guest; GLview already establishes the active renderer. Mesa VGPU9's WS8_B1 + VS/PS 3.0 match remains promising protocol overlap, not proof of complete GL state semantics; line stipple and logic operations remain audit candidates.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -37,14 +37,6 @@
 - Overlapping lock dimensions (aggregate, vertex/index, full/partial, flags, size buckets) are not additive.
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
-
-
-### Session 94 — Reconcile agent guidance and stale handoff instructions
-- Re-audited all 16 Markdown files; no malicious prompt injection or unrelated-repository redirection found.
-- Clarified that the QEMU codebase skill does not authorize builds/tests and that `AGENTS.md` controls execution permission.
-- Scoped CI/Codacy status-hook reporting to Claude; other agents leave post-push review to the owner or a later session and do not poll.
-- Replaced obsolete fetch/rebase advice with per-write verification of latest `main` HEAD and exact target blob SHA; clarified Gemini 4 Neon-only standing local build/benchmark authorization.
-- Updated the worklog index; historical worklog entries remain append-only. Documentation-only; no builds, tests, benchmarks, guest validation, or CI polling.
 
 
 ### Session 95 — Fix optional GitHub token handling in CI status helper
@@ -93,3 +85,10 @@
 - Mesa VGPU9 reports GLSL 1.20 and requires SVGA hardware version WS8_B1 plus VS/PS 3.0. Y2KBox advertises WS8_B1 and SM3.0 and implements handlers for the core legacy SVGA3D command family; semantic/capability completeness remains unproven.
 - VMware Workstation Player 15 documentation says OpenGL apps in XP guests run in software-emulation mode. Added a COD1 test with +set r_allowSoftwareGL 1 to allow generic formats and see whether software OpenGL can get past pixel-format selection.
 - T25 updated with protocol matching, candidate state gaps, and the software fallback test. No QEMU build, standalone probe compile/run, guest test, benchmark, or CI polling.
+
+
+### Session 104 — Identify the active XP guest OpenGL implementation
+- Owner-run COD1 software-OpenGL testing now reaches successful WGL context creation but fails the game's feature check.
+- GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 and only three extensions: `GL_EXT_bgra`, `GL_EXT_paletted_texture`, and `GL_WIN_swap_hint`. Detailed extension checks and limits are recorded in HANDOFF.md section 8d.
+- Next investigate why VMware Tools/SVGA is not loading a VMware OpenGL ICD. No Visual Studio installation or guest-side compilation is required; do not repeat the GLview test.
+- Documentation-only; no source changes, builds, benchmarks, additional guest tests, or CI polling.
