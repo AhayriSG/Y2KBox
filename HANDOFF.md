@@ -950,3 +950,34 @@ unchanged. No rendering or synchronization behavior was intentionally changed.
 Session 128 received static source review only; no build, runtime capture, XP
 verification, or CI was performed. The next owner test should be one full-mode
 capture spanning the visible flicker, not a separate test for each trace type.
+
+Session 129 adds the first coordinated T26 resource-level layer, still only in
+the opt-in `on` capture:
+
+- `VMVGA-D3D9-BUFFER-DEFER` records each guest write range and the accumulated
+  deferred range/update count. `VMVGA-D3D9-BUFFER-UPLOAD` records direct full
+  buffer DISCARDs and deferred native range uploads, including guest range,
+  native Lock range/flags, mode, decision reason, flush cause, ring capacity,
+  and copied bytes.
+- `VMVGA-RESOURCE-UPDATE` records guest-backed image/buffer subresources,
+  update boxes, row/plane layout, byte count and backend after the MOB transfer
+  has updated the CPU shadow but before native upload completion. No pixel data
+  is dumped.
+- `VMVGA-D3D9-GEOMETRY` adds a per-range summary correlated with the FIFO
+  sequence, target, viewport, primitive/index range and stream count. Vertex
+  position and UV bounds are deliberately reported as unavailable until a safe
+  CPU-shadow/vertex-format decoder is implemented.
+- `VMVGA-RENDER-CORRELATION` adds full-only readback submit/ready/retire
+  markers carrying the last observed FIFO sequence. Because readback completion
+  can be asynchronous, this is a nearby correlation hint, not a guaranteed
+  originating command ID.
+
+Simple-mode and inactive/default-off log formats are preserved; new high-volume
+records are gated by active full capture. No GPU readback, forced synchronization,
+or rendering/upload-policy change was introduced intentionally. Do not identify
+the minimap from surface IDs or texture dimensions alone.
+
+T26 remains IN PROGRESS. Static source review only; no QEMU build, runtime test,
+owner capture, or CI was performed. Next owner step: one full-mode NFSU2 capture
+spanning visible flicker, then inspect the new surface 29/35 uploads, surfaces
+404 and 410–446 updates, draw summaries and readback correlations together.
