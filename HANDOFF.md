@@ -637,7 +637,7 @@ startup did not produce correct rendering.
 
 ## 8i. TitaniumGL application-local OpenGL test and COD1 result (2026-11-24)
 
-TitaniumGL's project page(https://titaniumgl.uni.hu/keret.cgi?/index.html)
+[TitaniumGL project page](https://titaniumgl.uni.hu/keret.cgi?/index.html)
 describes an OpenGL implementation/wrapper that uses Direct3D 9 on Windows.
 The owner tested its Win32 `opengl32.dll` as an application-local DLL beside
 Call of Duty 1 (COD1) in the Windows XP guest.
