@@ -141,9 +141,17 @@ for lavapipe software fallback).
 ### How do I capture diagnostic logs and performance information?
 
 Diagnostic logging is an opt-in tester feature and is **off by default**.
-Enable Y2KBox debug mode with `-y2kboxdebugmode on` (or explicitly disable it
-with `-y2kboxdebugmode off`; the default is off). This is the command-line
-equivalent of the future T12 GUI's **Debug: On/Off** setting.
+Choose the diagnostic level with `-y2kboxdebugmode off|simple|on` (the
+default is `off`):
+
+- `off`: diagnostics disabled; Ctrl+Alt+L is unavailable.
+- `simple`: compact capture with bounded samples of repetitive VMVGA events
+  and interval summaries.
+- `on`: full selected per-event VMVGA logging, preserving the detailed mode
+  used before compact capture was introduced.
+
+This is the command-line equivalent of the future T12 GUI's diagnostic-level
+setting.
 With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
 to capture general Y2KBox diagnostics—including performance counters, VMVGA,
 VMPort GuestRPC, and vdagent traces—to a new timestamped
@@ -161,19 +169,19 @@ for the selected interval. Do **not** use shell-level `2> y2kbox-log.log`
 redirection with this feature: it redirects stderr before QEMU starts and
 defeats interval capture.
 
-**Capture verbosity:** Ctrl+Alt+L uses **summary mode** by default. It keeps a
-small sample of SYNC, fence, FIFO-run, and 3D-command events, preserves the
-existing stall/failure/state-change diagnostics, and writes interval-scoped
-VMVGA flight-recorder totals when capture stops. The `Y2KBOX-PERF command`
-records retain per-command counts and timing measurements, so suppressing
-repetitive event lines does not discard command-level performance data.
+**Capture verbosity:** `simple` samples the first four SYNC writes/results,
+fence events, and FIFO-run-end records, plus the first eight selected
+3D-command records. It preserves existing stall/failure/state-change
+diagnostics and fence-goal hits, and writes interval-scoped VMVGA
+flight-recorder totals when capture stops. The `Y2KBOX-PERF command` records
+retain per-command counts and timing measurements, so suppressing repetitive
+event lines does not discard command-level performance data.
 
-For a focused investigation that needs every selected VMVGA SYNC, fence, and
-3D-command event, launch with the additional QEMU global property
-`-global vmvga.debug-detail=on` alongside `-y2kboxdebugmode on`. The SDL title
-identifies whether the next capture will use summary or detailed mode. Detailed
-captures can still become very large; use them when the extra event sequence is
-needed by a coding agent, rather than as the default log to share.
+Use `-y2kboxdebugmode on` when a coding agent needs the full selected
+per-event VMVGA SYNC, fence, and 3D-command stream. The SDL title identifies
+whether the next capture will use simple or full mode. Full captures can still
+become very large; use them when the extra event sequence is needed, rather
+than as the default log to share.
 
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
 

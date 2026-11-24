@@ -2995,16 +2995,23 @@ void qemu_init(int argc, char **argv)
                     exit(1);
                 break;
             case QEMU_OPTION_y2kboxdebugmode:
-                if (g_str_equal(optarg, "on")) {
-                    if (qemu_global_option("vmvga.debug=on") != 0) {
+                if (g_str_equal(optarg, "off")) {
+                    if (qemu_global_option("vmvga.debug=off") != 0 ||
+                        qemu_global_option("vmvga.debug-detail=off") != 0) {
                         exit(1);
                     }
-                } else if (g_str_equal(optarg, "off")) {
-                    if (qemu_global_option("vmvga.debug=off") != 0) {
+                } else if (g_str_equal(optarg, "simple")) {
+                    if (qemu_global_option("vmvga.debug=on") != 0 ||
+                        qemu_global_option("vmvga.debug-detail=off") != 0) {
+                        exit(1);
+                    }
+                } else if (g_str_equal(optarg, "on")) {
+                    if (qemu_global_option("vmvga.debug=on") != 0 ||
+                        qemu_global_option("vmvga.debug-detail=on") != 0) {
                         exit(1);
                     }
                 } else {
-                    error_report("Invalid value for -y2kboxdebugmode: %s (expected on or off)",
+                    error_report("Invalid value for -y2kboxdebugmode: %s (expected off, simple, or on)",
                                  optarg);
                     exit(1);
                 }

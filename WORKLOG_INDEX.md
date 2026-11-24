@@ -137,3 +137,11 @@ See Sessions 82–115 in `WORKLOG.md` for the detailed chronology and evidence.
   capture-interval flight-recorder reset/final summary, and per-command
   performance count/timing retention. T19 remains IMPLEMENTED pending CI and
   owner XP verification.
+
+
+## Session 123
+
+- **Session 123 — One global Y2KBox diagnostic-level flag:** changed the
+  command-line interface to `-y2kboxdebugmode off|simple|on`, with off as
+  default, simple for compact sampled captures, and on for full selected
+  per-event VMVGA logging. Removed user-facing VMVGA global-property syntax.

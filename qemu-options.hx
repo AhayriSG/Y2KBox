@@ -574,8 +574,9 @@ DEF("global", HAS_ARG, QEMU_OPTION_global,
     QEMU_ARCH_ALL)
 
 DEF("y2kboxdebugmode", HAS_ARG, QEMU_OPTION_y2kboxdebugmode,
-    "-y2kboxdebugmode on|off\n"
-    "                enable or disable Y2KBox diagnostic mode (default: off)\n",
+    "-y2kboxdebugmode off|simple|on\n"
+    "                disable diagnostics, enable compact logging, or enable full logging\n"
+    "                (default: off)\n",
     QEMU_ARCH_ALL)
 SRST
 ``-y2kboxdebugmode on|off``

@@ -219,7 +219,7 @@ The launcher should act as an **instance manager**, not a chooser among applicat
 * **VBoxVGA 5.2.x / SharedOpenGL (proposed, unproven):** a possible additional virtual GPU choice for newly created instances, being investigated as an alternative route to **Windows XP guest OpenGL support**. It would use the matching VirtualBox 5.2.x Guest Additions/driver stack and Chromium-based SharedOpenGL host service. This is a research candidate, not an implemented Y2KBox backend. VirtualBox 5.2.x documentation describes experimental Windows XP guest 3D support, but that does not establish that its device/protocol/host-service stack can be ported to or works in Y2KBox. Keep T16's research and feasibility gates; do not advertise or offer this GPU as selectable until a minimal end-to-end proof of concept succeeds and licensing/source compatibility have been audited.
 * The virtual GPU is an instance-level hardware choice, not a global application setting or a fixed preset. Do not silently change the GPU of existing instances when another backend is added. Preserve each instance's selected hardware configuration.
 
-The launcher should let users select a qcow2 disk (made with qemu-img), floppy image, and CD/ISO for an instance. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
+The launcher should let users select a qcow2 disk (made with qemu-img), floppy image, and CD/ISO for an instance. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add a **Debug mode** Off/Simple/On setting, default **Off**; it selects disabled, compact, or full diagnostic capture without enabling continuous output. This maps to the `-y2kboxdebugmode off|simple|on` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent per-instance device selectors:
 * Network adapter: **VirtIO Net** as the default, with **RTL8139** as the fallback.
@@ -379,10 +379,10 @@ they are not assumed to make translated guest instruction execution faster.
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
-* Debug mode is a separate opt-in setting, default **off**, configured independently
-  of device creation with `-y2kboxdebugmode on` (or explicitly disabled with
-  `-y2kboxdebugmode off`). This is the command-line equivalent of T12's future
-  **Debug: On/Off** GUI setting. Do not put the debug property inside the
+* Diagnostic level is a separate opt-in setting, default **off**, configured
+  independently of device creation with `-y2kboxdebugmode off|simple|on`.
+  This is the command-line equivalent of T12's future **Debug mode** GUI
+  setting. Do not put the debug property inside the
   `-device vmvga` declaration or expose the internal VMVGA property to users.
 * With debug mode off, Ctrl+Alt+L is unavailable and no diagnostic capture is
   performed. With it on, the SDL title advertises the shortcut; debug mode enables
@@ -403,15 +403,15 @@ interval across Y2KBox, without continuously generating diagnostic output.
   only when debug mode is enabled. The title also identifies the selected
   summary/detailed capture mode. Report actual file/descriptor errors, not
   routine logging status.
-* **Capture verbosity:** summary mode is the default. It samples the first four
+* **Capture verbosity:** `simple` is compact mode. It samples the first four
   SYNC writes/results, fence events, and FIFO-run-end records, plus the first
   eight selected 3D-command records. It preserves FIFO stalls, failures,
   state-change diagnostics, and fence-goal hits. At capture start, reset the
   VMVGA flight-recorder interval counters; at stop, emit the final flight
   summary and FIFO command histogram. Existing `Y2KBOX-PERF command` records
-  retain per-command counts and timing. For full selected per-event VMVGA
-  output, use `-global vmvga.debug-detail=on` at launch; detailed mode is
-  explicitly opt-in and can generate large files.
+  retain per-command counts and timing. Use `-y2kboxdebugmode on` for full
+  selected per-event VMVGA output; full mode is explicitly opt-in and can
+  generate large files.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * DoD: Linux and Windows SDL builds compile in CI; static review confirms all
@@ -423,7 +423,7 @@ interval across Y2KBox, without continuously generating diagnostic output.
   - Ctrl+Alt+L start resets per-surface profiling-only counters; capture stop emits one `Y2KBOX-PROF subsystem=vmvga.vb_ring` line for each eligible dynamic D3D9 vertex buffer still represented by a live guest surface. Newly created surfaces inherit the active capture state.
   - `capacity_bytes`: largest host D3D9 VB allocation observed during the interval. `allocated_bytes`: cumulative bytes copied by successful uploads during the interval. `reused_bytes`: the subset copied with successful `D3DLOCK_NOOVERWRITE`. `discard_count`: successful `D3DLOCK_DISCARD` uploads. `wrap_count`: successful DISCARDs caused by a ring-end wrap. `high_water_bytes`: greatest absolute host-buffer byte end touched. `overlap_discard_count`: successful DISCARDs selected by the in-flight-overlap fallback. `allocation_failures`: failed ring upgrades and failed NOOVERWRITE lock/unlock attempts.
   - Both full-buffer DISCARD uploads and range-based uploads are included. Renderer teardown/recreation reattaches surfaces to the profiling registry without losing the active capture interval. Counters update only after successful unlock, except explicit allocation/lock failure counts. No per-upload output, allocation, or lock was added; capture-off upload path only checks the profiling-active flag. Allocator decisions and Session 115 behavior are unchanged.
-  - T19 remains IMPLEMENTED pending Linux/Windows CI and owner verification of summary and detailed capture contents, including repeated intervals in an XP guest. ScreenTarget/GART profiling remains deferred.
+  - T19 remains IMPLEMENTED pending Linux/Windows CI and owner verification of simple and full capture contents, including repeated intervals in an XP guest. ScreenTarget/GART profiling remains deferred.
 
 ## T20 (P2) Full BIN/CUE CD-image parsing — 🔴 TODO
 **Status:** TODO

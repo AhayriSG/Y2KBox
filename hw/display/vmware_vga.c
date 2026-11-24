@@ -12146,7 +12146,7 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
     struct pci_vmsvga_state_s *s = VMVGA(PCI_DEVICE(obj));
 
     if (enabled && !s->chip.debug) {
-        error_setg(errp, "Y2KBox debug mode is disabled; launch with -y2kboxdebugmode=on");
+        error_setg(errp, "Y2KBox diagnostics are disabled; launch with -y2kboxdebugmode simple or on");
         return;
     }
     if (s->chip.debug_log == enabled) {

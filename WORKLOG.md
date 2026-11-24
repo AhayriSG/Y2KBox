@@ -2137,3 +2137,10 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Made VMVGA flight-recorder counters capture-interval scoped: reset the recorder when Ctrl+Alt+L starts, and emit the final flight summary plus FIFO command histogram when capture stops. The existing `Y2KBOX-PERF command` records continue to provide per-command counts and timing; no command profiling was removed.
 - Added the selected capture mode to the log header and SDL window title. Documented summary and detailed usage in the README and T19 task entry.
 - Static source review only; no QEMU build, CI run, or owner XP capture was performed. T19 is IMPLEMENTED, not DONE, pending Linux/Windows CI and owner verification of both modes and repeated capture intervals.
+
+
+## Session 123 (ChatGPT), 2026-11-24 - Make diagnostic verbosity a single Y2KBox CLI setting
+
+- Replaced the user-facing two-state debug switch with `-y2kboxdebugmode off|simple|on`: `off` disables diagnostics, `simple` selects compact sampled capture, and `on` selects the previous full selected per-event VMVGA logging. The default remains `off`.
+- The command-line parser maps the selected level internally; users do not need any QEMU `-global` option or VMVGA-specific logging flag. Updated SDL title/log mode labels, command-line help, README, T12/T19 task wording, and HANDOFF.
+- No QEMU build, runtime test, or CI run performed. Owner should verify all three values, including invalid-value rejection, and compare simple/full captures.

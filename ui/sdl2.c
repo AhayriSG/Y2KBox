@@ -353,7 +353,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         sdl_set_debug_trace(true);
         qemu_perf_stats_start();
         fprintf(stderr, "Y2KBOX-DIAG capture_mode=%s\n",
-                debug_detail ? "detailed" : "summary");
+                debug_detail ? "on" : "simple");
         sdl_log_capture_enabled = true;
     } else {
         fflush(stderr);
@@ -426,11 +426,11 @@ static void sdl_update_caption(struct sdl2_console *scon)
     if (debug_available && sdl_log_capture_enabled) {
         snprintf(log_status, sizeof(log_status),
                  " - Diagnostic logging (%s mode; %s to stop)",
-                 debug_detail ? "detailed" : "summary", hotkey);
+                 debug_detail ? "full" : "simple", hotkey);
     } else if (debug_available) {
         snprintf(log_status, sizeof(log_status),
                  " - %s to start diagnostic logging (%s mode)", hotkey,
-                 debug_detail ? "detailed" : "summary");
+                 debug_detail ? "full" : "simple");
     }
 
     if (qemu_name) {

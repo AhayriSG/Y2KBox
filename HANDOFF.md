@@ -469,7 +469,7 @@ idempotent (`git checkout` touched files first).
     `D3D_DRIVER_TYPE_WARP` fallback on D3D11 (working with inbox Windows Direct3D or optional DXVK Windows DLLs
     placed beside `qemu-system-i386.exe`).
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips 3D backend init when `-display none` is
-    active (`display_backend_active == false`) unless Y2KBox debug mode (`-y2kboxdebugmode on`) or `Y2KBOX_3D_HEADLESS` is set.
+    active (`display_backend_active == false`) unless Y2KBox diagnostics (`-y2kboxdebugmode simple|on`) or `Y2KBOX_3D_HEADLESS` is set.
 * Risks: single small upstream; D3D9 is the ceiling for the XP driver (no DX10+); D3D8 and DirectDraw/D3D7
   coverage unknown (owner-run validation: try `d3d8to9` and a ddraw wrapper in the guest); performance of the device thread
   under TCG; Vulkan requirement. Benefits: vmmouse/absolute pointer comes with the VMware stack.
@@ -854,8 +854,9 @@ Shader and post-processing integration
 
 Y2KBox has one supported renderer, VMVGA, so its local diagnostic hooks are
 always part of the product. The debug-mode setting is nevertheless separate
-from device declaration: enable it with `-y2kboxdebugmode on` (or explicitly disable it
-with `-y2kboxdebugmode off`), independently of `-device vmvga`. Debug mode defaults off and is the command-line equivalent
+from device declaration: select diagnostics with `-y2kboxdebugmode off|simple|on`
+(default: `off`), independently of `-device vmvga`. The levels select disabled,
+compact capture, and full selected event logging. This is the command-line equivalent
 of the future T12 SDL2 + Dear ImGui frontend's **Debug: On/Off** setting. It enables diagnostic
 capabilities but does not start continuous output. Do not use
 `-device vmvga,debug=on`; keep device creation and debug configuration separate.

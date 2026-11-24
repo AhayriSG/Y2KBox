@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 113–122).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 114–123).
 
 ## How to use this file
 
@@ -53,7 +53,7 @@
 
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
-3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** Ctrl+Alt+L defaults to compact summary mode with bounded VMVGA event samples, capture-interval flight-recorder reset/final summary, and retained per-command count/timing records. Add `-global vmvga.debug-detail=on` for the previous full selected per-event VMVGA stream. Verify both modes, log sizes/content, and repeated intervals in XP; the existing VB-ring pressure summaries remain part of capture stop output.
+3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Verify all three levels, log sizes/content, and repeated intervals in XP; the existing VB-ring pressure summaries remain part of capture stop output.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. **T24 fixed-size SDL display is DONE.** The owner confirms Linux and Windows SDL CI pass and all XP acceptance checks are verified: guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking. The Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. No further T24 work is pending absent a new reproducible defect.
@@ -90,6 +90,12 @@
 
 ### Session 122 — Compact and detailed VMVGA diagnostic capture modes
 - Default Ctrl+Alt+L summary mode samples repetitive SYNC/fence/FIFO-run-end/3D-command events instead of printing every occurrence; existing stalls, failures, state changes, and fence-goal events remain visible.
-- Added `-global vmvga.debug-detail=on` for full selected per-event VMVGA output. Both modes retain per-command performance counts/timing.
+- Added a full selected per-event VMVGA output mode alongside compact sampled capture. Both modes retain per-command performance counts/timing.
 - Reset VMVGA flight-recorder counters at capture start and emit the interval's final flight summary/FIFO histogram at stop. SDL title and capture header identify the mode.
 - Static review only; no build, CI, or owner XP verification. T19 is IMPLEMENTED pending CI and owner validation.
+
+
+### Session 123 — One global Y2KBox diagnostic-level flag
+- `-y2kboxdebugmode off|simple|on`: off disables diagnostics, simple uses compact sampled capture, on restores full selected per-event logging. Default remains off.
+- Removed the user-facing VMVGA `-global` instruction. The parser maps the Y2KBox-wide setting internally; SDL title and capture header identify simple/full mode.
+- Static review only; no build, runtime test, or CI run. Owner verification of all three values and both capture outputs remains pending.
