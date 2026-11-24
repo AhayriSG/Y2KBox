@@ -16842,6 +16842,10 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
             if (vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
                     dxvk, surface, VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES)) {
                 host_len = surface->d3d9_host_length;
+                if (surface->vb_ring_profile_active) {
+                    surface->vb_ring_profile_capacity_bytes = MAX(
+                        surface->vb_ring_profile_capacity_bytes, host_len);
+                }
             } else if (surface->vb_ring_profile_active) {
                 surface->vb_ring_profile_allocation_failures++;
             }
@@ -16893,6 +16897,10 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
             if (vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
                     dxvk, surface, (uint32_t)target)) {
                 host_len = surface->d3d9_host_length;
+                if (surface->vb_ring_profile_active) {
+                    surface->vb_ring_profile_capacity_bytes = MAX(
+                        surface->vb_ring_profile_capacity_bytes, host_len);
+                }
             } else if (surface->vb_ring_profile_active) {
                 surface->vb_ring_profile_allocation_failures++;
             }
