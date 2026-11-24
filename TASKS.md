@@ -555,8 +555,8 @@ Establish whether a guest-visible OpenGL path for Windows XP is feasible while p
 * **Disposition:** T25 remains paused. No prototype, guest modification, driver replacement, source change, build, or guest test is currently authorized. Resume only after an independent reviewer provides a fresh feasibility assessment and the owner approves a concrete next step.
 
 
-## T26 (P1) Full-mode D3D9 resource and geometry diagnostics — 🟡 CLAIMED
-**Status:** CLAIMED by ChatGPT 2026-11-24
+## T26 (P1) Full-mode D3D9 resource and geometry diagnostics — 🟡 IN PROGRESS
+**Status:** IN PROGRESS 2026-11-24
 Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture findings. Keep `off` and `simple` behavior and overhead unchanged.
 
 * Trace dynamic D3D9 vertex/index-buffer uploads with guest surface ID, byte range, requested/deferred range, actual D3D9 lock flags/mode, flush reason, and the exact reason for DISCARD/NOOVERWRITE/flags=0 selection. Distinguish guest upload events from native flushes; correlate both without changing allocator decisions.
@@ -566,3 +566,6 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 * All high-volume records are gated strictly by `-y2kboxdebugmode on` plus an active Ctrl+Alt+L capture. Simple mode remains compact; diagnostics must not alter rendering, synchronization, upload policy, or GPU scheduling.
 * Update diagnostic documentation, TASKS/HANDOFF/WORKLOG/WORKLOAD_ACTIVE_SESSION as appropriate. Static source review is required. ChatGPT is not authorized to run QEMU configure/build/make/ninja or benchmarks; owner-run Windows XP full capture and Linux/Windows CI remain acceptance checks.
 * DoD: full-mode capture provides sufficient per-resource and per-draw evidence to distinguish the recurring surface-29 mesh and surface-35 quad sequence, identify texture updates for surfaces 404 and 410–446, and correlate them with presentation/readback. Do not label any resource as the minimap without visual/geometry evidence.
+* **Implementation progress (2026-11-24):** Full mode now records each deferred guest buffer range and merged range (`VMVGA-D3D9-BUFFER-DEFER`), plus native full-buffer and range-upload lock mode/flags/reason, byte ranges, capacity and flush cause (`VMVGA-D3D9-BUFFER-UPLOAD`). Guest-backed image/buffer updates emit subresource, box, row/plane layout, byte count and backend after the guest MOB data has reached the CPU shadow (`VMVGA-RESOURCE-UPDATE`). Each D3D9 draw range emits a compact FIFO-sequenced target/viewport/primitive/index/stream summary (`VMVGA-D3D9-GEOMETRY`). Full-only `VMVGA-RENDER-CORRELATION` records connect readback submit/ready/retire events to the last observed FIFO sequence; asynchronous readback polling may make that sequence a nearby correlation hint rather than the originating command.
+* **Remaining work:** screen-space position bounds and UV ranges are not yet decoded. Draw summaries explicitly emit `position_bounds=unavailable`, `uv_bounds=unavailable`, and `bounds_reason=vertex-decode-not-implemented`; do not treat this as completed geometry profiling. Continue only with safe CPU-shadow/vertex-format decoding, no GPU readback or forced synchronization.
+* **Verification:** static source review only. No QEMU build, local tests, owner capture, or CI was run. Keep T26 IN PROGRESS until the remaining geometry work and owner full-mode capture confirm the records are useful. Simple and inactive/default-off paths are intended to remain unchanged.
