@@ -568,7 +568,7 @@ static bool sdl_save_log_capture_png(const char *log_filename,
     error_report("Saved Full-mode guest display snapshot: %s", png_filename);
     return true;
 }
-#endif /* CONFIG_PNG */
+#endif /* CONFIG_PNG && CONFIG_PIXMAN */
 
 static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
