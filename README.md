@@ -167,8 +167,8 @@ VMPort GuestRPC, and vdagent traces—to a new timestamped
 `y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory. The VM
 continues running. Every capture interval gets its own file, and existing files
 are never overwritten. Simple captures remain manually stopped and are kept as
-plain-text `.log` files. Full captures automatically stop after three seconds
-(or earlier if Ctrl+Alt+L is pressed again), then are compressed in-process to
+plain-text `.log` files. Full captures automatically stop after two seconds
+(or earlier if Ctrl+Alt+L is pressed again), then are compressed asynchronously in a background worker to
 `.log.gz`; the original `.log` is removed only when compression succeeds.
 If compression fails, the uncompressed log is preserved. At the start of each interval,
 all `Y2KBOX-PERF` counters and timing baselines reset, so each file reports only
@@ -196,9 +196,9 @@ per-event correlation is needed.
 
 Use `-y2kboxdebugmode on` when a coding agent needs the full selected
 per-event VMVGA SYNC, fence, and 3D-command stream. Full captures automatically
-stop after three seconds (or earlier with Ctrl+Alt+L), and the SDL title shows
-the three-second auto-stop while one is active. After capture ends, Y2KBox
-compresses the log in-process using zlib's maximum compression level (9) and
+stop after two seconds (or earlier with Ctrl+Alt+L), and the SDL title shows
+the two-second auto-stop while one is active. After capture ends, Y2KBox
+compresses the completed log asynchronously in a background worker using zlib's maximum compression level (9) and
 saves it as `.log.gz`.
 
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
