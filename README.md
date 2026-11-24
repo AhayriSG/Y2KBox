@@ -167,7 +167,7 @@ VMPort GuestRPC, and vdagent traces—to a new timestamped
 `y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory. The VM
 continues running. Every capture interval gets its own file, and existing files
 are never overwritten. Simple captures remain manually stopped and are kept as
-plain-text `.log` files. Full captures automatically stop after five seconds
+plain-text `.log` files. Full captures automatically stop after three seconds
 (or earlier if Ctrl+Alt+L is pressed again), then are compressed in-process to
 `.log.gz`; the original `.log` is removed only when compression succeeds.
 If compression fails, the uncompressed log is preserved. At the start of each interval,
