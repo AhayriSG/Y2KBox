@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 106–115).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 107–116).
 
 ## How to use this file
 
@@ -20,13 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-
-### Session 106 — Establish the Windows XP OpenGL ICD discovery constraint
-- A conventional XP ICD must be advertised by the active display driver through the OPENGL_GETINFO escape; a registry entry alone cannot activate an arbitrary ICD alongside VMware's driver.
-- The only plausible no-display-driver-replacement path is a per-application standalone OpenGL DLL. The id Tech 3 r_glDriver path may make this possible for COD1, but its exact fork behavior must be verified.
-- Existing XP Direct3D 9 acceleration could provide the transport. GL4ES plus a historical ANGLE D3D9 backend is a high-risk candidate, not a known-good XP stack.
-- Next gate: prove standalone DLL loading and D3D9 HAL device creation/Present before writing any GL compatibility code. Documentation-only; no guest modifications, builds, tests, or CI polling.
 
 
 ### Session 107 — Pause guest OpenGL work for independent reassessment
@@ -75,6 +68,11 @@
 - Recorded owner post-Session 80 Windows TCG validation captures: FIFA 2003 improved to ~85.7 FPS (`25.352 s` / `2,172` flips, playable, slow-motions gone), Hitman 2 Sicily fade showed `2,913` unpresented sync ScreenTarget readbacks (`2.410 s` = 60.3% wall time) at ~767 FPS, and F1 '99-'02 spent `3.711 s` (68% of `fifo_run`) in `71,979` `INVALIDATE` `D3DLOCK_DISCARD` VB renames.
 - Implemented three targeted VMVGA/DXVK/GART fixes on `main`: (1) steady-state FIFO full-screen D3D9 flip supersession (`vmsvga3d_screen_target_try_supersede_flip_live`) + eager staging copy in `retire_latest`; (2) per-surface ring sub-allocation for dynamic D3D9 vertex buffers (`4 MiB` lazy upgrade, `32 MiB` global extra budget, `SetStreamSource` `d3d9_ring_base` offset) + guarded `<= 2 MiB` overlap-`DISCARD`; (3) O(1) `"vmsvga-gart-%u[0]"` QOM property deletion + FIFO-pass GART `memory_region_transaction` batching (flushed before fences, disable, and FIFO exit).
 - Verified locally with `git diff --check`, preprocessor/header checks, and standalone `gcc -Werror` logic tests (no local `meson`/`mingw32-gcc`). Linux/Windows CI and owner Windows TCG in-game re-captures are pending.
+
+### Session 116 — Reorganize WORKLOG_INDEX for scanability and coverage
+- Updated the topic map to include recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
+- Replaced the dense Sessions 82–115 prose block with a concise chronological list; detailed evidence remains in WORKLOG.md.
+- Documentation-only; no source changes, builds, tests, or CI polling.
 
 ## Current investigation / next actions
 
