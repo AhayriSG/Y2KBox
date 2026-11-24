@@ -1360,6 +1360,33 @@ static void vmsvga3d_state_trace_draw_snapshot(
         first = false;
     }
 
+    fprintf(stderr, " textures=");
+    first = true;
+    for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
+        const VMSVGA3DStateValue *binding =
+            &context->texture_state[stage][SVGA3D_TS_BIND_TEXTURE];
+        VMSVGA3DSurface *surface = NULL;
+
+        if (!binding->valid) {
+            continue;
+        }
+        if (s->svga3d != NULL &&
+            binding->value < SVGA3D_MAX_SURFACE_IDS) {
+            surface = s->svga3d->surfaces[binding->value];
+        }
+        if (surface != NULL && surface->mip_count != 0 &&
+            surface->mips != NULL) {
+            fprintf(stderr, "%s%u:%u@%ux%u/f%u/m%u", first ? "" : ",",
+                    stage, binding->value, surface->mips[0].size.width,
+                    surface->mips[0].size.height, surface->format,
+                    surface->mip_count);
+        } else {
+            fprintf(stderr, "%s%u:%u@missing", first ? "" : ",",
+                    stage, binding->value);
+        }
+        first = false;
+    }
+
     fprintf(stderr, " texture_states=");
     first = true;
     for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
@@ -1367,7 +1394,7 @@ static void vmsvga3d_state_trace_draw_snapshot(
             const VMSVGA3DStateValue *value =
                 &context->texture_state[stage][name];
 
-            if (!value->valid) {
+            if (!value->valid || name == SVGA3D_TS_BIND_TEXTURE) {
                 continue;
             }
             fprintf(stderr, "%s%u/%u=%08x", first ? "" : ",",
