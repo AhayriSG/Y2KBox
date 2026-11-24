@@ -310,7 +310,7 @@ static bool sdl_compress_log_capture(const char *filename)
     }
 
     while ((count = fread(buffer, 1, sizeof(buffer), input)) != 0) {
-        if (gzwrite(output, buffer, count) != (int)count) {
+        if (gzwrite(output, buffer, (unsigned int)count) != (int)count) {
             error_report("Could not write compressed diagnostic log %s",
                          compressed);
             goto out;
@@ -520,6 +520,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
 
     sdl_update_caption(scon);
 }
+
 static void sdl_update_caption(struct sdl2_console *scon)
 {
     char win_title[1024];
