@@ -10196,7 +10196,6 @@ static bool vmsvga3d_handle_present(struct vmsvga_state_s *s,
     }
 
     body = payload;
-    vmsvga_trace_frame_boundary(s, "guest-present-command", body->sid);
     rects = (SVGA3dCopyRect *)(body + 1);
     rect_count = (size - sizeof(*body)) / sizeof(*rects);
     state = s->svga3d;
@@ -10285,6 +10284,10 @@ static bool vmsvga3d_handle_present(struct vmsvga_state_s *s,
         }
     }
 
+    /* Advance only after the PRESENT command is consumed.  A deferred CPU
+     * fallback can rewind the FIFO and retry this handler; it must not create
+     * a phantom frame boundary on that retry. */
+    vmsvga_trace_frame_boundary(s, "guest-present-command", body->sid);
     vmsvga3d_fifo_release_payload(s, payload);
     return true;
 }
