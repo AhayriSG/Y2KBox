@@ -5533,7 +5533,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
             } else {
                 fprintf(stderr, "unavailable");
             }
-            fprintf(stderr, " decoded=%u bounds_ok=%u bounds_reason=%s\\n",
+            fprintf(stderr, " decoded=%u bounds_ok=%u bounds_reason=%s\n",
                     position_bounds.samples > uv_bounds.samples
                         ? position_bounds.samples : uv_bounds.samples,
                     bounds_ok, bounds_reason);
