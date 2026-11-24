@@ -145,6 +145,8 @@ VMSVGA3DDxvkSurface *vmsvga3d_dxvk_surface_create(VMSVGA3DDxvk *dxvk,
 void vmsvga3d_dxvk_surface_destroy(VMSVGA3DDxvkSurface *surface);
 void vmsvga3d_dxvk_vb_ring_profile_capture(VMSVGA3DDxvk *dxvk,
                                                bool enabled, bool detail);
+void vmsvga3d_dxvk_trace_sequence(VMSVGA3DDxvk *dxvk,
+                                      uint64_t sequence);
 bool vmsvga3d_dxvk_surface_info(
     const VMSVGA3DDxvkSurface *surface,
     struct vmsvga3d_d3d9_transfer_surface_s *info);
