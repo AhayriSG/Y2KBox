@@ -2028,3 +2028,12 @@ from its remaining acceptance evidence. Added IMPLEMENTED to the task-status
 vocabulary for tasks with no known source work remaining but outstanding
 verification, and documented the remaining Linux/Windows CI and owner-run XP
 checks. No source changes, builds, guest tests, or CI polling were performed.
+
+
+## Session 111 (ChatGPT), 2026-11-24 - Add visual task-status markers
+
+- Added consistent colored status markers to all 23 task headings in TASKS.md: red for TODO, yellow for CLAIMED / IN PROGRESS / PAUSED / IMPLEMENTED, and green for DONE.
+- Moved each complete canonical status into a plain-text Status field immediately below its heading. The heading marker is explicitly documented as a visual aid only; agents must use the plain-text field as the source of truth.
+- Clarified that IMPLEMENTED remains yellow while acceptance evidence is pending, including T24.
+- Updated AGENTS.md with the task-status parsing rule and refreshed the worklog index and rolling active-session summary.
+- Documentation-only. No source changes, builds, guest tests, or CI polling.
