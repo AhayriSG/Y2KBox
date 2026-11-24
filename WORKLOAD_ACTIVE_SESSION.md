@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 117–126).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 119–128).
 
 ## How to use this file
 
@@ -19,9 +19,10 @@
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
-### Session 118 — Define narrow VB-ring profiling handoff
-- Defined a focused capture-stop per-surface dynamic D3D9 VB-ring profile and its interval-only counters.
-- Documentation-only handoff; no source/build/runtime validation.
+### Session 128 — Expand full-mode VMVGA graphics-event diagnostics
+- Full capture now emits every FIFO command with a capture-local sequence number and command metadata; adds operands for legacy 2D surface copy/fill and rectangle copy.
+- Full mode also enables deep D3D9 draw planning/submission and render-target/texture state traces previously disabled by compile-time developer switches. Simple mode and inactive/default-off behavior remain unchanged.
+- Static source review only; no local build, XP capture, runtime test, or CI. Next owner step: one full-mode NFSU2 capture spanning visible minimap flicker. T19 remains IMPLEMENTED pending XP validation and Linux/Windows CI.
 
 ### Session 119 — Add capture-interval dynamic VB ring pressure profiling
 - Added per-surface profiling-only counters and a surface registry; capture start resets interval counters and stop emits one summary per eligible live dynamic D3D9 VB.
