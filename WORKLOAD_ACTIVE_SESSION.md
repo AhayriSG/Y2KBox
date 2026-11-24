@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 96–105).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 97–106).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is active.** Owner-run COD1 testing with `+set r_allowSoftwareGL 1` creates/makes-current a WGL context, then fails COD1's feature check. GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 with only `GL_EXT_bgra`, `GL_EXT_paletted_texture`, and `GL_WIN_swap_hint`; full details are in HANDOFF.md section 8d / WORKLOG.md Session 104. VMware Workstation Player 15 documentation explicitly says OpenGL applications in XP guests run in software-emulation mode, so GDI Generic is expected and a missing Tools install/ICD registration is unlikely; see HANDOFF.md section 8e / WORKLOG.md Session 105. Do not ask the owner to reinstall Tools, hunt for `vm3dgl.dll`, install Visual Studio, or compile `xp/tools/glprobe.c` in XP. The real architecture requirement is an XP guest-side OpenGL ICD translating WGL/GL calls into SVGA3D commands, plus host-side semantic coverage. WINVBE offers a possible software-only XP GL 2.1 experiment, but requires replacing the display driver and has no hardware 3D; keep it isolated and optional. Mesa VGPU9's WS8_B1 + VS/PS 3.0 match remains promising protocol overlap, not proof of complete GL state semantics; line stipple and logic operations remain audit candidates.
+4. **T25 guest OpenGL investigation remains active but is now a low-confidence feasibility task.** COD1 with `+set r_allowSoftwareGL 1` creates/makes-current a WGL context, then fails its feature check; GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 with only three extensions (details in HANDOFF.md 8d / WORKLOG Session 104). VMware Workstation Player 15 explicitly documents software-emulated OpenGL in XP guests (HANDOFF.md 8e / Session 105). New finding: a conventional XP ICD requires the active display driver to advertise it through OPENGL_GETINFO; a registry-only DLL cannot simply be installed beside VMware's driver (HANDOFF.md 8f / Session 106). Do not reinstall Tools, hunt for `vm3dgl.dll`, modify/replace the VMware display driver, or install WINVBE. The only plausible no-replacement route is a per-app standalone OpenGL DLL, potentially loaded through COD1's id Tech 3 `r_glDriver` path, translating GL to GLES2 and reusing the existing VMware D3D9 path. GL4ES + historical ANGLE D3D9 is high-risk and not a ready-made XP solution. First prove standalone DLL loading and D3D9 HAL device creation/Present; stop if either fails. No guest modification or build is authorized by this investigation.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -38,12 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 96 — Move diagnostic logging guidance into the README FAQ
-- Relocated the Ctrl+Alt+L instructions into a dedicated FAQ entry and retained the details about opt-in capture, separate files, counter resets, and shell redirection.
-- Added the expected recording overhead, guidance for comparable performance captures, and a tester-to-developer/LLM-assisted profiling workflow using `Y2KBOX-PERF` output.
-- Clarified the distinction between performance profiling and graphics diagnostics; documented `VMVGA_TRACE_DEEP_GB_UPDATE` as an optional compile-time trace disabled by default.
-- Documentation-only; no source changes, instrumentation, builds, benchmarks, tests, guest validation, or CI polling.
 
 ### Session 97 — Merge preservation rationale into the README project-purpose FAQ
 - Combined the former standalone preservation-practicality FAQ with the compatibility-layer answer, connecting the case for a complete XP environment with the practical benefits of emulation.
@@ -94,3 +88,10 @@
 - This makes the owner's GDI Generic 1.1.0 result expected; do not pursue a Tools reinstall or missing-ICD file hunt without new evidence.
 - WINVBE 1.3 provides an XP software OpenGL 2.1 ICD but requires replacing the display-driver stack and offers no hardware 3D; optional isolated test only.
 - T25's core requirement is a Windows XP guest OpenGL ICD that translates GL calls into SVGA3D commands. Documentation-only; no guest test, source changes, build, benchmark, or CI polling.
+
+
+### Session 106 — Establish the Windows XP OpenGL ICD discovery constraint
+- A conventional XP ICD must be advertised by the active display driver through the OPENGL_GETINFO escape; a registry entry alone cannot activate an arbitrary ICD alongside VMware's driver.
+- The only plausible no-display-driver-replacement path is a per-application standalone OpenGL DLL. The id Tech 3 r_glDriver path may make this possible for COD1, but its exact fork behavior must be verified.
+- Existing XP Direct3D 9 acceleration could provide the transport. GL4ES plus a historical ANGLE D3D9 backend is a high-risk candidate, not a known-good XP stack.
+- Next gate: prove standalone DLL loading and D3D9 HAL device creation/Present before writing any GL compatibility code. Documentation-only; no guest modifications, builds, tests, or CI polling.
