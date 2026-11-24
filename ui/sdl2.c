@@ -277,6 +277,11 @@ static void sdl_set_debug_trace(bool enabled)
     }
 }
 
+/*
+ * This function runs on a worker thread. Do not use error_report() here:
+ * stderr may already have been redirected for a newer capture interval.
+ * On failure, the original .log is retained for manual recovery.
+ */
 static bool sdl_compress_log_capture(const char *filename)
 {
     char *compressed = g_strdup_printf("%s.gz", filename);
@@ -294,15 +299,12 @@ static bool sdl_compress_log_capture(const char *filename)
 #endif
     fd = g_open(compressed, flags, 0666);
     if (fd < 0) {
-        error_report("Could not create compressed diagnostic log %s: %s",
-                     compressed, strerror(errno));
         goto out;
     }
     compressed_created = true;
 
     output = gzdopen(fd, "wb9");
     if (!output) {
-        error_report("Could not initialize gzip output for %s", compressed);
         g_close(fd, NULL);
         fd = -1;
         goto out;
@@ -311,35 +313,25 @@ static bool sdl_compress_log_capture(const char *filename)
 
     input = g_fopen(filename, "rb");
     if (!input) {
-        error_report("Could not reopen diagnostic log %s: %s",
-                     filename, strerror(errno));
         goto out;
     }
 
     while ((count = fread(buffer, 1, sizeof(buffer), input)) != 0) {
         if (gzwrite(output, buffer, (unsigned int)count) != (int)count) {
-            error_report("Could not write compressed diagnostic log %s",
-                         compressed);
             goto out;
         }
     }
     if (ferror(input)) {
-        error_report("Could not read diagnostic log %s: %s",
-                     filename, strerror(errno));
         goto out;
     }
     if (fclose(input) != 0) {
         input = NULL;
-        error_report("Could not close diagnostic log %s: %s",
-                     filename, strerror(errno));
         goto out;
     }
     input = NULL;
 
     if (gzclose(output) != Z_OK) {
         output = NULL;
-        error_report("Could not finish compressed diagnostic log %s",
-                     compressed);
         goto out;
     }
     output = NULL;
@@ -360,11 +352,7 @@ out:
             g_unlink(compressed);
         }
     } else if (g_unlink(filename) != 0) {
-        error_report("Compressed diagnostic log is %s, but the original %s "
-                     "could not be removed: %s",
-                     compressed, filename, strerror(errno));
     } else {
-        error_report("Full diagnostic capture saved as %s", compressed);
     }
     g_free(compressed);
     return success;
