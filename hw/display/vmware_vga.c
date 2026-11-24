@@ -6300,14 +6300,16 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
 
             if (name != NULL) {
                 fprintf(stderr,
-                        "VMVGA-FIFO name=%s cmd=%u stop=0x%08x next=0x%08x "
-                        "words=%d sync=%u\n",
-                        name, cmd, fifo_start, s->fifo_next, len, s->sync);
+                        "VMVGA-FIFO seq=%" PRIu64 " name=%s cmd=%u stop=0x%08x "
+                        "next=0x%08x words=%d sync=%u\n",
+                        s->trace_activity_seq, name, cmd, fifo_start,
+                        s->fifo_next, len, s->sync);
             } else {
                 fprintf(stderr,
-                        "VMVGA-FIFO cmd=%u stop=0x%08x next=0x%08x words=%d "
-                        "sync=%u\n",
-                        cmd, fifo_start, s->fifo_next, len, s->sync);
+                        "VMVGA-FIFO seq=%" PRIu64 " cmd=%u stop=0x%08x next=0x%08x "
+                        "words=%d sync=%u\n",
+                        s->trace_activity_seq, cmd, fifo_start, s->fifo_next,
+                        len, s->sync);
             }
         }
 
