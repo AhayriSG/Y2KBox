@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 108–117).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 109–118).
 
 ## How to use this file
 
@@ -21,11 +21,6 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 108 — Record QindieGL as a concrete but unproven OpenGL wrapper lead
-- Added QindieGL to T25's technical research record, including its missing `wglGetExtensionsStringEXT` implementation and the owner's COD1 failure.
-- Recorded the historical experiment that reportedly allowed COD1 to start but left substantial graphical corruption, and flagged GPL-3.0 compatibility review before any code reuse.
-- T25 remained PAUSED; no patch, build, guest modification, or test was authorized.
 
 ### Session 109 — Record TitaniumGL as a separate OpenGL wrapper research lead
 - Removed the QindieGL-specific paragraph from README.md while preserving the generic statement that application-local wrapper DLLs remain an unproven alternative.
@@ -84,6 +79,12 @@
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. **T24 fixed-size SDL display is DONE.** The owner confirms Linux and Windows SDL CI pass and all XP acceptance checks are verified: guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking. The Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. No further T24 work is pending absent a new reproducible defect.
 7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
+
+
+### Session 118 — Define narrow VB-ring profiling handoff
+- T19 remains PAUSED: static wiring review confirms the Ctrl+Alt+L capture controls existing performance counters, VMVGA/VMPort diagnostic gates, relevant trace events, and the Windows TCG vCPU profiler, but actual capture-content completeness still requires owner XP verification.
+- Added a focused Gemini 4 Neon follow-up for one capture-stop `Y2KBOX-PROF subsystem=vmvga.vb_ring` record per eligible dynamic D3D9 VB surface, with interval-only counters for capacity, allocation/high-water, NOOVERWRITE reuse, DISCARD/wrap, overlap discard, and allocation failures.
+- No source changes or tests. Preserve Session 115 allocator behavior; avoid per-upload logging and broader profiling expansion.
 
 ## Key diagnostic interpretation rules
 

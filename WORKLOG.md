@@ -2100,3 +2100,11 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added the missing D3D9 `D3DUSAGE_DYNAMIC` definition with its Direct3D 9 value, `0x00000200u`, alongside the existing D3D9 usage constants. Kept the D3D9 checks on the D3D9 flag; did not substitute the unrelated D3D11 `D3D11_USAGE_DYNAMIC` enum (value 2).
 - This is a minimal compile fix; no ring-buffer behavior or other Session 115 logic was changed.
 - No local QEMU build was run in this session. The source fix was pushed to `main`; GitHub Actions results remain pending and were not polled.
+
+
+## Session 118 (ChatGPT), 2026-11-24 - Define narrow VB-ring profiling handoff
+
+- Re-reviewed T19's Ctrl+Alt+L capture wiring and Session 115's per-surface dynamic D3D9 vertex-buffer ring state. Static inspection shows the existing capture controls the general performance counters, VMVGA/VMPort diagnostic gates, relevant trace events, and Windows TCG vCPU profiler; it does not by itself prove that every expected record is present in a real XP capture. T19 remains PAUSED pending owner content/repeated-interval verification.
+- Added a narrowly scoped Gemini 4 Neon follow-up to T19: emit one capture-stop `Y2KBOX-PROF subsystem=vmvga.vb_ring` record per eligible dynamic D3D9 VB surface, with explicitly defined capacity, allocation/high-water, successful NOOVERWRITE reuse, successful DISCARD/wrap, overlap-discard, and allocation-failure measurements.
+- Required profiling-only interval baselines/reset at capture start without resetting allocator state; no per-upload logging, no hot-path locks/allocations/I/O, no allocation-policy changes, and no broader ScreenTarget/GART profiler expansion.
+- Documentation-only handoff. No source changes, local build, runtime test, or CI polling. Gemini 4 Neon should implement and validate this focused follow-up before resuming broader optimization work; T19 is not marked DONE.

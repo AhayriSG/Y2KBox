@@ -409,6 +409,13 @@ interval across Y2KBox, without continuously generating diagnostic output.
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
 
+* **Focused profiling follow-up (hand off to Gemini 4 Neon; keep T19 PAUSED):**
+  - Add one low-volume `Y2KBOX-PROF subsystem=vmvga.vb_ring` summary per eligible dynamic D3D9 vertex-buffer surface at capture stop. Include `surface_id`, `capacity_bytes`, `allocated_bytes`, `reused_bytes`, `discard_count`, `wrap_count`, `high_water_bytes`, `overlap_discard_count`, and `allocation_failures`.
+  - Define the fields precisely in code/comments. Prefer capacity = current host allocation; allocated/high-water = maximum ring cursor reached during the capture; reused = successful NOOVERWRITE bytes; count only successful DISCARDs/wraps; count failed ring upgrades/suballocations separately. If the implementation's actual state cannot support one of these definitions accurately, omit or rename it rather than fabricate a proxy.
+  - Reset profiling-only counters/baselines at Ctrl+Alt+L capture start without resetting allocator state. Emit summaries at capture stop, not per upload/draw. Keep the capture-off path inert and avoid locks, allocations, formatting, or I/O in the hot upload path.
+  - Inspect the actual D3D9 ring upgrade, NOOVERWRITE, DISCARD, overlap fallback, and failure branches before instrumenting. Do not change allocation policy or Session 115 optimization behavior. Use existing profiling/capture hooks where practical; avoid a broad profiler redesign.
+  - Keep this scoped to VB-ring pressure only. ScreenTarget and GART profiling are deferred until this proves useful. T19 remains PAUSED until owner verifies real capture output and repeated capture intervals in XP.
+
 ## T20 (P2) Full BIN/CUE CD-image parsing — 🔴 TODO
 **Status:** TODO
 Implement full BIN/CUE parsing for Y2KBox's emulated CD-ROM, not merely a limited
