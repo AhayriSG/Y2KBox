@@ -10196,6 +10196,7 @@ static bool vmsvga3d_handle_present(struct vmsvga_state_s *s,
     }
 
     body = payload;
+    vmsvga_trace_frame_boundary(s, "guest-present-command", body->sid);
     rects = (SVGA3dCopyRect *)(body + 1);
     rect_count = (size - sizeof(*body)) / sizeof(*rects);
     state = s->svga3d;
