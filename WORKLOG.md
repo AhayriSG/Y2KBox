@@ -2013,3 +2013,18 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Recorded that TitaniumGL's hardware and software-renderer modes produced the same broad COD1 failure. The complete extension list was not captured; no claims were made about full extension implementation, successful D3D9 acceleration, or correct rendering.
 - Kept QindieGL and TitaniumGL as distinct candidates and preserved T25's PAUSED status and independent-reassessment gate. XP requirements, release provenance, source availability, and TitaniumGL licensing remain unverified.
 - Documentation-only. No source changes, builds, guest modifications, additional guest tests, benchmarks, or CI polling were performed.
+
+
+## Session 110 (ChatGPT), 2026-11-24 - Clarify T24 implementation and verification status
+
+The owner confirmed that the Windows build presents the intended fixed-size
+window: it is decorated but cannot be manually resized, and its titlebar
+maximize control is disabled. This verifies the Windows window-style behavior
+implemented in Session 62; it is not a report of guest-driven resolution,
+fullscreen-shortcut, or mouse-tracking checks.
+
+Changed T24 from PAUSED to IMPLEMENTED to distinguish completed source work
+from its remaining acceptance evidence. Added IMPLEMENTED to the task-status
+vocabulary for tasks with no known source work remaining but outstanding
+verification, and documented the remaining Linux/Windows CI and owner-run XP
+checks. No source changes, builds, guest tests, or CI polling were performed.
