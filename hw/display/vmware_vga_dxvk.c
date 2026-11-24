@@ -13993,7 +13993,7 @@ vmsvga3d_dxvk_d3d9_screen_readback_submit(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=readback-submit backend=d3d9 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, surface->sid, slot->sequence);
     }
 
@@ -14249,7 +14249,7 @@ vmsvga3d_dxvk_d3d9_screen_readback_poll(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=readback-ready backend=d3d9 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, surface->sid, slot->sequence);
     }
     slot->pending = false;
@@ -15093,7 +15093,7 @@ vmsvga3d_dxvk_d3d11_screen_readback_submit(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=readback-submit backend=d3d11 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, surface->sid, slot->sequence);
     }
     return VMSVGA3D_DXVK_SCREEN_READBACK_SUBMITTED;
@@ -15330,7 +15330,7 @@ vmsvga3d_dxvk_d3d11_screen_readback_poll_internal(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=readback-ready backend=d3d11 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, surface->sid, slot->sequence);
     }
     slot->pending = false;
@@ -15521,7 +15521,7 @@ vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=readback-retire backend=d3d9 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, sid,
                 retired->slots[selected_index].sequence);
     }
@@ -15779,7 +15779,7 @@ vmsvga3d_dxvk_d3d9_retired_screen_readback_poll(
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
                 "VMVGA-RENDER-CORRELATION event=retired-readback-ready backend=d3d9 "
-                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\\n",
+                "last_fifo_seq=%" PRIu64 " sid=%u readback_seq=%" PRIu64 "\n",
                 dxvk->trace_sequence, retired->sid, slot->sequence);
     }
     vmsvga3d_dxvk_d3d9_retired_screen_readback_discard(dxvk);
