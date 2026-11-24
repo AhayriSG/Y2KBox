@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 103–112).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 104–113).
 
 ## How to use this file
 
@@ -20,12 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-
-### Session 103 — Match Mesa's VGPU9 baseline and identify the COD1 software fallback
-- Mesa VGPU9 reports GLSL 1.20 and requires SVGA hardware version WS8_B1 plus VS/PS 3.0. Y2KBox advertises WS8_B1 and SM3.0 and implements handlers for the core legacy SVGA3D command family; semantic/capability completeness remains unproven.
-- VMware Workstation Player 15 documentation says OpenGL apps in XP guests run in software-emulation mode. Added a COD1 test with +set r_allowSoftwareGL 1 to allow generic formats and see whether software OpenGL can get past pixel-format selection.
-- T25 updated with protocol matching, candidate state gaps, and the software fallback test. No QEMU build, standalone probe compile/run, guest test, benchmark, or CI polling.
 
 
 ### Session 104 — Identify the active XP guest OpenGL implementation
