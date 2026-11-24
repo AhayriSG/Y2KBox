@@ -3934,7 +3934,7 @@ static bool vmsvga3d_dxvk_bind_context_target(
     }
 
     surface = s->svga3d->surfaces[target->sid];
-    if (VMVGA_TRACE_DEEP_D3D9_STATE) {
+    if ((VMVGA_TRACE_DEEP_D3D9_STATE || vmsvga_trace_detail_enabled(s))) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
             "D3D9-TARGET bind sid=%u face=%u mip=%u use=%u depth=%u surface=%p",
@@ -3949,7 +3949,7 @@ static bool vmsvga3d_dxvk_bind_context_target(
         return false;
     }
 
-    if (VMVGA_TRACE_DEEP_D3D9_STATE) {
+    if ((VMVGA_TRACE_DEEP_D3D9_STATE || vmsvga_trace_detail_enabled(s))) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
             "D3D9-TARGET image sid=%u level=%u image=%p",
@@ -3961,7 +3961,7 @@ static bool vmsvga3d_dxvk_bind_context_target(
         return false;
     }
 
-    if (VMVGA_TRACE_DEEP_D3D9_STATE) {
+    if ((VMVGA_TRACE_DEEP_D3D9_STATE || vmsvga_trace_detail_enabled(s))) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
             "D3D9-TARGET materialized sid=%u dxvk_surface=%p",
@@ -4352,7 +4352,7 @@ static bool vmsvga3d_dxvk_apply_context_textures(
                         return false;
                     }
                     VMVGA_TRACE_LOCAL_CACHED(
-                        trace_3d && VMVGA_TRACE_DEEP_D3D9_STATE,
+                        trace_3d && (VMVGA_TRACE_DEEP_D3D9_STATE || vmsvga_trace_detail_enabled(s)),
                         "D3D9-TEXTURE stage=unbind sampler=%u result=OK",
                         plan.stage);
                 } else {
@@ -4397,7 +4397,7 @@ static bool vmsvga3d_dxvk_apply_context_textures(
                         return false;
                     }
 
-                    if (trace_3d && VMVGA_TRACE_DEEP_D3D9_STATE) {
+                    if (trace_3d && (VMVGA_TRACE_DEEP_D3D9_STATE || vmsvga_trace_detail_enabled(s))) {
                         VMSVGA3DD3D9TransferSurface trace_info = { 0 };
                         const VMSVGA3DSurfaceImage *trace_image =
                             surface->mip_count != 0 && surface->mips != NULL
@@ -4925,7 +4925,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     bool reset_state = false;
     bool full_replay = false;
     bool trace = VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D);
-    bool deep_draw = trace && VMVGA_TRACE_DEEP_D3D9_DRAW;
+    bool deep_draw = trace &&
+                      (VMVGA_TRACE_DEEP_D3D9_DRAW ||
+                       vmsvga_trace_detail_enabled(s));
     const char *failure_stage = NULL;
     uint32_t failure_range = UINT32_MAX;
     uint64_t perf_total_start = 0;
