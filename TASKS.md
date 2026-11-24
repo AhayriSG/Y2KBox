@@ -418,7 +418,7 @@ interval across Y2KBox, without continuously generating diagnostic output.
 * No separate `-trace "vdagent*"` command-line option should be required.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * **Full-mode safety limit:** a full (`on`) capture automatically stops after
-  three seconds, including when the tester forgets to press the hotkey again.
+  two seconds, including when the tester forgets to press the hotkey again.
   Ctrl+Alt+L can stop it earlier. After stderr is flushed and restored, the
   completed full capture is compressed to the same timestamped `.log.gz`
   filename using zlib compression level 9 (maximum); the uncompressed `.log` is removed only after gzip succeeds.
@@ -582,7 +582,7 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 
 * **Session 130–131 follow-up (2026-11-24):** full captures now have a three-second
   QEMU realtime-timer limit and can still be stopped early with Ctrl+Alt+L.
-  After stderr restoration, full-mode `.log` files are compressed in-process
+  After stderr restoration, full-mode `.log` files are compressed asynchronously in a background worker
   with zlib level 9 (maximum compression) to `.log.gz`; the source is deleted
   only after successful gzip completion. Compression uses exclusive file
   creation and preserves the original log on failure. Simple-mode duration and
