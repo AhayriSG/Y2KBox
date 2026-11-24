@@ -567,6 +567,8 @@ VMSVGA3DDxvkScreenReadbackPollResult
 vmsvga3d_dxvk_d3d9_screen_readback_discard_completed(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
     uint64_t *sequence_out);
+bool vmsvga3d_dxvk_d3d9_screen_readback_has_pending(
+    const VMSVGA3DDxvkSurface *surface);
 VMSVGA3DDxvkScreenReadbackRetireResult
 vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t sid);

@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 105–114).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 106–115).
 
 ## How to use this file
 
@@ -20,13 +20,6 @@
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped `.log`; stopping ends that capture interval without restarting the VM.
 
 ## Latest ten worklog sessions
-
-
-### Session 105 — Establish VMware's documented XP OpenGL limitation
-- VMware Workstation Player 15 documentation explicitly states OpenGL applications in Windows XP guests run in software-emulation mode; VMware Tools 10.0.12 is the last Tools release for XP.
-- This makes the owner's GDI Generic 1.1.0 result expected; do not pursue a Tools reinstall or missing-ICD file hunt without new evidence.
-- WINVBE 1.3 provides an XP software OpenGL 2.1 ICD but requires replacing the display-driver stack and offers no hardware 3D; optional isolated test only.
-- T25's core requirement is a Windows XP guest OpenGL ICD that translates GL calls into SVGA3D commands. Documentation-only; no guest test, source changes, build, benchmark, or CI polling.
 
 
 ### Session 106 — Establish the Windows XP OpenGL ICD discovery constraint
@@ -77,6 +70,11 @@
 - The owner confirmed Linux and Windows SDL CI pass, and XP guest-driven resolution changes, Ctrl+Alt+F fullscreen toggling, and mouse tracking all work.
 - T24 is now DONE/green. TASKS.md records the complete acceptance set and no outstanding checks.
 - Documentation-only; no source changes, builds, guest tests, or CI polling. The verification results are the owner's confirmation.
+
+### Session 115 — T13e / T13e-F1: ScreenTarget flip supersession, dynamic VB ring sub-allocation, and O(1) GART unparent + FIFO txn batching
+- Recorded owner post-Session 80 Windows TCG validation captures: FIFA 2003 improved to ~85.7 FPS (`25.352 s` / `2,172` flips, playable, slow-motions gone), Hitman 2 Sicily fade showed `2,913` unpresented sync ScreenTarget readbacks (`2.410 s` = 60.3% wall time) at ~767 FPS, and F1 '99-'02 spent `3.711 s` (68% of `fifo_run`) in `71,979` `INVALIDATE` `D3DLOCK_DISCARD` VB renames.
+- Implemented three targeted VMVGA/DXVK/GART fixes on `main`: (1) steady-state FIFO full-screen D3D9 flip supersession (`vmsvga3d_screen_target_try_supersede_flip_live`) + eager staging copy in `retire_latest`; (2) per-surface ring sub-allocation for dynamic D3D9 vertex buffers (`4 MiB` lazy upgrade, `32 MiB` global extra budget, `SetStreamSource` `d3d9_ring_base` offset) + guarded `<= 2 MiB` overlap-`DISCARD`; (3) O(1) `"vmsvga-gart-%u[0]"` QOM property deletion + FIFO-pass GART `memory_region_transaction` batching (flushed before fences, disable, and FIFO exit).
+- Verified locally with `git diff --check`, preprocessor/header checks, and standalone `gcc -Werror` logic tests (no local `meson`/`mingw32-gcc`). Linux/Windows CI and owner Windows TCG in-game re-captures are pending.
 
 ## Current investigation / next actions
 

@@ -253,6 +253,7 @@ details, and measurements are indexed under TCG performance in `WORKLOG_INDEX.md
   stalls. The remaining crowded-grid behavior needs fresh, comparable profiling.
   Do not widen deferred-update batching or change guest-visible update ordering:
   previous captures showed each update consumed before another could merge.
+  - **Session 115 (pending CI & owner re-capture):** Owner post-Session 80 captures confirmed FIFA 2003 playable (~85.7 FPS, slow-motions gone) and isolated three remaining VMVGA/DXVK/GART BQL hotspots: Hitman 2 Sicily fade (`2,913` unpresented sync ScreenTarget readbacks = `2.410 s`), F1 '99-'02 (`71,979` VB `INVALIDATE` `D3DLOCK_DISCARD` renames = `3.711 s`, 68% of `fifo_run`), and FIFA 2003 (`>256 KiB` VB overlap `flags=0` = `611 ms`, GART O(N) unparent `168 ms` + `741` FlatView commits `1.404 s`). Implemented steady-state FIFO D3D9 flip supersession + eager retired staging copy, per-surface dynamic VB ring sub-allocation + guarded 2 MiB overlap-DISCARD, and O(1) GART QOM property deletion + FIFO-pass GART transaction batching (standalone local C tests passed; CI and owner re-captures pending).
 * **Current resume:** start with the latest owner-supplied capture. Establish its
   exact game, scene, weather, resolution, and duration before comparing against a
   matching baseline. Inspect the complete `Y2KBOX-PERF`/`Y2KBOX-PROF` records;

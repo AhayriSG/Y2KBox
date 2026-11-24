@@ -11397,7 +11397,9 @@ static bool vmsvga3d_d3d10_screen_target_bind_live(
             s->cb_screen_target_yield_pending = true;
             return false;
         }
-    } else if (!vmsvga3d_screen_target_quiesce_live(s)) {
+    } else if (!vmsvga3d_screen_target_try_supersede_flip_live(
+                   s, old_sid, surface, new_entry) &&
+               !vmsvga3d_screen_target_quiesce_live(s)) {
         return false;
     }
 
@@ -16590,6 +16592,7 @@ static bool vmsvga3d_d3d10_mob_fence64_live(
         return false;
     }
 
+    vmsvga3d_gart_txn_flush(s);
     mob = vmsvga3d_mob_get(s, command->mobId);
 
     return mob != NULL &&

@@ -95,6 +95,7 @@ struct vmsvga3d_dxvk_s {
     uint32_t d3d9_bound_depth_stencil_level;
     bool d3d9_bound_depth_stencil_valid;
     VMSVGA3DDxvkD3D9RetiredScreenReadback *d3d9_retired_screen_readback;
+    uint64_t d3d9_ring_vb_extra_bytes;
     void *d3d11_device;
     void *d3d11_device1;
     void *d3d11_context;
@@ -396,6 +397,9 @@ struct vmsvga3d_dxvk_surface_s {
     uint32_t d3d9_usage;
     uint32_t d3d9_format;
     uint32_t d3d9_length;
+    uint32_t d3d9_host_length;
+    uint32_t d3d9_ring_base;
+    uint32_t d3d9_ring_high;
     uint32_t d3d9_levels;
     void *d3d9_resource;
     void *d3d9_bounce;
@@ -421,7 +425,10 @@ struct vmsvga3d_dxvk_surface_s {
     VMSVGA3DDxvkBufferRange
         d3d9_buffer_inflight[VMSVGA3D_DXVK_BUFFER_INFLIGHT_MAX_RANGES];
     uint32_t d3d9_buffer_inflight_count;
+    uint32_t d3d9_buffer_discard_count;
+    uint64_t d3d9_buffer_nooverwrite_bytes;
     bool d3d9_buffer_discard_pending;
+    bool d3d9_buffer_last_was_overlap_discard;
 
     VMSVGA3DD3D10CreateDesc d3d11_desc;
     void *d3d11_resource;
@@ -3804,10 +3811,22 @@ static void vmsvga3d_dxvk_surface_evict_d3d9(
         surface->d3d9_resource = NULL;
     }
 #endif
+    if (surface->owner != NULL &&
+        surface->d3d9_host_length > surface->d3d9_length) {
+        uint64_t extra = surface->d3d9_host_length - surface->d3d9_length;
+        if (surface->owner->d3d9_ring_vb_extra_bytes >= extra) {
+            surface->owner->d3d9_ring_vb_extra_bytes -= extra;
+        } else {
+            surface->owner->d3d9_ring_vb_extra_bytes = 0;
+        }
+    }
     surface->d3d9_resource_type = VMSVGA3D_D3D9_HOST_RESOURCE_NONE;
     surface->d3d9_usage = 0;
     surface->d3d9_format = 0;
     surface->d3d9_length = 0;
+    surface->d3d9_host_length = 0;
+    surface->d3d9_ring_base = 0;
+    surface->d3d9_ring_high = 0;
     surface->d3d9_levels = 0;
     surface->d3d9_readback_width = 0;
     surface->d3d9_readback_height = 0;
@@ -3818,7 +3837,10 @@ static void vmsvga3d_dxvk_surface_evict_d3d9(
     surface->d3d9_buffer_dirty_end = 0;
     surface->d3d9_buffer_dirty_updates = 0;
     surface->d3d9_buffer_inflight_count = 0;
+    surface->d3d9_buffer_discard_count = 0;
+    surface->d3d9_buffer_nooverwrite_bytes = 0;
     surface->d3d9_buffer_discard_pending = false;
+    surface->d3d9_buffer_last_was_overlap_discard = false;
 }
 
 static void vmsvga3d_dxvk_surface_evict_d3d11(
@@ -4462,10 +4484,16 @@ bool vmsvga3d_dxvk_surface_materialize(
     surface->d3d9_usage = primary_desc->usage;
     surface->d3d9_format = primary_desc->format;
     surface->d3d9_length = primary_desc->length;
+    surface->d3d9_host_length = primary_desc->length;
+    surface->d3d9_ring_base = 0;
+    surface->d3d9_ring_high = 0;
     surface->d3d9_levels = primary_desc->levels;
     surface->d3d9_resident = true;
     surface->d3d9_buffer_inflight_count = 0;
+    surface->d3d9_buffer_discard_count = 0;
+    surface->d3d9_buffer_nooverwrite_bytes = 0;
     surface->d3d9_buffer_discard_pending = false;
+    surface->d3d9_buffer_last_was_overlap_discard = false;
 
     if (resource_plan->use == VMSVGA3D_D3D9_RESOURCE_USE_COLOR_TARGET &&
         primary_desc->multisample_type !=
@@ -15221,6 +15249,28 @@ vmsvga3d_dxvk_d3d11_screen_readback_poll_internal(
 #endif
 }
 
+bool vmsvga3d_dxvk_d3d9_screen_readback_has_pending(
+    const VMSVGA3DDxvkSurface *surface)
+{
+#if VMSVGA3D_DXVK_BACKEND_SUPPORTED
+    uint32_t i;
+
+    if (surface == NULL || !surface->d3d9_resident ||
+        surface->d3d11_resident) {
+        return false;
+    }
+    for (i = 0; i < VMSVGA3D_DXVK_SCREEN_READBACK_SLOTS; i++) {
+        if (surface->d3d9_screen_readback[i].pending) {
+            return true;
+        }
+    }
+    return false;
+#else
+    (void)surface;
+    return false;
+#endif
+}
+
 VMSVGA3DDxvkScreenReadbackRetireResult
 vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t sid)
@@ -15312,6 +15362,46 @@ vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
                sizeof(surface->d3d9_screen_readback[i]));
     }
     dxvk->d3d9_retired_screen_readback = retired;
+
+    /* Once retired, no newer submission can supersede the selected slot.
+     * Eagerly queue its GPU->staging copy + EVENT + FLUSH now so the next
+     * display refresh can publish it in a single tick without waiting two
+     * refreshes.  If queueing fails, leave d3d9_staging_submitted=false so
+     * the poll path handles it normally. */
+    {
+        VMSVGA3DDxvkScreenReadbackSlot *retired_slot =
+            &retired->slots[selected_index];
+        if (!retired_slot->d3d9_staging_submitted) {
+            VMSVGA3DDxvkGetRenderTargetData get_render_target_data = NULL;
+            VMSVGA3DDxvkQueryIssue issue = NULL;
+            VMSVGA3DDxvkQueryGetData get_data = NULL;
+            uint32_t query_data = 0;
+
+            if (vmsvga3d_dxvk_get_method(
+                    dxvk->d3d9_device,
+                    VMSVGA3D_DXVK_IDIRECT3DDEVICE9_GET_RENDER_TARGET_DATA,
+                    &get_render_target_data,
+                    sizeof(get_render_target_data)) &&
+                vmsvga3d_dxvk_get_method(
+                    retired_slot->query,
+                    VMSVGA3D_DXVK_IDIRECT3DQUERY9_ISSUE,
+                    &issue, sizeof(issue)) &&
+                vmsvga3d_dxvk_get_method(
+                    retired_slot->query,
+                    VMSVGA3D_DXVK_IDIRECT3DQUERY9_GET_DATA,
+                    &get_data, sizeof(get_data)) &&
+                vmsvga3d_dxvk_succeeded(get_render_target_data(
+                    dxvk->d3d9_device, retired_slot->render_target,
+                    retired_slot->staging)) &&
+                vmsvga3d_dxvk_succeeded(issue(
+                    retired_slot->query, VMSVGA3D_DXVK_D3DISSUE_END))) {
+                retired_slot->d3d9_staging_submitted = true;
+                (void)get_data(retired_slot->query, &query_data,
+                               sizeof(query_data),
+                               VMSVGA3D_DXVK_D3DGETDATA_FLUSH);
+            }
+        }
+    }
 
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
@@ -16222,6 +16312,10 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
         surface->d3d9_buffer_dirty_updates = 0;
         surface->d3d9_buffer_inflight_count = 0;
         surface->d3d9_buffer_discard_pending = false;
+        surface->d3d9_ring_base = 0;
+        surface->d3d9_ring_high = size;
+        surface->d3d9_buffer_nooverwrite_bytes = 0;
+        surface->d3d9_buffer_last_was_overlap_discard = false;
     }
     return vmsvga3d_dxvk_succeeded(result);
 #else
@@ -16428,6 +16522,17 @@ void vmsvga3d_dxvk_surface_mark_buffer_drawn_range(
     end = size > surface->d3d9_length - offset ? surface->d3d9_length
                                                : offset + size;
     vmsvga3d_dxvk_buffer_inflight_add(surface, offset, end);
+    {
+        uint32_t host_len = surface->d3d9_host_length
+                                ? surface->d3d9_host_length
+                                : surface->d3d9_length;
+        uint64_t abs_end = (uint64_t)surface->d3d9_ring_base + end;
+        uint32_t clamped_end = abs_end > host_len ? host_len
+                                                  : (uint32_t)abs_end;
+        if (clamped_end > surface->d3d9_ring_high) {
+            surface->d3d9_ring_high = clamped_end;
+        }
+    }
 #else
     (void)surface;
     (void)offset;
@@ -16446,6 +16551,18 @@ void vmsvga3d_dxvk_surface_mark_buffer_drawn_all(VMSVGA3DDxvkSurface *surface)
     surface->d3d9_buffer_inflight[0].start = 0;
     surface->d3d9_buffer_inflight[0].end = surface->d3d9_length;
     surface->d3d9_buffer_inflight_count = 1;
+    {
+        uint32_t host_len = surface->d3d9_host_length
+                                ? surface->d3d9_host_length
+                                : surface->d3d9_length;
+        uint64_t abs_end =
+            (uint64_t)surface->d3d9_ring_base + surface->d3d9_length;
+        uint32_t clamped_end = abs_end > host_len ? host_len
+                                                  : (uint32_t)abs_end;
+        if (clamped_end > surface->d3d9_ring_high) {
+            surface->d3d9_ring_high = clamped_end;
+        }
+    }
 #else
     (void)surface;
 #endif
@@ -16466,6 +16583,78 @@ bool vmsvga3d_dxvk_surface_buffer_fully_inflight(
 #endif
 }
 
+#define VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES (4u * 1024u * 1024u)
+#define VMSVGA3D_DXVK_D3D9_VB_RING_MAX_GUEST_BYTES (2u * 1024u * 1024u)
+#define VMSVGA3D_DXVK_D3D9_VB_RING_EXTRA_BUDGET_BYTES (32u * 1024u * 1024u)
+#define VMSVGA3D_DXVK_D3D9_VB_RING_FULL_UPGRADE_MAX_BYTES (256u * 1024u)
+#define VMSVGA3D_DXVK_D3D9_VB_RING_FULL_UPGRADE_THRESHOLD 4u
+#define VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN 64u
+#define VMSVGA3D_DXVK_D3D9_OVERLAP_DISCARD_MAX_BYTES (2u * 1024u * 1024u)
+#define VMSVGA3D_DXVK_D3D9_OVERLAP_DISCARD_UNCONDITIONAL_BYTES (256u * 1024u)
+
+#if VMSVGA3D_DXVK_BACKEND_SUPPORTED
+static bool vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
+    VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t target_length)
+{
+    VMSVGA3DDxvkCreateVertexBuffer create_vertex_buffer = NULL;
+    void *new_vb = NULL;
+    uint32_t current_host_len;
+    uint64_t delta;
+    int32_t result;
+
+    if (dxvk == NULL || surface == NULL || !surface->d3d9_resident ||
+        surface->d3d9_resource == NULL ||
+        surface->d3d9_resource_type !=
+            VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
+        (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC) == 0 ||
+        surface->d3d9_length == 0 ||
+        surface->d3d9_length > VMSVGA3D_DXVK_D3D9_VB_RING_MAX_GUEST_BYTES) {
+        return false;
+    }
+
+    current_host_len = surface->d3d9_host_length ? surface->d3d9_host_length
+                                                 : surface->d3d9_length;
+    if (target_length <= current_host_len ||
+        target_length <= surface->d3d9_length) {
+        return false;
+    }
+
+    delta = target_length - current_host_len;
+    if (delta > VMSVGA3D_DXVK_D3D9_VB_RING_EXTRA_BUDGET_BYTES ||
+        dxvk->d3d9_ring_vb_extra_bytes >
+            VMSVGA3D_DXVK_D3D9_VB_RING_EXTRA_BUDGET_BYTES - delta) {
+        return false;
+    }
+
+    if (!vmsvga3d_dxvk_get_method(
+            dxvk->d3d9_device,
+            VMSVGA3D_DXVK_IDIRECT3DDEVICE9_CREATE_VERTEX_BUFFER,
+            &create_vertex_buffer, sizeof(create_vertex_buffer))) {
+        return false;
+    }
+
+    result = create_vertex_buffer(
+        dxvk->d3d9_device, target_length, surface->d3d9_usage, 0,
+        VMSVGA3D_DXVK_D3DPOOL_DEFAULT, &new_vb, NULL);
+    if (!vmsvga3d_dxvk_succeeded(result) || new_vb == NULL) {
+        return false;
+    }
+
+    vmsvga3d_dxvk_d3d9_binding_cache_invalidate_surface(dxvk, surface);
+    vmsvga3d_dxvk_release(surface->d3d9_resource,
+                          VMSVGA3D_DXVK_IDIRECT3DDEVICE9_RELEASE);
+    surface->d3d9_resource = new_vb;
+    dxvk->d3d9_ring_vb_extra_bytes += delta;
+    surface->d3d9_host_length = target_length;
+    surface->d3d9_ring_base = 0;
+    surface->d3d9_ring_high = 0;
+    surface->d3d9_buffer_inflight_count = 0;
+    surface->d3d9_buffer_nooverwrite_bytes = 0;
+    surface->d3d9_buffer_last_was_overlap_discard = false;
+    return true;
+}
+#endif
+
 static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t offset,
     const void *shadow_data, uint32_t shadow_size, uint32_t size,
@@ -16483,13 +16672,20 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     QemuPerfStat lock_range_stat;
     QemuPerfStat lock_flags_stat;
     QemuPerfStat lock_size_stat;
+    uint32_t host_len;
     uint32_t lock_offset;
     uint32_t lock_size;
     const uint8_t *copy_src;
     uint32_t copy_size;
     uint32_t lock_flags;
+    uint32_t next_ring_base;
+    uint32_t next_ring_high;
+    bool is_ring_vb;
     bool full_range;
-    bool did_discard = false;
+    bool clear_generation = false;
+    bool count_full_discard = false;
+    bool mark_overlap_discard = false;
+    bool add_nooverwrite_bytes = false;
     bool did_invalidate_discard = false;
     bool did_overlap_fallback = false;
 
@@ -16497,16 +16693,17 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         !vmsvga3d_dxvk_surface_is_d3d9_buffer(surface) ||
         shadow_data == NULL || size == 0 ||
         offset > surface->d3d9_length || size > surface->d3d9_length - offset ||
-        offset > shadow_size || size > shadow_size - offset ||
-        !vmsvga3d_dxvk_get_method(
-            surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_LOCK,
-            &lock, sizeof(lock)) ||
-        !vmsvga3d_dxvk_get_method(
-            surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_UNLOCK,
-            &unlock, sizeof(unlock))) {
+        offset > shadow_size || size > shadow_size - offset) {
         return false;
     }
 
+    host_len = surface->d3d9_host_length ? surface->d3d9_host_length
+                                         : surface->d3d9_length;
+    is_ring_vb =
+        surface->d3d9_resource_type ==
+            VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER &&
+        (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC) != 0 &&
+        host_len >= surface->d3d9_length;
     full_range = offset == 0 && size == surface->d3d9_length;
 
     /*
@@ -16516,68 +16713,236 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
      * release.
      */
     if (!allow_async_lock) {
-        lock_offset = offset;
-        lock_size = size;
-        copy_src = (const uint8_t *)shadow_data + offset;
-        copy_size = size;
+        uint64_t abs_off = (uint64_t)surface->d3d9_ring_base + offset;
+        if (abs_off <= host_len && size <= host_len - abs_off) {
+            lock_offset = (uint32_t)abs_off;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data + offset;
+            copy_size = size;
+            next_ring_base = surface->d3d9_ring_base;
+            next_ring_high = MAX(surface->d3d9_ring_high,
+                                 (uint32_t)(abs_off + size));
+        } else if (shadow_size == surface->d3d9_length) {
+            lock_offset = 0;
+            lock_size = surface->d3d9_length;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = surface->d3d9_length;
+            full_range = true;
+            next_ring_base = 0;
+            next_ring_high = surface->d3d9_length;
+        } else {
+            return false;
+        }
         lock_flags = 0;
         lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FLAGS_ZERO;
-    } else if (full_range) {
-        lock_offset = 0;
-        lock_size = size;
-        copy_src = (const uint8_t *)shadow_data;
-        copy_size = size;
-        lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
-        lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
-        did_discard = true;
     } else if (surface->d3d9_buffer_discard_pending) {
         /*
-         * Guest invalidated the surface; rename the backing allocation via
-         * D3DLOCK_DISCARD while locking only the updated subrange.
+         * Guest invalidated the dynamic buffer.  For vertex buffers, sub-
+         * allocate a fresh aligned generation inside the host VB ring using
+         * D3DLOCK_NOOVERWRITE instead of forcing D3DLOCK_DISCARD buffer
+         * renames on every small write; SetStreamSource adds d3d9_ring_base.
          */
-        lock_offset = offset;
-        lock_size = size;
-        copy_src = (const uint8_t *)shadow_data + offset;
-        copy_size = size;
-        lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
-        lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
-        did_discard = true;
-        did_invalidate_discard = true;
+        uint64_t aligned_high;
+
+        if (is_ring_vb &&
+            host_len < VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES &&
+            surface->d3d9_length <=
+                VMSVGA3D_DXVK_D3D9_VB_RING_MAX_GUEST_BYTES) {
+            if (vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
+                    dxvk, surface, VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES)) {
+                host_len = surface->d3d9_host_length;
+            }
+        }
+
+        aligned_high = ((uint64_t)surface->d3d9_ring_high +
+                        (VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u)) &
+                       ~(uint64_t)(VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u);
+        if (is_ring_vb && aligned_high <= host_len &&
+            (uint64_t)offset + size <= host_len - aligned_high) {
+            lock_offset = (uint32_t)(aligned_high + offset);
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data + offset;
+            copy_size = size;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
+            next_ring_base = (uint32_t)aligned_high;
+            next_ring_high = (uint32_t)(aligned_high + offset + size);
+            clear_generation = true;
+        } else {
+            lock_offset = offset;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data + offset;
+            copy_size = size;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+            next_ring_base = 0;
+            next_ring_high = offset + size;
+            clear_generation = true;
+            did_invalidate_discard = true;
+        }
+    } else if (full_range) {
+        uint64_t aligned_high;
+
+        if (is_ring_vb &&
+            host_len == surface->d3d9_length &&
+            surface->d3d9_length <=
+                VMSVGA3D_DXVK_D3D9_VB_RING_FULL_UPGRADE_MAX_BYTES &&
+            surface->d3d9_buffer_discard_count >=
+                VMSVGA3D_DXVK_D3D9_VB_RING_FULL_UPGRADE_THRESHOLD) {
+            uint64_t target = (uint64_t)surface->d3d9_length * 16u;
+            if (target < 512u * 1024u) {
+                target = 512u * 1024u;
+            }
+            if (target > VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES) {
+                target = VMSVGA3D_DXVK_D3D9_VB_RING_TARGET_BYTES;
+            }
+            if (vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
+                    dxvk, surface, (uint32_t)target)) {
+                host_len = surface->d3d9_host_length;
+            }
+        }
+
+        aligned_high = ((uint64_t)surface->d3d9_ring_high +
+                        (VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u)) &
+                       ~(uint64_t)(VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u);
+        if (is_ring_vb && host_len > surface->d3d9_length &&
+            aligned_high <= host_len && size <= host_len - aligned_high) {
+            lock_offset = (uint32_t)aligned_high;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = size;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
+            next_ring_base = (uint32_t)aligned_high;
+            next_ring_high = (uint32_t)(aligned_high + size);
+            clear_generation = true;
+        } else {
+            lock_offset = 0;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = size;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+            next_ring_base = 0;
+            next_ring_high = size;
+            clear_generation = true;
+            count_full_discard = true;
+        }
     } else if (!vmsvga3d_dxvk_buffer_inflight_overlaps(surface, offset, size)) {
+        uint64_t abs_off = (uint64_t)surface->d3d9_ring_base + offset;
+
+        if (abs_off <= host_len && size <= host_len - abs_off) {
+            /*
+             * Proven disjoint from all byte ranges drawn in the current
+             * generation.
+             */
+            lock_offset = (uint32_t)abs_off;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data + offset;
+            copy_size = size;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
+            next_ring_base = surface->d3d9_ring_base;
+            next_ring_high = MAX(surface->d3d9_ring_high,
+                                 (uint32_t)(abs_off + size));
+            add_nooverwrite_bytes = true;
+        } else if (shadow_size == surface->d3d9_length) {
+            /*
+             * A sub-allocated ring generation grew past the end of host_len;
+             * wrap cleanly to base 0 with D3DLOCK_DISCARD from shadow so
+             * earlier bytes in this generation remain intact.
+             */
+            lock_offset = 0;
+            lock_size = surface->d3d9_length;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = surface->d3d9_length;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+            full_range = true;
+            next_ring_base = 0;
+            next_ring_high = surface->d3d9_length;
+            clear_generation = true;
+        } else {
+            return false;
+        }
+    } else if (shadow_size == surface->d3d9_length &&
+               (surface->d3d9_length <=
+                    VMSVGA3D_DXVK_D3D9_OVERLAP_DISCARD_UNCONDITIONAL_BYTES ||
+                (surface->d3d9_length <=
+                     VMSVGA3D_DXVK_D3D9_OVERLAP_DISCARD_MAX_BYTES &&
+                 (!surface->d3d9_buffer_last_was_overlap_discard ||
+                  surface->d3d9_buffer_nooverwrite_bytes >=
+                      surface->d3d9_length / 4u)))) {
         /*
-         * Proven disjoint from all byte ranges drawn since buffer creation or
-         * the last D3DLOCK_DISCARD rename.
+         * Dynamic-buffer overlap fallback: replace the full buffer from the
+         * authoritative CPU shadow so untouched bytes are preserved without
+         * stalling on earlier GPU reads, and reset in-flight tracking so
+         * subsequent ring-buffer appends use NOOVERWRITE.  For >256 KiB
+         * buffers (up to 2 MiB), require >=25% NOOVERWRITE progress between
+         * consecutive overlap-discards so genuine ring wraparounds reset
+         * cleanly without thrashing full copies on same-offset overwrites.
          */
-        lock_offset = offset;
-        lock_size = size;
-        copy_src = (const uint8_t *)shadow_data + offset;
-        copy_size = size;
-        lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
-        lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
-    } else if (surface->d3d9_length <= 256u * 1024u &&
-               shadow_size == surface->d3d9_length) {
-        /*
-         * Dynamic-buffer overlap fallback: replace the entire dynamic buffer
-         * from the authoritative CPU shadow via D3DLOCK_DISCARD so untouched
-         * bytes are preserved without stalling on earlier GPU reads, and reset
-         * in-flight tracking so subsequent ring-buffer appends use NOOVERWRITE.
-         */
-        lock_offset = 0;
-        lock_size = surface->d3d9_length;
-        copy_src = (const uint8_t *)shadow_data;
-        copy_size = surface->d3d9_length;
-        lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
-        lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+        uint64_t aligned_high = ((uint64_t)surface->d3d9_ring_high +
+                                 (VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u)) &
+                                ~(uint64_t)(VMSVGA3D_DXVK_D3D9_VB_RING_ALIGN - 1u);
+
+        if (is_ring_vb && host_len > surface->d3d9_length &&
+            aligned_high <= host_len &&
+            surface->d3d9_length <= host_len - aligned_high) {
+            lock_offset = (uint32_t)aligned_high;
+            lock_size = surface->d3d9_length;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = surface->d3d9_length;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_NOOVERWRITE;
+            next_ring_base = (uint32_t)aligned_high;
+            next_ring_high = (uint32_t)(aligned_high + surface->d3d9_length);
+        } else {
+            lock_offset = 0;
+            lock_size = surface->d3d9_length;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = surface->d3d9_length;
+            lock_flags = VMSVGA3D_DXVK_D3DLOCK_DISCARD;
+            lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_DISCARD;
+            next_ring_base = 0;
+            next_ring_high = surface->d3d9_length;
+        }
         full_range = true;
-        did_discard = true;
+        clear_generation = true;
+        mark_overlap_discard = true;
     } else {
-        lock_offset = offset;
-        lock_size = size;
-        copy_src = (const uint8_t *)shadow_data + offset;
-        copy_size = size;
+        uint64_t abs_off = (uint64_t)surface->d3d9_ring_base + offset;
+        if (abs_off <= host_len && size <= host_len - abs_off) {
+            lock_offset = (uint32_t)abs_off;
+            lock_size = size;
+            copy_src = (const uint8_t *)shadow_data + offset;
+            copy_size = size;
+            next_ring_base = surface->d3d9_ring_base;
+            next_ring_high = MAX(surface->d3d9_ring_high,
+                                 (uint32_t)(abs_off + size));
+        } else if (shadow_size == surface->d3d9_length) {
+            lock_offset = 0;
+            lock_size = surface->d3d9_length;
+            copy_src = (const uint8_t *)shadow_data;
+            copy_size = surface->d3d9_length;
+            full_range = true;
+            next_ring_base = 0;
+            next_ring_high = surface->d3d9_length;
+        } else {
+            return false;
+        }
         lock_flags = 0;
         lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FLAGS_ZERO;
         did_overlap_fallback = true;
+    }
+
+    if (!vmsvga3d_dxvk_get_method(
+            surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_LOCK,
+            &lock, sizeof(lock)) ||
+        !vmsvga3d_dxvk_get_method(
+            surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_UNLOCK,
+            &unlock, sizeof(unlock))) {
+        return false;
     }
 
     lock_type_stat =
@@ -16649,9 +17014,20 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     result = unlock(surface->d3d9_resource);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK, perf_start_ns);
 
-    if (vmsvga3d_dxvk_succeeded(result) && did_discard) {
-        surface->d3d9_buffer_discard_pending = false;
-        surface->d3d9_buffer_inflight_count = 0;
+    if (vmsvga3d_dxvk_succeeded(result)) {
+        surface->d3d9_ring_base = next_ring_base;
+        surface->d3d9_ring_high = next_ring_high;
+        if (clear_generation) {
+            surface->d3d9_buffer_discard_pending = false;
+            surface->d3d9_buffer_inflight_count = 0;
+            surface->d3d9_buffer_nooverwrite_bytes = 0;
+            surface->d3d9_buffer_last_was_overlap_discard = mark_overlap_discard;
+        } else if (add_nooverwrite_bytes) {
+            surface->d3d9_buffer_nooverwrite_bytes += copy_size;
+        }
+        if (count_full_discard && surface->d3d9_buffer_discard_count < UINT32_MAX) {
+            surface->d3d9_buffer_discard_count++;
+        }
     }
     return vmsvga3d_dxvk_succeeded(result);
 #else
@@ -18277,10 +18653,12 @@ bool vmsvga3d_dxvk_set_stream_source(VMSVGA3DDxvk *dxvk, uint32_t stream,
     if (surface != NULL) {
         if (!surface->d3d9_resident || surface->d3d9_resource == NULL ||
             surface->d3d9_resource_type !=
-                VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER) {
+                VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
+            surface->d3d9_ring_base > UINT32_MAX - offset) {
             return false;
         }
         buffer = surface->d3d9_resource;
+        offset += surface->d3d9_ring_base;
     }
 
     cacheable = stream < G_N_ELEMENTS(dxvk->d3d9_bound_stream_sources);

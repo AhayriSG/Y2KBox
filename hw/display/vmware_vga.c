@@ -480,6 +480,10 @@ struct vmsvga_state_s {
     uint64_t cb_queue_drains;
     bool cb_bh_running;
     bool cb_shadow_yield_allowed;
+    bool gart_txn_batch_allowed;
+    bool gart_txn_active;
+    uint32_t gart_txn_map_pages;
+    uint32_t gart_txn_unmap_pages;
     bool cb_shadow_yield_pending;
     bool cb_screen_target_yield_pending;
     uint32_t cb_shadow_yield_sid;
@@ -6098,6 +6102,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
     uint32_t maxloop = 1024;
     struct vmsvga_cursor_definition_s cursor = {0};
     bool trace_flight = vmsvga_trace_flight_enabled();
+    bool saved_gart_txn_batch_allowed;
 
     /* Keep register-command-buffer and legacy FIFO side effects ordered.
      * Private FIFO parsing for a queued command buffer sets
@@ -6145,6 +6150,9 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
     if (vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
         s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(1);
     }
+
+    saved_gart_txn_batch_allowed = s->gart_txn_batch_allowed;
+    s->gart_txn_batch_allowed = true;
 
     while ((len >= 1) && maxloop > 0) {
 
@@ -7175,6 +7183,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               }
               len -= command_words + 1;
               fence_arg = vmsvga_fifo_read(s);
+              vmsvga3d_gart_txn_flush(s);
               s->fence = fence_arg;
               if (vmsvga_fifo_has_reg(s, SVGA_FIFO_FENCE)) {
                   s->fifo[SVGA_FIFO_FENCE] = cpu_to_le32(fence_arg);
@@ -7777,6 +7786,9 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
 #endif
         }
     }
+
+    vmsvga3d_gart_txn_flush(s);
+    s->gart_txn_batch_allowed = saved_gart_txn_batch_allowed;
 
     if (flush_damage) {
         vmsvga_damage_flush(s);

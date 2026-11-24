@@ -487,6 +487,10 @@ static void vmsvga3d_screen_target_barrier_restore_live(
     struct vmsvga_state_s *s, bool discard_async);
 static bool vmsvga3d_screen_target_quiesce_yieldable_live(
     struct vmsvga_state_s *s, bool allow_d3d9_detach, bool *pending_out);
+static bool vmsvga3d_screen_target_try_supersede_flip_live(
+    struct vmsvga_state_s *s, uint32_t old_sid,
+    VMSVGA3DSurface *new_surface,
+    const SVGAOTableScreenTargetEntry *new_entry);
 static VMSVGA3DDxvkScreenReadbackPollResult
 vmsvga3d_screen_target_async_poll_present_live(
     struct vmsvga_state_s *s, VMSVGA3DSurface *surface,
@@ -773,6 +777,7 @@ static void vmsvga3d_surface_clear_legacy_bindings(
 
 static struct vmsvga3d_state_s *
 vmsvga3d_state_ensure(struct vmsvga_state_s *s);
+static void vmsvga3d_gart_txn_flush(struct vmsvga_state_s *s);
 static void vmsvga3d_gart_disable_live(struct vmsvga_state_s *s);
 
 static void *vmsvga3d_dx_cotable_entry_ptr(struct vmsvga_state_s *s,
@@ -1816,10 +1821,43 @@ static bool vmsvga3d_gart_resolve_page(uint64_t gpa,
     return true;
 }
 
+static void vmsvga3d_gart_txn_flush(struct vmsvga_state_s *s)
+{
+    uint32_t map_pages;
+    uint32_t unmap_pages;
+    QemuPerfStat commit_stat;
+    uint64_t perf_start_ns;
+
+    if (s == NULL || !s->gart_txn_active) {
+        return;
+    }
+
+    map_pages = s->gart_txn_map_pages;
+    unmap_pages = s->gart_txn_unmap_pages;
+    s->gart_txn_active = false;
+    s->gart_txn_map_pages = 0;
+    s->gart_txn_unmap_pages = 0;
+
+    if (map_pages > 0) {
+        qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT, map_pages);
+    }
+    if (unmap_pages > 0) {
+        qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, unmap_pages);
+    }
+    commit_stat = map_pages > 0 ? QEMU_PERF_GART_MAP_COMMIT
+                                : QEMU_PERF_GART_UNMAP_COMMIT;
+    perf_start_ns = qemu_perf_stats_begin(commit_stat);
+    memory_region_transaction_commit();
+    qemu_perf_stats_end(commit_stat, perf_start_ns);
+}
+
 static void vmsvga3d_gart_page_remove_alias(struct vmsvga_state_s *s,
-                                             VMSVGA3DGARTPage *page)
+                                             VMSVGA3DGARTPage *page,
+                                             uint32_t aperture_page)
 {
     MemoryRegion *bar1;
+    Object *alias_obj;
+    Object *parent;
 
     if (page == NULL || !page->alias_active) {
         return;
@@ -1829,7 +1867,29 @@ static void vmsvga3d_gart_page_remove_alias(struct vmsvga_state_s *s,
     if (bar1 != NULL) {
         memory_region_del_subregion(bar1, &page->alias);
     }
-    object_unparent(OBJECT(&page->alias));
+    alias_obj = OBJECT(&page->alias);
+    parent = alias_obj->parent;
+    if (parent != NULL) {
+        char prop_name[48];
+        ObjectProperty *prop;
+
+        /*
+         * memory_region_init_alias() registers each page alias on pci_vmsvga
+         * as "vmsvga-gart-<page>[*]", which resolves to "[0]" because at most
+         * one alias exists per aperture page.  Direct hash deletion avoids
+         * object_unparent()'s two O(N) full-table scans over ~8k GART pages.
+         */
+        snprintf(prop_name, sizeof(prop_name), "vmsvga-gart-%u[0]",
+                 aperture_page);
+        prop = object_property_find(parent, prop_name);
+        if (prop != NULL && prop->opaque == alias_obj) {
+            object_property_del(parent, prop_name);
+        } else {
+            object_unparent(alias_obj);
+        }
+    } else {
+        object_unparent(alias_obj);
+    }
     page->alias_active = false;
 }
 
@@ -1881,10 +1941,12 @@ static void vmsvga3d_gart_disable_live(struct vmsvga_state_s *s)
         return;
     }
 
+    vmsvga3d_gart_txn_flush(s);
+
     if (state->gart_pages != NULL) {
         memory_region_transaction_begin();
         for (page = 0; page < state->gart_page_count; page++) {
-            vmsvga3d_gart_page_remove_alias(s, &state->gart_pages[page]);
+            vmsvga3d_gart_page_remove_alias(s, &state->gart_pages[page], page);
         }
         memory_region_transaction_commit();
     }
@@ -2046,11 +2108,18 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
     qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_ALIAS,
                              mob->gbo.page_count);
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_ALIAS);
-    memory_region_transaction_begin();
+    if (s->gart_txn_batch_allowed) {
+        if (!s->gart_txn_active) {
+            memory_region_transaction_begin();
+            s->gart_txn_active = true;
+        }
+    } else {
+        memory_region_transaction_begin();
+    }
     for (page = 0; page < mob->gbo.page_count; page++) {
         VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
 
-        vmsvga3d_gart_page_remove_alias(s, entry);
+        vmsvga3d_gart_page_remove_alias(s, entry, first_page + page);
         vmsvga3d_gart_page_install_alias(s, entry, first_page + page,
                                          &sections[page]);
         entry->gpa = gpas[page];
@@ -2058,11 +2127,15 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
         entry->mob_page = page;
     }
     qemu_perf_stats_end(QEMU_PERF_GART_MAP_ALIAS, perf_start_ns);
-    qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
-                             mob->gbo.page_count);
-    perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
-    memory_region_transaction_commit();
-    qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
+    if (s->gart_txn_batch_allowed) {
+        s->gart_txn_map_pages += mob->gbo.page_count;
+    } else {
+        qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
+                                 mob->gbo.page_count);
+        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
+        memory_region_transaction_commit();
+        qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
+    }
     ok = true;
 
 out:
@@ -2106,6 +2179,7 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
 
     {
         bool txn_opened = false;
+        uint32_t removed_pages = 0;
 
         qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_ALIAS, num_pages);
         perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_ALIAS);
@@ -2113,18 +2187,28 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
             VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
 
             if (entry->alias_active) {
-                if (!txn_opened) {
+                if (s->gart_txn_batch_allowed) {
+                    if (!s->gart_txn_active) {
+                        memory_region_transaction_begin();
+                        s->gart_txn_active = true;
+                    }
+                } else if (!txn_opened) {
                     memory_region_transaction_begin();
                     txn_opened = true;
                 }
-                vmsvga3d_gart_page_remove_alias(s, entry);
+                vmsvga3d_gart_page_remove_alias(s, entry, first_page + page);
+                removed_pages++;
             }
             entry->gpa = 0;
             entry->mobid = SVGA3D_INVALID_ID;
             entry->mob_page = 0;
         }
         qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
-        if (txn_opened) {
+        if (s->gart_txn_batch_allowed) {
+            if (removed_pages > 0) {
+                s->gart_txn_unmap_pages += num_pages;
+            }
+        } else if (txn_opened) {
             qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, num_pages);
             perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
             memory_region_transaction_commit();
@@ -2271,7 +2355,7 @@ static bool vmsvga3d_mob_redefine(struct vmsvga_state_s *s,
                 continue;
             }
 
-            vmsvga3d_gart_page_remove_alias(s, gart_page);
+            vmsvga3d_gart_page_remove_alias(s, gart_page, page);
             if (resolved[page]) {
                 vmsvga3d_gart_page_install_alias(s, gart_page, page,
                                                  &sections[page]);
@@ -2398,7 +2482,7 @@ static bool vmsvga2d_mob_update_mapping_live(struct vmsvga_state_s *s,
                 continue;
             }
 
-            vmsvga3d_gart_page_remove_alias(s, gart_page);
+            vmsvga3d_gart_page_remove_alias(s, gart_page, page);
             if (resolved[page]) {
                 vmsvga3d_gart_page_install_alias(s, gart_page, page,
                                                  &sections[page]);
@@ -18032,6 +18116,88 @@ static bool vmsvga3d_screen_target_quiesce_yieldable_live(
     return true;
 }
 
+/*
+ * On steady-state FIFO valid-to-valid full-screen D3D9 flips, the incoming
+ * surface immediately supersedes the entire scanout.  Synchronously reading
+ * back an unpresented old frame on every flip stalls the BQL at guest flip
+ * rate (e.g. >700 flips/s during simple fade screens).  If old_sid has a
+ * display-submitted async readback slot, detach it into the single-entry
+ * retired mailbox; otherwise drop its unpresented dirty rects.
+ */
+static bool vmsvga3d_screen_target_try_supersede_flip_live(
+    struct vmsvga_state_s *s, uint32_t old_sid,
+    VMSVGA3DSurface *new_surface,
+    const SVGAOTableScreenTargetEntry *new_entry)
+{
+    struct vmsvga3d_state_s *state;
+    VMSVGA3DSurface *old_surface;
+    VMSVGA3DD3D9TransferSurface old_d3d9_info = {0};
+    const struct svga3d_surface_desc *new_desc = NULL;
+
+    if (s == NULL || s->svga3d == NULL || s->dxvk == NULL ||
+        new_surface == NULL || new_entry == NULL ||
+        old_sid == SVGA3D_INVALID_ID || old_sid >= SVGA3D_MAX_SURFACE_IDS ||
+        !s->screen_defined || s->screen_width == 0 || s->screen_height == 0 ||
+        s->cb_shadow_yield_allowed || s->screen_frontend_deferred ||
+        s->screen_handoff_active || s->screen_direct_active) {
+        return false;
+    }
+
+    state = s->svga3d;
+    if (state->screen_target_barrier_active ||
+        state->screen_target_frontend_commit_pending ||
+        vmsvga3d_dxvk_d3d11_retired_screen_readback_count(s->dxvk) != 0) {
+        return false;
+    }
+    if (state->screen_target_dirty_count != 0 &&
+        state->screen_target_dirty_sid != old_sid) {
+        return false;
+    }
+    if (!new_surface->screen_target_content_valid ||
+        new_surface->mips == NULL || new_surface->mip_count == 0 ||
+        le32_to_cpu(new_entry->width) != s->screen_width ||
+        le32_to_cpu(new_entry->height) != s->screen_height ||
+        new_surface->mips[0].size.width != s->screen_width ||
+        new_surface->mips[0].size.height != s->screen_height ||
+        !vmsvga3d_present_format(new_surface, &new_desc) ||
+        !vmsvga3d_screen_target_direct_format_compatible(new_surface,
+                                                         new_desc)) {
+        return false;
+    }
+
+    old_surface = state->surfaces[old_sid];
+    if (old_surface == NULL || old_surface->dxvk_surface == NULL ||
+        !vmsvga3d_d3d9_runtime_surface_info(s, old_surface, &old_d3d9_info) ||
+        !old_d3d9_info.resident ||
+        vmsvga3d_dxvk_d3d11_surface_resident(old_surface->dxvk_surface)) {
+        return false;
+    }
+
+    if (vmsvga3d_dxvk_d3d9_screen_readback_has_pending(
+            old_surface->dxvk_surface)) {
+        VMSVGA3DDxvkScreenReadbackRetireResult retire =
+            vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
+                s->dxvk, old_surface->dxvk_surface, old_sid);
+
+        if (retire != VMSVGA3D_DXVK_SCREEN_READBACK_RETIRED &&
+            retire != VMSVGA3D_DXVK_SCREEN_READBACK_RETIRE_IDLE) {
+            return false;
+        }
+    }
+
+    state->screen_target_dirty_sid = SVGA3D_INVALID_ID;
+    state->screen_target_dirty_count = 0;
+    memset(state->screen_target_dirty_rects, 0,
+           sizeof(state->screen_target_dirty_rects));
+    state->screen_target_full_present_pending = false;
+    vmsvga3d_screen_target_write_tracking_reset_live(s, false);
+    VMVGA_TRACE_LOCAL(
+        VMVGA_TRACE_3D,
+        "SCREEN-READBACK backend=d3d9 phase=supersede-flip old-sid=%u",
+        old_sid);
+    return true;
+}
+
 static bool vmsvga3d_screen_target_quiesce_live(struct vmsvga_state_s *s)
 {
     struct vmsvga3d_state_s *state;
@@ -19007,6 +19173,7 @@ static bool vmsvga2d_handle_gb_mob_fence(struct vmsvga_state_s *s,
 
         body = payload;
         value = body->value;
+        vmsvga3d_gart_txn_flush(s);
         mob = vmsvga3d_mob_get(s, body->mobId);
         ok = mob != NULL &&
              vmsvga3d_mob_write(s, mob, body->mobOffset,
@@ -19059,6 +19226,7 @@ static bool vmsvga3d_handle_gb_mob_fence(struct vmsvga_state_s *s,
             vmsvga3d_d3d9_process_pending_gb_queries(s, "GB_MOB_FENCE");
         }
 
+        vmsvga3d_gart_txn_flush(s);
         mob = vmsvga3d_mob_get(s, body->mobId);
         ok = mob != NULL &&
              vmsvga3d_mob_write(s, mob, body->mobOffset,
