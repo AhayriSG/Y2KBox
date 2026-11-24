@@ -2,9 +2,14 @@
 
 This directory holds selected diagnostic logs captured manually from Y2KBox.
 
-Capture logs normally, compress the ones worth keeping with gzip, and add the
-`.log.gz` files here. These are ordinary text logs inside standard gzip
-archives; no special viewer or automated upload process is required.
+Capture logs normally and add selected captures here as `.log.gz` files.
+Full (`on`) captures are automatically stopped after five seconds (or earlier
+with Ctrl+Alt+L) and compressed by Y2KBox after stderr is restored. Simple
+captures remain uncompressed `.log` files; compress those manually when they
+are worth keeping. Automatic capture compression writes to the launch working
+directory and does not add files to this repository. These are ordinary text
+logs inside standard gzip archives; no special viewer or automated upload
+process is required.
 
 Use filenames that identify the session and capture mode, for example:
 
