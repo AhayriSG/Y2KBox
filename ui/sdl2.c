@@ -465,6 +465,11 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         return false;
     }
     image_bytes = row_bytes * (size_t)height;
+    if (image_bytes > 64u * 1024u * 1024u) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "display surface exceeds the 64 MiB safety limit.");
+        return false;
+    }
     pixels = g_try_malloc(image_bytes);
     linebuf = qemu_pixman_linebuf_create(PIXMAN_BE_r8g8b8, width);
     if (pixels == NULL || linebuf == NULL ||
