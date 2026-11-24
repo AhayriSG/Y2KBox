@@ -32,7 +32,7 @@ have follow-up subsections under the same number.
 | VirtIO Block / Net and supported guest devices | 37–44 | VirtIO source restoration, Linux host-backend build gates, device defaults and PS/2 pointing-device policy |
 | Scene-stall profiling, VMVGA FIFO, GART and FlatView | 45–59, 68–80, 115 | T13e investigation history, instrumentation semantics, GART and memory transactions, FlatView algorithms, BQL contention, ScreenTarget readback stalls and performance hypotheses |
 | D3D9 dynamic-buffer uploads, DISCARD / NOOVERWRITE and lock profiling | 68–76, 80, 115, 129 | Buffer invalidation, in-flight range tracking, lock-mode selection, deferred uploads, ring sub-allocation, merge/flush cadence and measured lock improvements |
-| Full-mode resource/update/draw correlation diagnostics | 128–130 | FIFO sequence correlation, guest-backed image updates, D3D9 buffer upload decisions, draw-range metadata, and readback event linkage for visual investigations |
+| Full-mode resource/update/draw correlation diagnostics | 128–130, 136 | FIFO sequence correlation, guest-backed image updates, D3D9 buffer upload decisions, draw-range metadata, and readback event linkage for visual investigations |
 | F1 Challenge performance investigation | 45–47, 68–79, 115 | Crowded-grid slowdown, vCPU profiling, x87/TCG hotspots, owner validation and Session 115's dynamic vertex-buffer DISCARD investigation |
 | FIFA 2003 performance investigation | 45, 48–59, 80, 115 | Scene-transition stalls, VMVGA/DXVK timing, memory topology costs, Session 80 optimizations and Session 115 validation/fixes |
 | Hitman 2: Silent Assassin performance and rendering | 115 | Sicily fade-in/out ScreenTarget readback stalls and dynamic vertex-buffer upload behavior |
