@@ -6294,7 +6294,8 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             vmsvga_trace_fifo_record(s, cmd, is_3d, supported_3d);
         }
 
-        if (trace_flight && VMVGA_TRACE_DEEP_FIFO) {
+        if (trace_flight &&
+            (VMVGA_TRACE_DEEP_FIFO || vmsvga_trace_detail_enabled(s))) {
             const char *name = vmsvga_trace_fifo_cmd_name(cmd);
 
             if (name != NULL) {
@@ -6974,6 +6975,12 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               width = vmsvga_fifo_read(s);
               height = vmsvga_fifo_read(s);
               rop = vmsvga_fifo_read(s);
+              VMVGA_TRACE_LOCAL(
+                  VMVGA_TRACE_DRAW,
+                  "SURFACE_COPY src=%u dst=%u src_xy=%u,%u dst_xy=%u,%u "
+                  "size=%ux%u rop=%u",
+                  src_surface_offset, dst_surface_offset, src_x, src_y,
+                  dst_x, dst_y, width, height, rop);
               if (!vmsvga_surface_copy(s, src_surface_offset, dst_surface_offset,
                                        src_x, src_y, dst_x, dst_y, width, height,
                                        rop)) {
@@ -7005,6 +7012,10 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               width = vmsvga_fifo_read(s);
               height = vmsvga_fifo_read(s);
               rop = vmsvga_fifo_read(s);
+              VMVGA_TRACE_LOCAL(
+                  VMVGA_TRACE_DRAW,
+                  "SURFACE_FILL dst=%u rect=%u,%u/%ux%u color=0x%08x rop=%u",
+                  dst_surface_offset, x, y, width, height, color, rop);
               if (!vmsvga_surface_fill(s, color, dst_surface_offset, x, y, width,
                                        height, rop)) {
                   VMVGA_TRACE_WARNING("SURFACE_FILL ignored invalid surface or ROP");
@@ -7095,6 +7106,10 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 SizeOfSVGAFifoCmdRectCopy -= 1;
                 uint32_t h = vmsvga_fifo_read(s);
                 SizeOfSVGAFifoCmdRectCopy -= 1;
+                VMVGA_TRACE_LOCAL(
+                    VMVGA_TRACE_DRAW,
+                    "RECT_COPY src=%u,%u dst=%u,%u size=%ux%u",
+                    x0, y0, x1, y1, w, h);
                 if (!vmsvga_copy_rect(s, x0, y0, x1, y1, w, h)) {
                     VMVGA_TRACE_WARNING("RECT_COPY ignored invalid rectangle");
                 }
