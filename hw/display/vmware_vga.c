@@ -44,7 +44,6 @@
 #include "hw/i386/vmport-vmvga.h"
 #include "include/vmware_vga_compat.h"
 #include "include/vmware_vga_gmr.h"
-#include "include/vmware_vga_dxvk.h"
 #include "include/includeCheck.h"
 #pragma pack(push, 1)
 #include "include/svga_types.h"
@@ -52,6 +51,7 @@
 #include "include/svga_overlay.h"
 #include "include/svga_reg.h"
 #pragma pack(pop)
+#include "include/vmware_vga_dxvk.h"
 #include "migration/vmstate.h"
 #include "vga_int.h"
 
