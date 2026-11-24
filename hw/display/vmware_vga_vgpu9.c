@@ -5228,7 +5228,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
             goto out;
         }
 
-        if (deep_draw) {
+        if (vmsvga_trace_detail_enabled(s)) {
             fprintf(stderr,
                     "VMVGA-D3D9-GEOMETRY seq=%" PRIu64 " cid=%u range=%u "
                     "target=%u:%u:%u viewport=%u,%u/%ux%u "
@@ -5249,6 +5249,9 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                     plan.indexed.num_vertices, plan.index_surface_id,
                     ranges[i].indexArray.offset, ranges[i].indexWidth,
                     stream_count);
+        }
+
+        if (deep_draw) {
             fprintf(stderr,
                     "VMVGA-D3D9-DRAW plan[%u] action=%u prim=%u count=%u "
                     "start_vertex=%u index_sid=%u unbind=%u sync_index=%u "
