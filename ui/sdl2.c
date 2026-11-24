@@ -30,6 +30,7 @@
 #include "ui/console.h"
 #include "ui/input.h"
 #include "ui/sdl2.h"
+#include "ui/qemu-pixman.h"
 #include "system/runstate.h"
 #include "system/runstate-action.h"
 #include "system/system.h"
@@ -42,6 +43,9 @@
 #include "qemu/thread.h"
 
 #include <zlib.h>
+#ifdef CONFIG_PNG
+#include <png.h>
+#endif
 
 #include <fcntl.h>
 #include <glib/gstdio.h>
@@ -405,6 +409,140 @@ static void sdl_wait_for_log_compression(void)
     qemu_mutex_unlock(&sdl_log_compress_mutex);
 }
 
+
+#ifdef CONFIG_PNG
+/*
+ * Save one CPU-side guest display-surface snapshot after a Full capture.
+ * This deliberately avoids SDL_RenderReadPixels/glReadPixels and therefore
+ * does not force a host GPU readback.
+ */
+static bool sdl_save_log_capture_png(const char *log_filename,
+                                     struct sdl2_console *scon)
+{
+    pixman_image_t *linebuf = NULL;
+    png_struct *png_ptr = NULL;
+    png_info *info_ptr = NULL;
+    g_autofree char *base = NULL;
+    g_autofree char *png_filename = NULL;
+    uint8_t *pixels = NULL;
+    FILE *fp = NULL;
+    size_t row_bytes;
+    size_t image_bytes;
+    int width;
+    int height;
+    int y;
+
+    if (scon == NULL || scon->surface == NULL ||
+        scon->surface->image == NULL || scon->has_dmabuf) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "no CPU-backed display surface is available.");
+        return false;
+    }
+
+    width = surface_width(scon->surface);
+    height = surface_height(scon->surface);
+    if (width <= 0 || height <= 0 ||
+        (size_t)width > SIZE_MAX / 3u) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "invalid display-surface dimensions.");
+        return false;
+    }
+
+    row_bytes = (size_t)width * 3u;
+    if ((size_t)height > SIZE_MAX / row_bytes) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "display-surface size overflow.");
+        return false;
+    }
+    image_bytes = row_bytes * (size_t)height;
+    pixels = g_malloc(image_bytes);
+    linebuf = qemu_pixman_linebuf_create(PIXMAN_BE_r8g8b8, width);
+    if (linebuf == NULL) {
+        error_report("Full diagnostic PNG snapshot skipped: "
+                     "could not allocate the RGB conversion row.");
+        g_free(pixels);
+        return false;
+    }
+
+    /*
+     * Convert/copy the live QEMU DisplaySurface into a private RGB buffer
+     * before writing the file. The encoder never reads a surface that may
+     * be modified by subsequent guest display updates.
+     */
+    for (y = 0; y < height; y++) {
+        qemu_pixman_linebuf_fill(linebuf, scon->surface->image,
+                                 width, 0, y);
+        memcpy(pixels + (size_t)y * row_bytes,
+               pixman_image_get_data(linebuf), row_bytes);
+    }
+    pixman_image_unref(linebuf);
+
+    if (g_str_has_suffix(log_filename, ".log")) {
+        base = g_strndup(log_filename, strlen(log_filename) - 4);
+    } else {
+        base = g_strdup(log_filename);
+    }
+    png_filename = g_strconcat(base, ".png", NULL);
+    fp = g_fopen(png_filename, "wb");
+    if (fp == NULL) {
+        error_report("Could not create diagnostic PNG %s: %s",
+                     png_filename, strerror(errno));
+        g_free(pixels);
+        return false;
+    }
+
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (png_ptr == NULL) {
+        error_report("Could not initialize libpng for diagnostic snapshot.");
+        fclose(fp);
+        g_unlink(png_filename);
+        g_free(pixels);
+        return false;
+    }
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) {
+        error_report("Could not allocate libpng snapshot metadata.");
+        png_destroy_write_struct(&png_ptr, NULL);
+        fclose(fp);
+        g_unlink(png_filename);
+        g_free(pixels);
+        return false;
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        png_destroy_write_struct(&png_ptr, &info_ptr);
+        fclose(fp);
+        g_unlink(png_filename);
+        g_free(pixels);
+        error_report("Failed while encoding diagnostic PNG %s.", png_filename);
+        return false;
+    }
+
+    png_init_io(png_ptr, fp);
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8,
+                 PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+    png_write_info(png_ptr, info_ptr);
+    for (y = 0; y < height; y++) {
+        png_write_row(png_ptr, pixels + (size_t)y * row_bytes);
+    }
+    png_write_end(png_ptr, NULL);
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+
+    if (fclose(fp) != 0) {
+        error_report("Could not finish diagnostic PNG %s: %s",
+                     png_filename, strerror(errno));
+        g_unlink(png_filename);
+        g_free(pixels);
+        return false;
+    }
+
+    g_free(pixels);
+    error_report("Saved Full-mode guest display snapshot: %s", png_filename);
+    return true;
+}
+#endif /* CONFIG_PNG */
+
 static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
 static void sdl_log_capture_timeout(void *opaque)
@@ -555,11 +693,19 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         sdl_log_capture_enabled = false;
-        sdl_log_capture_console = NULL;
         if (debug_detail && sdl_log_capture_filename) {
+#ifdef CONFIG_PNG
+            sdl_save_log_capture_png(
+                sdl_log_capture_filename,
+                sdl_log_capture_console != NULL ? sdl_log_capture_console : scon);
+#else
+            error_report("Full diagnostic PNG snapshot unavailable: "
+                         "this build was configured without libpng.");
+#endif
             sdl_start_log_compression(sdl_log_capture_filename);
             sdl_log_capture_filename = NULL;
         }
+        sdl_log_capture_console = NULL;
         g_clear_pointer(&sdl_log_capture_filename, g_free);
     }
 
