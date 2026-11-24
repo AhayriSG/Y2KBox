@@ -32,6 +32,9 @@
 
 #include "qapi/error.h"
 
+/* Public DXVK declarations use SVGA3D types and vGPU10 limits. */
+#include "svga3d_dx.h"
+
 typedef struct vmsvga3d_dxvk_s VMSVGA3DDxvk;
 typedef struct vmsvga3d_dxvk_surface_s VMSVGA3DDxvkSurface;
 
