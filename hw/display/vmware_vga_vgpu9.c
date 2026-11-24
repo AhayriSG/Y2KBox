@@ -5055,16 +5055,16 @@ static bool vmsvga3d_d3d9_decode_geometry_bounds(
                 *reason = "index-buffer-out-of-bounds";
                 return false;
             }
-            if (index_width == sizeof(uint16_t)) {
-                uint16_t value;
-                memcpy(&value,
-                       (const uint8_t *)index_surface->mips[0].data +
-                           index_offset, sizeof(value));
-                raw_index = value;
-            } else {
-                memcpy(&raw_index,
-                       (const uint8_t *)index_surface->mips[0].data +
-                           index_offset, sizeof(raw_index));
+            {
+                const uint8_t *index_data =
+                    (const uint8_t *)index_surface->mips[0].data +
+                    index_offset;
+                raw_index = (uint32_t)index_data[0] |
+                            ((uint32_t)index_data[1] << 8);
+                if (index_width == sizeof(uint32_t)) {
+                    raw_index |= ((uint32_t)index_data[2] << 16) |
+                                 ((uint32_t)index_data[3] << 24);
+                }
             }
             if (raw_index < plan->indexed.min_vertex_index ||
                 raw_index - plan->indexed.min_vertex_index >=
