@@ -76,10 +76,14 @@
 - IMPLEMENTED remains yellow until acceptance checks are complete. AGENTS.md now states the authoritative-field rule.
 - Documentation-only; no source changes, builds, guest tests, or CI polling.
 
-### Session 112 — Plan selectable graphics machine profiles in T12
-- T12 now describes a future profile-based launcher: each graphics profile binds its backend, matching XP guest-driver environment, and dedicated system qcow2 image.
-- The existing VMware SVGA II / SVGA3D profile remains the active/default Direct3D 9 path. VBoxVGA 5.2.x / Chromium SharedOpenGL is recorded only as a proposed, experimental OpenGL-oriented second profile.
-- The VBox profile is not implemented or selectable; it requires a minimal end-to-end Y2KBox proof of concept and source/licensing audit. T16 remains the research/feasibility track.
+### Session 112 — Initial T12 graphics profile proposal
+- T12 was initially updated to describe two isolated graphics machine profiles: VMVGA/SVGA3D as the active path and VBoxVGA 5.2.x/SharedOpenGL as a proposed experimental path.
+- This was superseded by Session 113's clarification: the intended design is user-created VM instances, not application-defined presets. See Session 113 and current T12.
+
+### Session 113 — Clarify T12 as a user-managed instance manager
+- T12 now describes a launcher/instance manager where users create and name independent XP VM instances and select virtual hardware, including the virtual GPU, per instance.
+- Each instance has independently persisted hardware configuration and its own system disk/guest installation. No hard-coded vendor presets or two bundled XP images are implied.
+- VMVGA/SVGA3D remains the supported path. VBoxVGA 5.2.x/SharedOpenGL is only a future research candidate, gated on an end-to-end proof of concept and licensing/source audit; it is not selectable today.
 - Documentation-only; no source changes, builds, guest tests, benchmarks, or CI polling.
 
 ## Current investigation / next actions
