@@ -474,8 +474,8 @@ task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
 
-## T24 (P1) Fixed-size SDL guest display window — 🟡 IMPLEMENTED
-**Status:** IMPLEMENTED (Windows window behavior owner-verified; CI + remaining XP checks outstanding)
+## T24 (P1) Fixed-size SDL guest display window — 🟢 DONE
+**Status:** DONE 2026-11-24 (Linux/Windows SDL CI and owner-run XP acceptance verified)
 Make the SDL host window follow the VMVGA guest display surface rather than
 allowing host-side window geometry to influence the guest.
 
@@ -490,17 +490,14 @@ allowing host-side window geometry to influence the guest.
   the guest resolution. Keep `Ctrl+Alt+F` as the interactive fullscreen toggle.
 * Do not alter mouse emulation or coordinate mapping to compensate for
   host-window resizing.
-* **Owner-confirmed Windows behavior (2026-11-24):** the built Windows
-  application presents a decorated, non-resizable window, and the titlebar
-  maximize control is disabled as intended. This confirms the fixed-window
-  behavior; it does not by itself verify guest-driven resolution changes,
-  `Ctrl+Alt+F` fullscreen switching, or mouse tracking.
-* **Remaining acceptance checks:** Linux and Windows SDL CI; owner verification
-  in XP of guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling,
-  and mouse tracking. Do not change the implementation unless one of these
-  checks exposes a real defect.
-* DoD: Linux and Windows SDL builds pass CI and the remaining owner-run XP
-  checks above are confirmed.
+* **Owner verification (2026-11-24):** the owner confirms the complete
+  acceptance set: Linux and Windows SDL CI pass, and XP guest-driven resolution
+  changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking all work.
+  The Windows window is decorated and non-resizable, with the titlebar maximize
+  control disabled.
+* **Completion:** implementation and all stated acceptance checks are verified.
+  No further T24 work is pending; change the implementation only if a new,
+  reproducible defect is reported.
 
 ## T25 (P2) Investigate guest OpenGL support through VMware SVGA3D — 🟡 PAUSED
 **Status:** PAUSED (low feasibility; awaiting independent reassessment)
