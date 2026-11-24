@@ -139,6 +139,7 @@ uint32_t vmsvga3d_dxvk_d3d11_max_forced_sample_count(
 VMSVGA3DDxvkSurface *vmsvga3d_dxvk_surface_create(VMSVGA3DDxvk *dxvk,
                                                     uint32_t sid);
 void vmsvga3d_dxvk_surface_destroy(VMSVGA3DDxvkSurface *surface);
+void vmsvga3d_dxvk_vb_ring_profile_capture(VMSVGA3DDxvk *dxvk, bool enabled);
 bool vmsvga3d_dxvk_surface_info(
     const VMSVGA3DDxvkSurface *surface,
     struct vmsvga3d_d3d9_transfer_surface_s *info);

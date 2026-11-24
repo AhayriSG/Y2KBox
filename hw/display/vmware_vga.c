@@ -44,6 +44,7 @@
 #include "hw/i386/vmport-vmvga.h"
 #include "include/vmware_vga_compat.h"
 #include "include/vmware_vga_gmr.h"
+#include "include/vmware_vga_dxvk.h"
 #include "include/includeCheck.h"
 #pragma pack(push, 1)
 #include "include/svga_types.h"
@@ -12128,8 +12129,10 @@ static void vmsvga_set_debug_log(Object *obj, bool enabled, Error **errp)
 
     s->chip.debug_log = enabled;
     if (enabled) {
+        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, true);
         qatomic_inc(&vmvga_trace_debug_capture_devices);
     } else {
+        vmsvga3d_dxvk_vb_ring_profile_capture(s->chip.dxvk, false);
         assert(qatomic_read(&vmvga_trace_debug_capture_devices) > 0);
         qatomic_dec(&vmvga_trace_debug_capture_devices);
     }
