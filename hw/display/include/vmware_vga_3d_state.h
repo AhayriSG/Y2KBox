@@ -39,6 +39,11 @@
 
 struct vmsvga_state_s;
 
+uint64_t vmsvga_trace_event_sequence(const struct vmsvga_state_s *s);
+uint64_t vmsvga_trace_frame_id(const struct vmsvga_state_s *s);
+void vmsvga_trace_frame_boundary(struct vmsvga_state_s *s,
+                                 const char *kind, uint32_t sid);
+
 
 static bool vmsvga3d_state_context_define(struct vmsvga_state_s *s, uint32_t cid);
 static bool vmsvga3d_state_context_destroy(struct vmsvga_state_s *s, uint32_t cid);
