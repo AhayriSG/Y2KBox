@@ -2247,3 +2247,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - This supersedes Session 134's interim decision to defer pixel snapshots. The PNG is the last CPU-side guest display surface at capture stop, not a video recording or a screenshot of host-window decorations/scaling.
 - Updated capture README, HANDOFF, TASKS and WORKLOAD_ACTIVE_SESSION. T26 remains IN PROGRESS.
 - Verification: static source review only. No local QEMU build, runtime capture, XP validation, or CI was run. Owner should verify CONFIG_PNG/CONFIG_PIXMAN in the Windows build, check the PNG alongside the two-second NFSU2 Full log, and run Linux/Windows CI.
+
+
+### Session 136 (GPT-6), 2026-11-25 - Add Full-mode texgen and cube-shadow diagnostics
+
+- Continued T26 for the Joint Operations: Typhoon Rising D3D8 missing-canopy investigation. Added targeted Full-mode records in `hw/display/vmware_vga_3d_state.c`: WORLD/VIEW/TEXTURE0 transform matrices, texture-transform flags and coordinate-generation state, active material values, enabled light data, and per-face level-zero cube-map CPU-shadow dimensions/pitch/size/FNV-1a checksums.
+- Each record carries guest frame and event/FIFO sequence; texgen records also carry context/stage/SID. The cube-face checksum path is bounded to 2 MiB per record and explicitly identifies its source as the CPU shadow; it does not claim GPU-current pixels or correct face orientation.
+- Kept the instrumentation behind `vmsvga_trace_detail_enabled()` and restricted it to draws using 3D transform flags or nonzero texcoord generation. No renderer, upload, synchronization, or scheduling behavior was changed.
+- Updated T26, HANDOFF and capture documentation. T26 remains IN PROGRESS pending owner Full-mode Joint Operations capture and Linux/Windows CI.
+- Verification: remote source/static review only. No local QEMU build (not authorized), runtime capture, owner XP visual verification, or CI was run. The initial commit's record terminators and capture guard were corrected in a follow-up commit; current source was fetched back and inspected.
