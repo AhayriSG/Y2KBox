@@ -5534,7 +5534,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 fprintf(stderr, "unavailable");
             }
             fprintf(stderr,
-                    " position_samples=%u uv_samples=%u bounds_ok=%u "
+                    " position_refs=%u uv_refs=%u bounds_ok=%u "
                     "bounds_reason=%s\n",
                     position_bounds.samples, uv_bounds.samples,
                     bounds_ok, bounds_reason);
