@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 111–120).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 112–121).
 
 ## How to use this file
 
@@ -21,12 +21,6 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 111 — Add visual task-status markers
-- Added red/yellow/green markers to all 23 TASKS.md headings, matching TODO, in-progress/partial states, and DONE respectively.
-- Moved each complete canonical status into a plain-text Status field directly below its heading; heading colors are visual-only and must never drive agent decisions.
-- IMPLEMENTED remains yellow until acceptance checks are complete. AGENTS.md now states the authoritative-field rule.
-- Documentation-only; no source changes, builds, guest tests, or CI polling.
 
 ### Session 112 — Initial T12 graphics profile proposal
 - T12 was initially updated to describe two isolated graphics machine profiles: VMVGA/SVGA3D as the active path and VBoxVGA 5.2.x/SharedOpenGL as a proposed experimental path.
@@ -84,6 +78,10 @@
 - Included successful full-buffer DISCARD uploads as well as range uploads; narrowed wrap counts to actual capacity exhaustion and kept overlap/invalidation DISCARDs distinct.
 - Made the per-surface registry follow renderer teardown/recreation so active capture state and interval counters survive renderer replacement.
 - Static source-path checks only; no QEMU build/runtime test. T19 remains PAUSED pending CI and owner XP capture/repeated-interval verification.
+
+### Session 121 — Preserve observed VB-ring capacity on failed appends
+- Record a successful host-ring upgrade in `capacity_bytes` immediately, even if the following NOOVERWRITE lock fails.
+- No allocator behavior change. Static inspection only; no build/runtime test. T19 remains PAUSED pending CI and owner XP capture verification.
 
 ## Key diagnostic interpretation rules
 
