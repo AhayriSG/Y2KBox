@@ -66,7 +66,7 @@ static char *sdl_log_capture_filename;
 static struct sdl2_console *sdl_log_capture_console;
 static QEMUTimer *sdl_log_capture_timer;
 
-#define SDL_LOG_CAPTURE_FULL_LIMIT_MS 5000
+#define SDL_LOG_CAPTURE_FULL_LIMIT_MS 3000
 static SDL_Cursor *sdl_cursor_normal;
 static SDL_Cursor *sdl_cursor_hidden;
 static int absolute_enabled;
@@ -295,7 +295,7 @@ static bool sdl_compress_log_capture(const char *filename)
     }
     compressed_created = true;
 
-    output = gzdopen(fd, "wb");
+    output = gzdopen(fd, "wb9");
     if (!output) {
         error_report("Could not initialize gzip output for %s", compressed);
         g_close(fd, NULL);
@@ -372,7 +372,7 @@ static void sdl_log_capture_timeout(void *opaque)
     (void)opaque;
 
     if (sdl_log_capture_enabled && sdl_log_capture_console) {
-        error_report("Full diagnostic capture reached its 5-second limit; "
+        error_report("Full diagnostic capture reached its 3-second limit; "
                      "stopping and compressing the log.");
         sdl_toggle_log_capture(sdl_log_capture_console);
     }
@@ -570,7 +570,7 @@ static void sdl_update_caption(struct sdl2_console *scon)
     if (debug_available && sdl_log_capture_enabled) {
         if (debug_detail) {
             snprintf(log_status, sizeof(log_status),
-                     " - Diagnostic logging (full; auto-stops at 5s; %s to stop)",
+                     " - Diagnostic logging (full; auto-stops at 3s; %s to stop)",
                      hotkey);
         } else {
             snprintf(log_status, sizeof(log_status),
