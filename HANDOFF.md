@@ -983,6 +983,9 @@ the opt-in `on` capture:
   formats, unavailable shadows, instancing, invalid indices and oversized draws
   report an explicit `bounds_reason`; decoding is capped at 65,536 vertices and
   performs no GPU readback or forced synchronization.
+- `VMVGA-FRAME` marks guest `SVGA_3D_CMD_PRESENT` command boundaries with a capture-local frame ID. The marker names the frame being closed and advances the ID for subsequent draws. This is a guest command boundary, not a host SDL presentation/vblank frame; retain the separate FIFO/event `seq`.
+- `VMVGA-D3D9-STATE-SNAPSHOT` emits one effective guest-context snapshot per validated D3D9 draw. It includes render-target bindings, viewport/scissor, shader IDs, every valid texture/sampler and render state, and bound texture SIDs with live dimensions, format and mip count. It carries both `frame` and `seq`; it describes guest state at draw submission, not proof that native host state application succeeded.
+- No PNG/JPEG snapshot is currently captured. The existing SDL/GLib/zlib path has no identified PNG/JPEG encoder, and this diagnostic extension deliberately adds no image dependency.
 - `VMVGA-RENDER-CORRELATION` adds full-only readback submit/ready/retire
   markers carrying the last observed FIFO sequence. Because readback completion
   can be asynchronous, this is a nearby correlation hint, not a guaranteed
