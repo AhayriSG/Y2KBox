@@ -375,7 +375,7 @@ they are not assumed to make translated guest instruction execution faster.
 
 
 ## T19 (P1) General SDL diagnostic logging capture — 🟡 IMPLEMENTED
-**Status:** IMPLEMENTED (compact/detailed VMVGA capture modes added; CI and owner XP verification pending)
+**Status:** IMPLEMENTED (owner XP capture contents verified; Linux/Windows CI and repeated-interval acceptance remain pending)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
@@ -421,6 +421,12 @@ interval across Y2KBox, without continuously generating diagnostic output.
   diagnostic sources are quiet while inactive and stderr is restored on stop;
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
+
+* **Owner-run Windows XP capture verification (2026-11-24; Session 127):**
+  - Simple capture: approximately 48 KB; capture header reported `capture_mode=simple`. Its capture-stop summary reported 734 superseded flips, `event-lines=2`, first/last SID 2/1, and per-SID counts of 367 each.
+  - Full capture: approximately 1.5 MB; capture header reported `capture_mode=on`. Its summary reported 766 superseded flips and `event-lines=766`, confirming all supersede events were emitted individually in full mode.
+  - Owner confirmed the false unknown-register warning for the valid `SVGA_REG_BUSY` read was absent from both captures. These separate captures naturally had different event totals.
+  - This verifies the inspected simple/full capture behavior on the owner's Windows XP run. It does not establish Linux/Windows CI status or repeated-interval acceptance; keep T19 IMPLEMENTED until those remaining DoD checks are satisfied.
 
 * **Simple-mode warning retention and dispatch classification (Sessions 124–125; static review only):**
   - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unhandled commands/escapes, `NOP_ERROR`, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
