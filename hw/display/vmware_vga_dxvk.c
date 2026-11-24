@@ -15307,7 +15307,7 @@ vmsvga3d_dxvk_d3d11_screen_readback_poll_internal(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d11 phase=ready sid=%u seq=%" PRIu64
         " last_fifo_seq=%" PRIu64 " rects=%u wait=%u dropped=%u",
-        surface->sid, slot->sequence, slot->rect_count, wait ? 1u : 0u,
+        surface->sid, slot->sequence, dxvk->trace_sequence, slot->rect_count, wait ? 1u : 0u,
         dropped);
     slot->pending = false;
     slot->rect_count = 0;
