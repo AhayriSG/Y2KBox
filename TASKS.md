@@ -21,11 +21,14 @@ Different coding agents may take over sequentially; this shared task queue is th
    to `main`, set the task to `PAUSED` with a precise "Resume here:" note (what is
    done, what is next, what is broken). Never leave a claimed task silent.
 
-Status values: `TODO`, `CLAIMED by ...`, `IMPLEMENTED` (implementation complete; acceptance evidence pending), `PAUSED`, `DONE`. `IMPLEMENTED` tasks have no known source work remaining and are not available to claim; finish their stated verification before marking them `DONE`. Priority: P0 first.
+Status values: `TODO`, `CLAIMED by ...`, `IN PROGRESS`, `IMPLEMENTED` (implementation complete; acceptance evidence pending), `PAUSED`, `DONE`. `IMPLEMENTED` tasks have no known source work remaining and are not available to claim; finish their stated verification before marking them `DONE`. Priority: P0 first.
+
+**Visual heading markers (human aid only):** `🔴` = not started (`TODO`); `🟡` = partial, claimed, in progress, paused, or implemented with verification pending (`CLAIMED`, `IN PROGRESS`, `PAUSED`, `IMPLEMENTED`); `🟢` = fully completed and verified (`DONE`). Keep the full canonical status in the plain-text `**Status:**` field immediately below every task heading. The heading marker and its label are redundant display aids, never the source of truth; agents must parse and update the `Status` field. In particular, `IMPLEMENTED` remains yellow until acceptance evidence is complete and the task becomes `DONE`.
 
 ---
 
-## T01 (P0) Fixed XP machine  -  Status: PAUSED (parts 1, 2a, 2b done)
+## T01 (P0) Fixed XP machine — 🟡 PAUSED
+**Status:** PAUSED (parts 1, 2a, 2b done)
 Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
 * DONE part 1: fixed RAM 2 GiB and exactly 1 vCPU, with `default_cpus = max_cpus = 1` (`hw/i386/pc.c`). The QEMU `-smp` CLI option and its parser have been removed; multi-vCPU/SMP configurations are unsupported.
 * DONE part 2a (`xp/strip/08-fixed-machine-memory.py`): minimal `pc_memory_init` (all RAM below 4 GiB,
@@ -47,7 +50,8 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
 * DoD: fresh configure+build; one machine in `-machine help`; standard checks (HANDOFF 7);
   `info mtree` shows 2 GiB below 4 GiB only; the machine exposes exactly one CPU and does not accept `-smp`.
 
-## T02 (P0) XP guest CPU model: SSE2 maximum  -  Status: PAUSED (parts 1 and 2a done)
+## T02 (P0) XP guest CPU model: SSE2 maximum — 🟡 PAUSED
+**Status:** PAUSED (parts 1 and 2a done)
 * DONE: model `xp-p4` (Pentium 4 Northwood: family 15 model 2 stepping 9, SSE2, no SSE3+) added
   in `target/i386/cpu.c` and made the default (`TARGET_DEFAULT_CPU_TYPE` in `target/i386/cpu.h`).
   Verified in-guest with `xp/bench/cpuid.asm`.
@@ -62,7 +66,8 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   `gen_ldo_env_A0`/`gen_sto_env_A0` then always use pair atomicity. Keep x87/MMX/SSE/SSE2.
 * DoD: build; CPUID shows no SSE3+; vectest OK; retain the owner-verified XP SP3 boot baseline.
 
-## T03 (P0) Hosts: Windows and Linux only  -  Status: PAUSED (pass 1 done; Linux + Windows CI verified)
+## T03 (P0) Hosts: Windows and Linux only — 🟡 PAUSED
+**Status:** PAUSED (pass 1 done; Linux + Windows CI verified)
 * Remove macOS/BSD/Solaris/Haiku/Emscripten/other-OS code: meson/configure branches,
   `util/` `ui/` `audio/` `net/` `block/` files for those OSes (cocoa, coreaudio, vmnet,
   kqueue, ...), headers, docs mentions.
@@ -79,7 +84,8 @@ Goal: exactly one machine, no user-facing machine/CPU/RAM/SMP options.
   xattr code), system/, trace/ (dtrace/ftrace), options `cocoa/vmnet/coreaudio/pvg` in
   meson_options.txt; (2) Windows build is verified by CI (T07).
 
-## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS  -  Status: DONE 2026-11-18 (implementation 746dae5; benchmark recorded df28ec6)
+## T04 (P1) Inline PSHUFD / PSHUFLW / PSHUFHW / PUNPCK* / PACK* / SHUFPS — 🟢 DONE
+**Status:** DONE 2026-11-18 (implementation 746dae5; benchmark recorded df28ec6)
 Legacy XMM forms of PSHUFD/PSHUFLW/PSHUFHW, PUNPCK*, PACK* and SHUFPS now
 have inline native x86 TCG lowering. MMX and VEX/YMM forms retain their helper paths.
 Dedicated boot-sector functional tests run in Linux/Windows CI:
@@ -99,7 +105,8 @@ measurable improvement; the small difference may be within shared-runner noise
 and is not evidence of a broad regression. Linux result recorded; Windows
 functional CI remains independent and is not required for this Linux measurement.
 
-## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO call-site leftovers (preserve KVM)  -  Status: DONE 2026-11-19
+## T05 (P1) Remove IOMMU / SEV / SGX / TDX / VFIO call-site leftovers (preserve KVM) — 🟢 DONE
+**Status:** DONE 2026-11-19
 * Removed PC-machine IOMMU hotplug registration/state and the PC ACPI DMAR/IVRS
   table builders. Removed the unused AMD-IOMMU stub wiring and its Kconfig options.
   The generic x86 IOMMU stub/interface remains because the KVM split-irqchip IOAPIC
@@ -117,14 +124,16 @@ functional CI remains independent and is not required for this Linux measurement
 * KVM implementation and required interfaces were not removed by T05. Linux KVM
   restoration remains the separate T17 task.
 
-## T06 (P1) Remaining pruning  -  Status: TODO
+## T06 (P1) Remaining pruning — 🔴 TODO
+**Status:** TODO
 Device models still compiled but unused, trace-events of deleted code, QAPI
 schemas/commands for removed features, migration extras (COLO, postcopy, multifd -
 keep savevm snapshots), vhost/vhost-user, block formats other than raw/qcow2/vvfat?,
 net backends other than user/slirp(+socket?), `scripts/`, `python/`, `rust/`, `qga/`.
 Use the dead-code technique in HANDOFF 5b. Re-run the boot + vectest checks.
 
-## T07 (P1) Windows host build  -  Status: DONE 2026-11-14 (CI green at 92dbf22, run 43695682586)
+## T07 (P1) Windows host build — 🟢 DONE
+**Status:** DONE 2026-11-14 (CI green at 92dbf22, run 43695682586)
 GitHub Actions builds and checks Linux (ubuntu-24.04) and Windows (MSYS2 UCRT64): configure,
 build `qemu-system-i386[.exe]` + `qemu-img[.exe]`, accelerator/device checks, functional tests,
 and the x87 differential test. Windows needed `pc-bios/qemu-nsis.ico` restored (92dbf22).
@@ -151,7 +160,8 @@ results, but must not mark these checks complete without the owner's confirmatio
 - Record the exact guest setup, application/game, scene, host, and observed result
   in `WORKLOG.md`; update this note only when the owner supplies new evidence.
 
-## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D)  -  Status: DONE 2026-11-24 (integration committed; CI-verified; runtime acceptance tracked separately)
+## T09 (P2) 3D: integrate qemu-vmvga (VMware SVGA II + SVGA3D) — 🟢 DONE
+**Status:** DONE 2026-11-24 (integration committed; CI-verified; runtime acceptance tracked separately)
 PRIMARY 3D plan (owner proposal 2026-11-14, evaluated and agreed; see HANDOFF 8a).
 Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for QEMU 11.1.x: device
 `vmvga`, SVGA3D vgpu9/vgpu10/vgpu11, DXVK-based rendering, `hw/i386/vmport.c`).
@@ -170,7 +180,8 @@ Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for
     vs `#GP` on `0x565A`) and Linux/Windows CI checks (`-vga help`, `-device help`, `vmport_ring3_test.asm`).
 * **Completion:** no further T09 integration work is pending. The owner-run validation checklist above is the separate place to record ongoing XP driver, display/2D, D3D API, and game-compatibility observations. Do not repeat completed integration/build checks unless the source changes.
 
-## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows  -  Status: PAUSED (integration committed; owner-run guest validation pending)
+## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows — 🟡 PAUSED
+**Status:** PAUSED (integration committed; owner-run guest validation pending)
 qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
 * **Integration implemented and CI-verified;** live guest rendering and API compatibility require the owner-run XP guest validation note above.
   * **Linux:** `vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
@@ -190,13 +201,15 @@ qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-nativ
   headless smoke check does not prove Windows-host visual correctness or game compatibility;
   render-thread pinning remains T14.
 
-## T16 (P3, frozen alternative) VBoxVGA 5.2.x path  -  Status: TODO (not planned; kept as fallback)
+## T16 (P3, frozen alternative) VBoxVGA 5.2.x path — 🔴 TODO
+**Status:** TODO (not planned; kept as fallback)
 If qemu-vmvga proves unworkable on XP: VBoxVGA (VBE dispi + HGSMI/VBVA) + VMMDev (PCI 80ee:cafe) + HGCM +
 the Chromium-based 3D host service from VirtualBox v5.2.x (GPLv2; the service is absent from 6.1.4).
 Research notes: HANDOFF 8b. Sub-pieces if ever started: T16a VBoxVGA+HGSMI/VBVA, T16b VMMDev+HGCM,
 T16c GL stream receiver/replay (consider a separate process).
 
-## T12 (P2) Own front end: launcher + display  -  Status: TODO
+## T12 (P2) Own front end: launcher + display — 🔴 TODO
+**Status:** TODO
 Our own executable with an **SDL2 + Dear ImGui** frontend, using Xemu's `ui/xui/` as an architectural reference. Dear ImGui is the primary GUI choice; wxWidgets is a fallback alternative, not a parallel implementation target. Keep QEMU's existing **SDL2 display backend**: do not migrate to SDL3 or replace the VMVGA renderer, display path, fullscreen handling, or mouse/input behavior as part of frontend work. Reuse Xemu's relevant frontend patterns, but do not import its Xbox-specific systems or unnecessary dependencies wholesale. Keep the dependency footprint and SDL2/QEMU event-loop integration complexity as explicit design considerations; begin with Dear ImGui core and its SDL2 integration, adding components only when Y2KBox needs them. The only interactive display backend we plan to support is **SDL2**; do not spend time supporting VNC or `-display none` as user-facing display choices (`-display none` remains useful for headless CI/checks). The launcher should pick a qcow2 disk (made with qemu-img), floppy image, and CD/ISO. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. Add a **Debug** On/Off setting, default **Off**; it should enable Y2KBox's tester diagnostics without enabling continuous output. This maps to the `-y2kboxdebugmode on|off` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent device selectors:
@@ -206,7 +219,8 @@ Add three independent device selectors:
 * Pointing device: no selector; retain the PC machine's default **PS/2 IntelliMouse** as the only supported pointing device. Do not expose USB mouse or USB tablet choices in the launcher.
 
 The launcher must make the `virtio-win-0.1.141_x86.vfd` driver floppy attachable during XP setup and warn that an existing XP installation cannot boot from VirtIO Block until its `viostor` driver is installed. It should also expose the appropriate guest driver guidance for VirtIO Net and, if the optional VirtIO SCSI CD-ROM path is implemented, its XP storage driver. Needs a display/input embedding path (DisplayChangeListener).
-## T13 (P1) Windows TCG performance for ALL guest instruction classes  -  Status: IN PROGRESS (T13e-F1 active; other subtracks retain their statuses)
+## T13 (P1) Windows TCG performance for ALL guest instruction classes — 🟡 IN PROGRESS
+**Status:** IN PROGRESS (T13e-F1 active; other subtracks retain their statuses)
 
 Primary performance target: Windows TCG. Linux product runtime is KVM-only; do not
 use Linux TCG timings as a product performance target. Scope is all XP guest
@@ -261,14 +275,16 @@ details, and measurements are indexed under TCG performance in `WORKLOG_INDEX.md
   `WORKLOG.md`, retain relevant regression tests, and obtain the normal CI result.
   Do not add recurring CI performance benchmarks.
 
-## T14 (P1) Threading model and thread pinning  -  Status: TODO
+## T14 (P1) Threading model and thread pinning — 🔴 TODO
+**Status:** TODO
 Define which host threads exist (vCPU, main loop, IO, audio, display/3D) and pin them
 (vCPU thread to the fastest/performance core, others elsewhere) with Windows
 (`SetThreadAffinityMask`/`SetThreadIdealProcessorEx`, priority) and Linux (`sched_setaffinity`)
 APIs. Respect hybrid CPUs (P/E cores). Make it automatic (no user flags), with a safe fallback.
 Measure scheduling and affinity changes with the guest fixed at exactly 1 vCPU; do not introduce a multi-vCPU test mode.
 
-## T15 (P3) Restore and enable VirtIO Block + Net for XP  -  Status: DONE 2026-11-21
+## T15 (P3) Restore and enable VirtIO Block + Net for XP — 🟢 DONE
+**Status:** DONE 2026-11-21
 The minimal VirtIO implementation and build wiring have been restored from the exact upstream QEMU 11.1.90 baseline (`9d7d057a558b9a1c232cea390b4481dd20d9c9ce`): shared VirtIO core/config/bus/QMP, PCI transport, VirtIO Block + Net frontends and implementations, `net_rx_pkt`, and the missing public headers. Meson wiring includes only the selected Block/Net device sources. `CONFIG_VIRTIO`, `CONFIG_VIRTIO_PCI`, `CONFIG_VIRTIO_BLK`, and `CONFIG_VIRTIO_NET` are enabled; unrelated VirtIO devices remain disabled.
 
 Linux and Windows CI both pass on the validated source state at `d95d75703577a65e913d2451d0f01bfbb915a477`. Owner confirms QEMU launches and boots Windows XP with VirtIO enabled and reports a substantial initial improvement in interactive performance. The standard XP launch profile now uses VirtIO Block for the system disk and VirtIO Net for networking. This task's source restoration, device registration/build validation, and launch-profile integration are complete; the owner will continue manual workload-specific performance and reliability comparisons. **Do not add recurring CI performance benchmarks.**
@@ -280,7 +296,8 @@ The Linux build fixes are part of the final scope: `vhost_vdpa` is disabled to a
 * Keep the CD-ROM on the existing **PIIX IDE** path. Do not enable VirtIO SCSI or a VirtIO CD-ROM in this task. T12 may later expose an optional VirtIO SCSI CD-ROM choice after its device implementation and XP driver path are restored and validated; PIIX IDE remains the default.
 * For a fresh XP installation, load the XP x86 `viostor` driver from `virtio-win-0.1.141_x86.vfd` through text-mode Setup's F6 flow. Install the XP x86 NetKVM driver after setup. Existing IDE installations must have `viostor` installed before switching their boot disk to VirtIO Block.
 * Owner-led disk and network performance comparisons remain manual and workload-specific. Keep benchmark scripts available for deliberate A/B runs, but do not add recurring performance benchmarks to CI.
-## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only  -  Status: PAUSED (Linux KVM implementation and CI build restored; host runtime validation outstanding)
+## T17 (P1) Restore Linux KVM accelerator; keep Windows TCG-only — 🟡 PAUSED
+**Status:** PAUSED (Linux KVM implementation and CI build restored; host runtime validation outstanding)
 Earlier host/accelerator stripping removed the KVM implementation (see the historical
 Session 1 entry in WORKLOG.md). Restore the Linux KVM build and runtime path, including
 the required accelerator sources, x86 KVM hooks, machine/interrupt/clock integration,
@@ -320,7 +337,8 @@ host; compile-only CI is not sufficient.
   runtime success from compile-only CI.
 
 
-## T18 (P2) Evaluate Windows TCG virtual-memory backend APIs  -  Status: TODO
+## T18 (P2) Evaluate Windows TCG virtual-memory backend APIs — 🔴 TODO
+**Status:** TODO
 Investigate whether Windows guest-memory allocation, reservation, mapping, or remapping
 is a measurable cost in the Windows TCG execution path before implementing a new
 backend. Candidate APIs include `VirtualAlloc2` and `MapViewOfFile3` (Windows 10
@@ -346,7 +364,8 @@ they are not assumed to make translated guest instruction execution faster.
 * **Scope:** Windows TCG only. Linux remains KVM-only; no Linux TCG product path.
 
 
-## T19 (P1) General SDL diagnostic logging capture  -  Status: PAUSED (CI and basic repeated-capture behavior verified; capture-content coverage still under investigation)
+## T19 (P1) General SDL diagnostic logging capture — 🟡 PAUSED
+**Status:** PAUSED (CI and basic repeated-capture behavior verified; capture-content coverage still under investigation)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
@@ -380,7 +399,8 @@ interval across Y2KBox, without continuously generating diagnostic output.
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
 
-## T20 (P2) Full BIN/CUE CD-image parsing  -  Status: TODO
+## T20 (P2) Full BIN/CUE CD-image parsing — 🔴 TODO
+**Status:** TODO
 Implement full BIN/CUE parsing for Y2KBox's emulated CD-ROM, not merely a limited
 or strict-subset parser. Support the complete CUE-sheet syntax and all defined
 CUE flags (including flags such as `DCP`), with correct track/index and sector
@@ -389,14 +409,16 @@ layout handling. Use the CD-ROM references in HANDOFF.md section 9 (libcdio,
 validating the parser. Keep this distinct from frontend disc swapping: guest-
 visible insert/eject of images in the emulated CD-ROM is tracked under T12.
 
-## T21 (P2) Verify ReShade injection compatibility  -  Status: TODO
+## T21 (P2) Verify ReShade injection compatibility — 🔴 TODO
+**Status:** TODO
 Investigate and verify that ReShade injection is compatible with Y2KBox's
 Windows/SDL2 display path and the planned SDL2 + Dear ImGui frontend. Identify any
 limitations or conflicts in the current host-window/display lifecycle and
 implement only the compatibility work actually needed. This compatibility
 investigation takes priority over integrating librashader.
 
-## T22 (P3) Consider librashader integration  -  Status: TODO (after T12)
+## T22 (P3) Consider librashader integration — 🔴 TODO
+**Status:** TODO (after T12)
 After the SDL2 + Dear ImGui frontend is implemented, consider integrating librashader
 as an optional shader/post-processing path. This is deliberately very low
 priority; first establish ReShade injection compatibility (T21). Do not let
@@ -404,7 +426,8 @@ librashader integration delay the frontend or higher-priority compatibility
 work. See HANDOFF.md section 9 for librashader and emulator integration
 references.
 
-## T23 (P3) Configurable RAM and vGPU memory presets  -  Status: TODO (after T12)
+## T23 (P3) Configurable RAM and vGPU memory presets — 🔴 TODO
+**Status:** TODO (after T12)
 After the SDL2 + Dear ImGui frontend is implemented, add simple user-facing memory
 presets in the launcher. RAM candidates remain 512, 1024, and 2048 MB; the
 current machine stays fixed at 2048 MB until that GUI work is implemented.
@@ -442,7 +465,8 @@ task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
 
-## T24 (P1) Fixed-size SDL guest display window  -  Status: IMPLEMENTED (Windows window behavior owner-verified; CI + remaining XP checks outstanding)
+## T24 (P1) Fixed-size SDL guest display window — 🟡 IMPLEMENTED
+**Status:** IMPLEMENTED (Windows window behavior owner-verified; CI + remaining XP checks outstanding)
 Make the SDL host window follow the VMVGA guest display surface rather than
 allowing host-side window geometry to influence the guest.
 
@@ -469,7 +493,8 @@ allowing host-side window geometry to influence the guest.
 * DoD: Linux and Windows SDL builds pass CI and the remaining owner-run XP
   checks above are confirmed.
 
-## T25 (P2) Investigate guest OpenGL support through VMware SVGA3D  -  Status: PAUSED (low feasibility; awaiting independent reassessment)
+## T25 (P2) Investigate guest OpenGL support through VMware SVGA3D — 🟡 PAUSED
+**Status:** PAUSED (low feasibility; awaiting independent reassessment)
 Establish whether a guest-visible OpenGL path for Windows XP is feasible while preserving the existing VMware SVGA II / SVGA3D display driver, with **OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum target**. OpenGL is not currently implemented as a guest-facing API.
 
 **Current disposition (2026-11-24): PAUSED — low feasibility; awaiting independent reassessment.** No implementation work is authorized. The next reviewer should independently challenge the assumptions and investigate alternative architectures, rather than simply continue the current standalone-DLL / GL4ES / ANGLE hypothesis. A guest-side application-local wrapper DLL is one unproven possibility, not an established solution or the presumed direction. Request a written architecture, XP compatibility, licensing, and feasibility assessment before proposing any prototype. Do not modify the guest, replace or patch the VMware display driver, change the host renderer, or begin a broad OpenGL implementation as part of this paused task. See HANDOFF.md section 8g.
