@@ -20201,6 +20201,10 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
     }
 
     if (cmd < SVGA_3D_CMD_LEGACY_BASE || cmd > SVGA_3D_CMD_FUTURE_MAX) {
+        VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
+                          "WARN 3D command outside supported range cmd=%u "
+                          "fifo=0x%08x words=%d",
+                          cmd, fifo_start, *len);
         return false;
     }
 
@@ -20227,6 +20231,10 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
     }
 
     if (info == NULL) {
+        VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
+                          "WARN 3D command has no metadata cmd=%u "
+                          "fifo=0x%08x words=%d",
+                          cmd, fifo_start, *len);
         return false;
     }
 

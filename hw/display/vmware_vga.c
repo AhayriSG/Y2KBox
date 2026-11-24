@@ -364,6 +364,9 @@ static unsigned int vmvga_trace_debug_capture_devices;
   VMVGA_TRACE_LOCAL_CACHED(VMVGA_TRACE_LOCAL_ENABLED(category), fmt,     \
                             ##__VA_ARGS__)
 
+#define VMVGA_TRACE_WARNING(fmt, ...)                                      \
+  VMVGA_TRACE_LOCAL(VMVGA_TRACE_STATE, "WARN " fmt, ##__VA_ARGS__)
+
 #if VMVGA_TRACE_QEMU
 #define VMVGA_QEMU_TRACE(event, call)                                         \
   do {                                                                         \
@@ -5027,7 +5030,7 @@ static inline void vmsvga_cursor_define(struct vmsvga_state_s *s,
     VPRINT("vmsvga_cursor_define was just executed\n");
 
     if (!vmsvga_cursor_source_set(s, c, false)) {
-        VPRINT("vmsvga_cursor_define failed to cache/render cursor %u\n", c->id);
+        VMVGA_TRACE_WARNING("cursor-define failed to cache/render cursor=%u", c->id);
         return;
     }
     if (!s->mob_cursor_active && c->id == s->active_cursor &&
@@ -5044,8 +5047,8 @@ vmsvga_rgba_cursor_define(struct vmsvga_state_s *s,
     VPRINT("vmsvga_rgba_cursor_define was just executed\n");
 
     if (!vmsvga_cursor_source_set(s, c, true)) {
-        VPRINT("vmsvga_rgba_cursor_define failed to cache/render cursor %u\n",
-               c->id);
+        VMVGA_TRACE_WARNING("rgba-cursor-define failed to cache/render cursor=%u",
+                            c->id);
         return;
     }
     if (!s->mob_cursor_active && c->id == s->active_cursor &&
@@ -6254,7 +6257,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
          * by the default path, preserving the existing stall semantics.
          */
 
-        VPRINT("Unknown command %u in SVGA command FIFO\n", cmd);
+        VMVGA_TRACE_WARNING("unknown FIFO command=%u", cmd);
 
         switch (cmd) {
         case SVGA_CMD_INVALID_CMD:
@@ -6268,7 +6271,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             s->fifo_stop = fifo_start;
             s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
             len = 0;
-            VPRINT("SVGA_CMD_INVALID_CMD command %u in SVGA command FIFO\n", cmd);
+            VMVGA_TRACE_WARNING("invalid FIFO command=%u", cmd);
             break;
         case SVGA_CMD_DEFINE_BITMAP: {
               uint32_t id;
@@ -6661,7 +6664,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                     "RECT_FILL color=0x%08x x=%u y=%u w=%u h=%u",
                     c, x, y, w, h);
                 if (!vmsvga_fill_rect(s, c, x, y, w, h)) {
-                    VPRINT("SVGA_CMD_RECT_FILL ignored invalid rectangle\n");
+                    VMVGA_TRACE_WARNING("RECT_FILL ignored invalid rectangle");
                 }
             }
             VPRINT("SVGA_CMD_RECT_FILL command %u in SVGA command FIFO\n", cmd);
@@ -6780,7 +6783,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 rop_fill_rop);
             if (!vmsvga_rop_fill_rect(s, rop_fill_color, rop_fill_x, rop_fill_y,
                                       rop_fill_w, rop_fill_h, rop_fill_rop)) {
-                VPRINT("SVGA_CMD_RECT_ROP_FILL ignored invalid rectangle or ROP\n");
+                VMVGA_TRACE_WARNING("RECT_ROP_FILL ignored invalid rectangle or ROP");
             }
             VPRINT("SVGA_CMD_RECT_ROP_FILL command %u in SVGA command FIFO\n", cmd);
             break;
@@ -6864,8 +6867,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               if (!vmsvga_surface_alpha_blend(
                       s, src_surface_offset, dst_surface_offset, src_x, src_y, dst_x,
                       dst_y, width, height, blend_op, flags, param1, param2)) {
-                  VPRINT("SVGA_CMD_SURFACE_ALPHA_BLEND ignored invalid surface or "
-                         "blend operation\n");
+                  VMVGA_TRACE_WARNING("SURFACE_ALPHA_BLEND ignored invalid surface or blend operation");
               }
               VPRINT("SVGA_CMD_SURFACE_ALPHA_BLEND command %u in SVGA command FIFO\n",
                      cmd);
@@ -6901,7 +6903,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               if (!vmsvga_surface_copy(s, src_surface_offset, dst_surface_offset,
                                        src_x, src_y, dst_x, dst_y, width, height,
                                        rop)) {
-                  VPRINT("SVGA_CMD_SURFACE_COPY ignored invalid surface or ROP\n");
+                  VMVGA_TRACE_WARNING("SURFACE_COPY ignored invalid surface or ROP");
               }
               VPRINT("SVGA_CMD_SURFACE_COPY command %u in SVGA command FIFO\n", cmd);
               break;
@@ -6931,7 +6933,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
               rop = vmsvga_fifo_read(s);
               if (!vmsvga_surface_fill(s, color, dst_surface_offset, x, y, width,
                                        height, rop)) {
-                  VPRINT("SVGA_CMD_SURFACE_FILL ignored invalid surface or ROP\n");
+                  VMVGA_TRACE_WARNING("SURFACE_FILL ignored invalid surface or ROP");
               }
               VPRINT("SVGA_CMD_SURFACE_FILL command %u in SVGA command FIFO\n", cmd);
               break;
@@ -7020,7 +7022,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 uint32_t h = vmsvga_fifo_read(s);
                 SizeOfSVGAFifoCmdRectCopy -= 1;
                 if (!vmsvga_copy_rect(s, x0, y0, x1, y1, w, h)) {
-                    VPRINT("SVGA_CMD_RECT_COPY ignored invalid rectangle\n");
+                    VMVGA_TRACE_WARNING("RECT_COPY ignored invalid rectangle");
                 }
             }
             VPRINT("SVGA_CMD_RECT_COPY command %u in SVGA command FIFO\n", cmd);
@@ -7053,7 +7055,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   s->fifo_stop = fifo_start;
                   s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                   len = 0;
-                  VPRINT("invalid SVGA_CMD_DEFINE_CURSOR command %u\n", cmd);
+                  VMVGA_TRACE_WARNING("invalid DEFINE_CURSOR command=%u", cmd);
                   break;
               }
               cursor.hot_x = MIN(cursor.hot_x, cursor.width - 1);
@@ -7082,8 +7084,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                       s->fifo_stop = s->fifo_next;
                       s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                       len = 0;
-                      VPRINT("oversized SVGA_CMD_DEFINE_CURSOR command %u discarded\n",
-                             cmd);
+                      VMVGA_TRACE_WARNING("oversized DEFINE_CURSOR command=%u discarded", cmd);
                   } else {
                       s->fifo_stop = fifo_start;
                       s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
@@ -7099,8 +7100,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   len -= header_words + and_words + xor_words + 1;
                   vmsvga_fifo_skip(s, and_words + xor_words);
                   vmsvga_cursor_definition_clear(&cursor);
-                  VPRINT("SVGA_CMD_DEFINE_CURSOR command %u dropped: allocation failed\n",
-                         cmd);
+                  VMVGA_TRACE_WARNING("DEFINE_CURSOR command=%u dropped: allocation failed", cmd);
                   break;
               }
               len -= header_words + and_words + xor_words + 1;
@@ -7136,7 +7136,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   s->fifo_stop = fifo_start;
                   s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                   len = 0;
-                  VPRINT("invalid SVGA_CMD_DEFINE_ALPHA_CURSOR command %u\n", cmd);
+                  VMVGA_TRACE_WARNING("invalid DEFINE_ALPHA_CURSOR command=%u", cmd);
                   break;
               }
               cursor.hot_x = MIN(cursor.hot_x, cursor.width - 1);
@@ -7152,8 +7152,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                       s->fifo_stop = s->fifo_next;
                       s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                       len = 0;
-                      VPRINT("oversized SVGA_CMD_DEFINE_ALPHA_CURSOR command %u discarded\n",
-                             cmd);
+                      VMVGA_TRACE_WARNING("oversized DEFINE_ALPHA_CURSOR command=%u discarded", cmd);
                   } else {
                       s->fifo_stop = fifo_start;
                       s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
@@ -7169,8 +7168,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   len -= header_words + pixels + 1;
                   vmsvga_fifo_skip(s, pixels);
                   vmsvga_cursor_definition_clear(&cursor);
-                  VPRINT("SVGA_CMD_DEFINE_ALPHA_CURSOR command %u dropped: allocation failed\n",
-                         cmd);
+                  VMVGA_TRACE_WARNING("DEFINE_ALPHA_CURSOR command=%u dropped: allocation failed", cmd);
                   break;
               }
               len -= header_words + pixels + 1;
@@ -7284,7 +7282,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   s->fifo_stop = fifo_start;
                   s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                   len = 0;
-                  VPRINT("invalid SVGA_CMD_REMAP_GMR2 flags %u\n", flags);
+                  VMVGA_TRACE_WARNING("invalid REMAP_GMR2 flags=%u", flags);
                   break;
               }
               if (flags & SVGA_REMAP_GMR2_VIA_GMR) {
@@ -7356,7 +7354,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             if (!vmsvga_rop_copy_rect(s, rop_copy_x0, rop_copy_y0, rop_copy_x1,
                                       rop_copy_y1, rop_copy_w, rop_copy_h,
                                       rop_copy_rop)) {
-                VPRINT("SVGA_CMD_RECT_ROP_COPY ignored invalid rectangle or ROP\n");
+                VMVGA_TRACE_WARNING("RECT_ROP_COPY ignored invalid rectangle or ROP");
             }
             VPRINT("SVGA_CMD_RECT_ROP_COPY command %u in SVGA command FIFO\n", cmd);
             break;
@@ -7430,8 +7428,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                       }
                       break;
                   default:
-                      VPRINT("SVGA_CMD_ESCAPE: unknown VMware escape 0x%x\n",
-                             escape_cmd);
+                      VMVGA_TRACE_WARNING("unknown VMware escape=0x%x", escape_cmd);
                       break;
                   }
               }
@@ -7480,7 +7477,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                   s->fifo_stop = fifo_start;
                   s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
                   len = 0;
-                  VPRINT("invalid SVGA_CMD_DEFINE_SCREEN size %u\n", struct_size);
+                  VMVGA_TRACE_WARNING("invalid DEFINE_SCREEN size=%u", struct_size);
                   break;
               }
               id = vmsvga_fifo_read(s);
@@ -7673,7 +7670,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 vmsvga_update_rect(s, front_rop_x, front_rop_y, front_rop_w,
                                    front_rop_h);
             } else {
-                VPRINT("SVGA_CMD_FRONT_ROP_FILL ignored invalid rectangle or ROP\n");
+                VMVGA_TRACE_WARNING("FRONT_ROP_FILL ignored invalid rectangle or ROP");
             }
             VPRINT("SVGA_CMD_FRONT_ROP_FILL command %u in SVGA command FIFO\n",
                    cmd);
@@ -9392,7 +9389,7 @@ static uint32_t vmsvga_value_read(void *opaque, uint32_t address)
         return ret;
     }
 
-    VPRINT("Unknown register %u\n", s->index);
+    VMVGA_TRACE_WARNING("unknown register read index=%u", s->index);
 
     switch (s->index) {
     case SVGA_REG_FENCE_GOAL:
@@ -9906,7 +9903,7 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
                           trace_vmware_value_write(s->index, value));
     }
 
-    VPRINT("Unknown register %u with the value of %u\n", s->index, value);
+    VMVGA_TRACE_WARNING("unknown register write index=%u value=%u", s->index, value);
 
     switch (s->index) {
     case SVGA_REG_ID:
@@ -9938,8 +9935,8 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
                     value, s->fence_goal, fifo_goal, s->fence, s->irq_mask,
                     s->irq_status);
         }
-        VPRINT("SVGA_REG_FENCE_GOAL register %u ignored value %u\n", s->index,
-               value);
+        VMVGA_TRACE_WARNING("FENCE_GOAL register=%u ignored value=%u", s->index,
+                            value);
         break;
     case SVGA_REG_ENABLE: {
           bool was_enabled = s->enable;
@@ -10424,7 +10421,7 @@ static void vmsvga_bios_write(void *opaque, uint32_t address, uint32_t data)
 
     (void)opaque;
 
-    VPRINT("vmsvga_bios_write %u ignored value %u\n", address, data);
+    VMVGA_TRACE_WARNING("BIOS write ignored address=%u value=%u", address, data);
 }
 
 static inline void vmsvga_trace_display_path_reset(
