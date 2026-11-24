@@ -802,9 +802,15 @@ void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
         trace->screen_readback_supersede_event_lines < 2) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
-            "SCREEN-READBACK seq=%" PRIu64 " backend=d3d9 phase=supersede-flip old-sid=%u",
-            s->trace_activity_seq, old_sid);
+            "SCREEN-READBACK backend=d3d9 phase=supersede-flip old-sid=%u",
+            old_sid);
         trace->screen_readback_supersede_event_lines++;
+        if (vmsvga_trace_detail_enabled(s)) {
+            fprintf(stderr,
+                    "VMVGA-RENDER-CORRELATION event=screen-readback-supersede "
+                    "last_fifo_seq=%" PRIu64 " sid=%u\\n",
+                    s->trace_activity_seq, old_sid);
+        }
     }
 }
 
