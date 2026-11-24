@@ -634,6 +634,83 @@ startup did not produce correct rendering.
   build, guest modification, or test. It is a concrete lead for the independent
   reassessment, not a reason to resume implementation automatically.
 
+
+## 8i. TitaniumGL application-local OpenGL test and COD1 result (2026-11-24)
+
+TitaniumGL's project page(https://titaniumgl.uni.hu/keret.cgi?/index.html)
+describes an OpenGL implementation/wrapper that uses Direct3D 9 on Windows.
+The owner tested its Win32 `opengl32.dll` as an application-local DLL beside
+Call of Duty 1 (COD1) in the Windows XP guest.
+
+**Owner-observed COD1 log and behavior (2026-11-24):**
+
+```text
+pixelformat 1 selected
+getting DC: succeeded
+creating GL context: succeeded
+making context: succeeded
+0 PFDs found
+MCD acceleration found
+calling library system32/opengl32.dll succeeded
+
+GLVERSION 1.4
+GL RENDERER VMware SVGA II/119MB VRAM
+[large GL_EXT / GL_ARB / WGL_ARB / WGL_EXT / GL_OES / GL_SGIS extension list]
+...
+RE_SHUTDOWN (1)
+```
+
+The owner reports that COD1 still displayed its missing-video-card-features
+error after the extension list and shut down the renderer. The complete extension
+list and exact per-extension capability values were not saved. The owner also
+tested TitaniumGL's software-renderer mode and observed the same broad result
+as with hardware acceleration; changing that mode did not get COD1 past its
+graphics-card rejection.
+
+**What this establishes, and what it does not:**
+
+- The application-local DLL is being loaded by COD1, and the game successfully
+  acquired a DC, created a GL context, and made it current.
+- COD1 saw OpenGL 1.4 and a renderer string identifying VMware SVGA II with
+  119 MB VRAM, along with a much larger advertised extension set than the
+  native XP GDI Generic OpenGL 1.1 path.
+- The log's `0 PFDs found` line is notable, but it is not yet established as
+  the cause of failure: the same log subsequently reports successful context
+  creation and making the context current. Do not infer what TitaniumGL means
+  by this counter without source or additional diagnostics.
+- Advertised extensions do not prove that every associated function is
+  implemented correctly or that all limits/formats satisfy COD1's checks.
+  Context creation is not equivalent to successful renderer initialization,
+  frame presentation, or correct in-game rendering.
+- The owner reports the same COD1 rejection in both TitaniumGL hardware and
+  software rendering modes. This weakens the hypothesis that the failure is
+  caused solely by the selected rendering mode, but does not identify the
+  failing capability check.
+- The log line about calling `system32\\opengl32.dll` succeeded is recorded
+  as reported; its exact loader/forwarding semantics have not been established.
+
+**Research limits and next steps if T25 is reopened:**
+
+- Obtain the exact TitaniumGL build/version and inspect its XP requirements,
+  source availability, provenance, and license before considering further use.
+  The project page and the owner's successful DLL/context test do not by
+  themselves establish that every current release supports XP.
+- Capture the complete TitaniumGL log and COD1's exact fatal/console output,
+  especially the capability checks immediately preceding `RE_SHUTDOWN (1)`.
+  The owner was tired and did not capture the full extension list; do not ask
+  for it again unless a later test makes it necessary.
+- Investigate the `0 PFDs found` message and COD1's actual feature-check logic
+  rather than guessing from the advertised extension names. Compare required
+  extensions, function pointers, texture limits/formats, and other queried
+  capabilities against what TitaniumGL really implements.
+- Keep TitaniumGL and QindieGL as separate experimental leads. QindieGL's
+  missing `wglGetExtensionsStringEXT` and historical startup-with-corruption
+  report are documented in section 8h; those findings do not explain
+  TitaniumGL's different observed failure.
+- This test does not change T25's PAUSED status and does not authorize a
+  prototype, guest modification, driver replacement, source change, build, or
+  additional test. It is evidence for the independent reassessment only.
+
 ## 9. References and resources for development
 
 QEMU-based x86 emulation
