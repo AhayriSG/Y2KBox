@@ -28,7 +28,8 @@
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
-6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
+6. **T24 fixed-size SDL display is IMPLEMENTED.** The owner confirmed the Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. Remaining acceptance: Linux/Windows SDL CI plus owner XP checks for guest-driven resolution changes, `Ctrl+Alt+F` fullscreen, and mouse tracking. Do not change source unless a check finds a real defect.
+7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
 ## Key diagnostic interpretation rules
 
@@ -38,12 +39,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 100 — Start guest OpenGL investigation and audit the SVGA3D path
-- Began T25 (IN PROGRESS), targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
-- Corrected the protocol model: Mesa translates OpenGL into SVGA3D commands; there is no separate raw OpenGL FIFO. Y2KBox already whitelists some legacy commands used by SVGA3D, but complete GL 2.1 semantics and caps are unverified.
-- The latest QEMU diagnostic log has no WGL/PFD output. A guest-side probe is needed to enumerate pixel formats, distinguish generic software from ICD formats, and test context creation.
-- Mesa's documented SVGA guest driver stack is Linux-specific; historical Workstation 6 documentation describes XP OpenGL as software-emulated but does not establish VMware Tools 10.0.12 behavior. README Fixed target wording was previewed and awaits owner approval. No source changes, diagnostic utility, builds, tests, guest validation, or CI polling.
 
 ### Session 101 — Clarify the guest OpenGL target in the README
 - Updated the README Fixed target to include OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum, explicitly noting that guest OpenGL is not yet implemented.
@@ -96,3 +91,9 @@
 - Removed the QindieGL-specific paragraph from README.md while preserving the generic statement that application-local wrapper DLLs remain an unproven alternative.
 - Added TitaniumGL's COD1 OpenGL 1.4/context/extension observations, the unresolved `0 PFDs found` line, and the same broad rejection in hardware and software modes to TASKS.md and HANDOFF.md section 8i.
 - Kept TitaniumGL separate from QindieGL and T25 PAUSED. Documentation-only; no source changes, builds, guest modifications, additional guest tests, benchmarks, or CI polling.
+
+
+### Session 110 — Clarify T24 implementation and verification status
+- The owner confirmed that the Windows build has the intended decorated, non-resizable window and disabled titlebar maximize control. This verifies the fixed-window behavior implemented in Session 62.
+- T24 is now IMPLEMENTED rather than PAUSED: no known source work remains, but Linux/Windows CI and owner XP checks for guest-driven resolution changes, Ctrl+Alt+F fullscreen, and mouse tracking are still outstanding.
+- Documentation-only. No source changes, builds, guest tests, or CI polling.
