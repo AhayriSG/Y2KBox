@@ -5230,6 +5230,25 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
 
         if (deep_draw) {
             fprintf(stderr,
+                    "VMVGA-D3D9-GEOMETRY seq=%" PRIu64 " cid=%u range=%u "
+                    "target=%u:%u:%u viewport=%u,%u/%ux%u "
+                    "prim=%u count=%u indexed=%u start_vertex=%u "
+                    "min_vertex=%u vertex_count=%u index_sid=%u "
+                    "index_offset=%u index_width=%u streams=%u "
+                    "bounds=not-transformed\\n",
+                    vmsvga_trace_event_sequence(s), cid, i,
+                    context->render_targets[SVGA3D_RT_COLOR0].sid,
+                    context->render_targets[SVGA3D_RT_COLOR0].face,
+                    context->render_targets[SVGA3D_RT_COLOR0].mipmap,
+                    context->viewport.x, context->viewport.y,
+                    context->viewport.w, context->viewport.h,
+                    plan.primitive_type, plan.primitive_count,
+                    plan.action == VMSVGA3D_D3D9_DRAW_ACTION_INDEXED,
+                    plan.start_vertex, plan.indexed.min_vertex_index,
+                    plan.indexed.num_vertices, plan.index_surface_id,
+                    ranges[i].indexArray.offset, ranges[i].indexWidth,
+                    stream_count);
+            fprintf(stderr,
                     "VMVGA-D3D9-DRAW plan[%u] action=%u prim=%u count=%u "
                     "start_vertex=%u index_sid=%u unbind=%u sync_index=%u "
                     "index_format=%u base=%d min=%u vertices=%u start_index=%u "
