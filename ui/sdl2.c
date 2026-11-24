@@ -38,6 +38,9 @@
 #include "qom/object.h"
 #include "trace/control.h"
 #include "qemu-main.h"
+#include "qemu/timer.h"
+
+#include <zlib.h>
 
 #include <fcntl.h>
 #include <glib/gstdio.h>
@@ -59,6 +62,11 @@ static int gui_fullscreen;
 static int gui_grab_code = KMOD_LALT | KMOD_LCTRL;
 static bool sdl_log_capture_enabled;
 static int sdl_log_capture_saved_stderr = -1;
+static char *sdl_log_capture_filename;
+static struct sdl2_console *sdl_log_capture_console;
+static QEMUTimer *sdl_log_capture_timer;
+
+#define SDL_LOG_CAPTURE_FULL_LIMIT_MS 5000
 static SDL_Cursor *sdl_cursor_normal;
 static SDL_Cursor *sdl_cursor_hidden;
 static int absolute_enabled;
@@ -264,6 +272,106 @@ static void sdl_set_debug_trace(bool enabled)
     }
 }
 
+static bool sdl_compress_log_capture(const char *filename)
+{
+    char *compressed = g_strdup_printf("%s.gz", filename);
+    FILE *input = NULL;
+    gzFile output = NULL;
+    int fd = -1;
+    int flags = O_WRONLY | O_CREAT | O_EXCL;
+    uint8_t buffer[65536];
+    size_t count;
+    bool success = false;
+
+#ifdef O_BINARY
+    flags |= O_BINARY;
+#endif
+    fd = g_open(compressed, flags, 0666);
+    if (fd < 0) {
+        error_report("Could not create compressed diagnostic log %s: %s",
+                     compressed, strerror(errno));
+        goto out;
+    }
+
+    output = gzdopen(fd, "wb");
+    if (!output) {
+        error_report("Could not initialize gzip output for %s", compressed);
+        g_close(fd, NULL);
+        fd = -1;
+        goto out;
+    }
+    fd = -1; /* owned by output */
+
+    input = g_fopen(filename, "rb");
+    if (!input) {
+        error_report("Could not reopen diagnostic log %s: %s",
+                     filename, strerror(errno));
+        goto out;
+    }
+
+    while ((count = fread(buffer, 1, sizeof(buffer), input)) != 0) {
+        if (gzwrite(output, buffer, count) != count) {
+            error_report("Could not write compressed diagnostic log %s",
+                         compressed);
+            goto out;
+        }
+    }
+    if (ferror(input)) {
+        error_report("Could not read diagnostic log %s: %s",
+                     filename, strerror(errno));
+        goto out;
+    }
+    if (fclose(input) != 0) {
+        input = NULL;
+        error_report("Could not close diagnostic log %s: %s",
+                     filename, strerror(errno));
+        goto out;
+    }
+    input = NULL;
+
+    if (gzclose(output) != Z_OK) {
+        output = NULL;
+        error_report("Could not finish compressed diagnostic log %s",
+                     compressed);
+        goto out;
+    }
+    output = NULL;
+    success = true;
+
+out:
+    if (input) {
+        fclose(input);
+    }
+    if (output && gzclose(output) != Z_OK) {
+        success = false;
+    }
+    if (fd >= 0) {
+        g_close(fd, NULL);
+    }
+    if (!success) {
+        g_unlink(compressed);
+    } else if (g_unlink(filename) != 0) {
+        error_report("Compressed diagnostic log is %s, but the original %s "
+                     "could not be removed: %s",
+                     compressed, filename, strerror(errno));
+    } else {
+        error_report("Full diagnostic capture saved as %s", compressed);
+    }
+    g_free(compressed);
+    return success;
+}
+
+static void sdl_toggle_log_capture(struct sdl2_console *scon);
+
+static void sdl_log_capture_timeout(void *opaque)
+{
+    if (sdl_log_capture_enabled && sdl_log_capture_console) {
+        error_report("Full diagnostic capture reached its 5-second limit; "
+                     "stopping and compressing the log.");
+        sdl_toggle_log_capture(sdl_log_capture_console);
+    }
+}
+
 static void sdl_toggle_log_capture(struct sdl2_console *scon)
 {
     Object *vmvga;
@@ -335,7 +443,6 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         g_close(fd, NULL);
-        g_free(filename);
         /*
          * Buffer stderr while capturing to a file so Windows MinGW stdio
          * does not issue a 1-byte WriteFile syscall per character while
@@ -348,17 +455,38 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             setvbuf(stderr, NULL, _IONBF, 0);
             dup2(sdl_log_capture_saved_stderr, STDERR_FILENO);
             error_report_err(err);
+            g_free(filename);
             return;
         }
         sdl_set_debug_trace(true);
         qemu_perf_stats_start();
         fprintf(stderr, "Y2KBOX-DIAG capture_mode=%s\n",
                 debug_detail ? "on" : "simple");
+        sdl_log_capture_filename = filename;
+        sdl_log_capture_console = scon;
         sdl_log_capture_enabled = true;
+        if (debug_detail) {
+            if (!sdl_log_capture_timer) {
+                sdl_log_capture_timer = timer_new_ms(QEMU_CLOCK_REALTIME,
+                                                     sdl_log_capture_timeout,
+                                                     NULL);
+            }
+            timer_mod(sdl_log_capture_timer,
+                      qemu_clock_get_ms(QEMU_CLOCK_REALTIME) +
+                      SDL_LOG_CAPTURE_FULL_LIMIT_MS);
+        }
     } else {
+        if (sdl_log_capture_timer) {
+            timer_del(sdl_log_capture_timer);
+        }
         fflush(stderr);
         if (!object_property_set_bool(vmvga, "debug-log", false, &err)) {
             error_report_err(err);
+            if (debug_detail && sdl_log_capture_timer) {
+                timer_mod(sdl_log_capture_timer,
+                          qemu_clock_get_ms(QEMU_CLOCK_REALTIME) +
+                          SDL_LOG_CAPTURE_FULL_LIMIT_MS);
+            }
             return;
         }
         sdl_set_debug_trace(false);
@@ -371,16 +499,25 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             object_property_set_bool(vmvga, "debug-log", true, NULL);
             sdl_set_debug_trace(true);
             qemu_perf_stats_start();
+            if (debug_detail && sdl_log_capture_timer) {
+                timer_mod(sdl_log_capture_timer,
+                          qemu_clock_get_ms(QEMU_CLOCK_REALTIME) +
+                          SDL_LOG_CAPTURE_FULL_LIMIT_MS);
+            }
             error_report("Could not restore stderr after diagnostic capture: %s",
                          strerror(saved_errno));
             return;
         }
         sdl_log_capture_enabled = false;
+        sdl_log_capture_console = NULL;
+        if (debug_detail && sdl_log_capture_filename) {
+            sdl_compress_log_capture(sdl_log_capture_filename);
+        }
+        g_clear_pointer(&sdl_log_capture_filename, g_free);
     }
 
     sdl_update_caption(scon);
 }
-
 static void sdl_update_caption(struct sdl2_console *scon)
 {
     char win_title[1024];
@@ -1131,6 +1268,15 @@ static void sdl_mouse_define(DisplayChangeListener *dcl,
 static void sdl_cleanup(void)
 {
     int i;
+
+    if (sdl_log_capture_timer) {
+        timer_del(sdl_log_capture_timer);
+        timer_free(sdl_log_capture_timer);
+        sdl_log_capture_timer = NULL;
+    }
+    if (sdl_log_capture_enabled && sdl_log_capture_console) {
+        sdl_toggle_log_capture(sdl_log_capture_console);
+    }
 
     if (!sdl2_console) {
         return;
