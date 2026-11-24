@@ -2224,3 +2224,10 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Full capture now stops diagnostics, flushes the file, restores stderr, and transfers ownership of the completed `.log` path to a detached QEMU worker thread. The worker performs zlib level-9 gzip compression without occupying the QEMU main thread.
 - The worker deletes the original `.log` only after successful compression; failures preserve the original and remove an incomplete `.gz`. SDL shutdown waits for outstanding compression workers so they cannot outlive QEMU.
 - Updated README, HANDOFF, TASKS, command-line help, capture documentation, and the active-session summary. Static source review only; owner runtime verification and Linux/Windows CI remain outstanding.
+
+
+## Session 133 (GPT-6), 2026-11-24 - Decode CPU-shadow vertex position and UV bounds
+- Replaced the Full-mode `vertex-decode-not-implemented` placeholder in `VMVGA-D3D9-GEOMETRY` with CPU-shadow decoding for indexed and non-indexed draw ranges.
+- The initial decoder supports FLOAT1–FLOAT4 declarations, including the observed NFSU2 FLOAT3 position and FLOAT2 TEXCOORD0 layout. It applies stream source offsets/strides and indexed base-vertex addressing, validates index and vertex-buffer bounds, rejects non-finite values and instanced streams, and caps each draw at 65,536 vertices.
+- Emits vertex-space position X/Y/Z bounds (where present), TEXCOORD0 U/V bounds, decoded sample count, success flag and explicit failure reason. These values are not screen-space transformed coordinates. No GPU readback, forced synchronization, or rendering behavior change was introduced.
+- Updated README, HANDOFF, TASKS, capture documentation and active-session notes. T26 remains IN PROGRESS pending owner full-mode NFSU2 capture and Linux/Windows build/CI validation. Static source review only; no build or runtime test was run.
