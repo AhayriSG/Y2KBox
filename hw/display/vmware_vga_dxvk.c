@@ -16300,7 +16300,6 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
         !vmsvga3d_dxvk_get_method(
             surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_UNLOCK,
             &unlock, sizeof(unlock))) {
-        if (surface->vb_ring_profile_active && is_ring_vb && lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) surface->vb_ring_profile_allocation_failures++;
         return false;
     }
 
@@ -16340,7 +16339,6 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     qemu_perf_stats_add_work(lock_size_stat, size);
 
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
-        if (surface->vb_ring_profile_active && is_ring_vb && lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) surface->vb_ring_profile_allocation_failures++;
         return false;
     }
 
@@ -16369,6 +16367,18 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
         surface->d3d9_ring_high = size;
         surface->d3d9_buffer_nooverwrite_bytes = 0;
         surface->d3d9_buffer_last_was_overlap_discard = false;
+        if (surface->vb_ring_profile_active &&
+            surface->d3d9_resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER &&
+            (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC) != 0) {
+            surface->vb_ring_profile_eligible = true;
+            surface->vb_ring_profile_capacity_bytes = MAX(
+                surface->vb_ring_profile_capacity_bytes,
+                surface->d3d9_host_length);
+            surface->vb_ring_profile_allocated_bytes += size;
+            surface->vb_ring_profile_discard_count++;
+            surface->vb_ring_profile_high_water_bytes = MAX(
+                surface->vb_ring_profile_high_water_bytes, size);
+        }
     }
     return vmsvga3d_dxvk_succeeded(result);
 #else
@@ -17007,6 +17017,10 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         !vmsvga3d_dxvk_get_method(
             surface->d3d9_resource, VMSVGA3D_DXVK_IDIRECT3DBUFFER9_UNLOCK,
             &unlock, sizeof(unlock))) {
+        if (surface->vb_ring_profile_active && is_ring_vb &&
+            lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) {
+            surface->vb_ring_profile_allocation_failures++;
+        }
         return false;
     }
 
@@ -17067,6 +17081,10 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     qemu_perf_stats_add_work(lock_flags_stat, copy_size);
     qemu_perf_stats_add_work(lock_size_stat, copy_size);
     if (!vmsvga3d_dxvk_succeeded(result) || destination == NULL) {
+        if (surface->vb_ring_profile_active && is_ring_vb &&
+            lock_flags == VMSVGA3D_DXVK_D3DLOCK_NOOVERWRITE) {
+            surface->vb_ring_profile_allocation_failures++;
+        }
         return false;
     }
 
