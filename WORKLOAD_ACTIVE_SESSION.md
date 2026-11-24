@@ -101,6 +101,6 @@
 - Static review only; no build, runtime test, or CI run. Owner verification of all three values and both capture outputs remains pending.
 
 ### Session 124 — Preserve explicit VMVGA warnings in simple captures
-- Routed identified invalid/unknown/rejected legacy FIFO and register cases, cursor payload/allocation failures, and invalid GMR2/Screen inputs through capture-gated `VMVGA-WARN` records; added equivalent warnings for unknown SVGA3D command IDs/metadata.
+- Routed identified invalid/unknown/rejected legacy FIFO and register cases, `NOP_ERROR`, cursor payload/allocation failures, and invalid GMR2/Screen inputs through capture-gated `VMVGA-WARN` records; added equivalent warnings for unknown SVGA3D command IDs/metadata.
 - Existing stall, fence-goal, and abnormal SYNC/FIFO records remain independently visible. Routine repetitive events stay sampled.
 - Targeted coverage only: no universal severity classifier or repeated-warning aggregation yet. Static review only; no build/runtime/CI/XP verification.

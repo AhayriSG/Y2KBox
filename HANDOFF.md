@@ -885,8 +885,8 @@ capture interval. Exceptional file/descriptor errors are still reported.
 
 Simple-mode sampling is not intended to suppress explicit warnings. The VMVGA
 legacy FIFO path emits capture-gated `VMVGA-WARN` records for identified invalid,
-unknown, rejected, and allocation-failure cases that were previously only
-`VPRINT` diagnostics (and therefore normally compiled out). The SVGA3D
+unknown, rejected, and allocation-failure cases (including the explicit
+`NOP_ERROR` FIFO command) that were previously only `VPRINT` diagnostics (and therefore normally compiled out). The SVGA3D
 dispatcher also records out-of-range command IDs and in-range IDs without
 metadata. Existing FIFO/3D stalls and abnormal SYNC/fence conditions retain
 their independent reporting paths.
