@@ -164,9 +164,13 @@ setting.
 With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
 to capture general Y2KBox diagnostics—including performance counters, VMVGA,
 VMPort GuestRPC, and vdagent traces—to a new timestamped
-`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory; press
-again to stop. The VM continues running. Every capture interval gets its own
-file, and existing files are never overwritten. At the start of each interval,
+`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory. The VM
+continues running. Every capture interval gets its own file, and existing files
+are never overwritten. Simple captures remain manually stopped and are kept as
+plain-text `.log` files. Full captures automatically stop after five seconds
+(or earlier if Ctrl+Alt+L is pressed again), then are compressed in-process to
+`.log.gz`; the original `.log` is removed only when compression succeeds.
+If compression fails, the uncompressed log is preserved. At the start of each interval,
 all `Y2KBOX-PERF` counters and timing baselines reset, so each file reports only
 work measured during that capture; the VM and guest state are not restarted.
 When debug mode is enabled but capture is inactive, the diagnostic streams
@@ -188,9 +192,10 @@ event lines does not discard command-level performance data.
 
 Use `-y2kboxdebugmode on` when a coding agent needs the full selected
 per-event VMVGA SYNC, fence, and 3D-command stream. The SDL title identifies
-whether the next capture will use simple or full mode. Full captures can still
-become very large; use them when the extra event sequence is needed, rather
-than as the default log to share.
+whether the next capture will use simple or full mode and shows the five-second
+auto-stop while a full capture is active. Full captures can still contain a
+large amount of data, but their maximum capture window is bounded and the
+result is automatically gzip-compressed after capture ends.
 
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
 
