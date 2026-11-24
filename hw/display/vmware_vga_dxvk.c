@@ -13985,9 +13985,9 @@ vmsvga3d_dxvk_d3d9_screen_readback_submit(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d9 phase=submit sid=%u seq=%" PRIu64
-        " slot=%td rects=%u source-rects=%u cumulative=%u "
+        " last_fifo_seq=%" PRIu64 " slot=%td rects=%u source-rects=%u cumulative=%u "
         "bbox=%u,%u/%ux%u",
-        surface->sid, slot->sequence,
+        surface->sid, slot->sequence, dxvk->trace_sequence,
         slot - surface->d3d9_screen_readback, submit_rect_count, rect_count,
         cumulative ? 1u : 0u, left, top, width, height);
 
@@ -14237,8 +14237,8 @@ vmsvga3d_dxvk_d3d9_screen_readback_poll(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d9 phase=ready sid=%u seq=%" PRIu64
-        " rects=%u wait=%u dropped=%u",
-        surface->sid, slot->sequence, slot->rect_count, wait ? 1u : 0u,
+        " last_fifo_seq=%" PRIu64 " rects=%u wait=%u dropped=%u",
+        surface->sid, slot->sequence, dxvk->trace_sequence, slot->rect_count, wait ? 1u : 0u,
         dropped);
     slot->pending = false;
     slot->d3d9_staging_submitted = false;
@@ -15073,9 +15073,9 @@ vmsvga3d_dxvk_d3d11_screen_readback_submit(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d11 phase=submit sid=%u seq=%" PRIu64
-        " slot=%td rects=%u source-rects=%u cumulative=%u "
+        " last_fifo_seq=%" PRIu64 " slot=%td rects=%u source-rects=%u cumulative=%u "
         "bbox=%u,%u/%ux%u",
-        surface->sid, slot->sequence,
+        surface->sid, slot->sequence, dxvk->trace_sequence,
         slot - surface->d3d11_screen_readback, submit_rect_count, rect_count,
         cumulative ? 1u : 0u, left, top, width, height);
     return VMSVGA3D_DXVK_SCREEN_READBACK_SUBMITTED;
@@ -15306,7 +15306,7 @@ vmsvga3d_dxvk_d3d11_screen_readback_poll_internal(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d11 phase=ready sid=%u seq=%" PRIu64
-        " rects=%u wait=%u dropped=%u",
+        " last_fifo_seq=%" PRIu64 " rects=%u wait=%u dropped=%u",
         surface->sid, slot->sequence, slot->rect_count, wait ? 1u : 0u,
         dropped);
     slot->pending = false;
@@ -15491,8 +15491,8 @@ vmsvga3d_dxvk_d3d9_screen_readback_retire_latest(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d9 phase=retire sid=%u seq=%" PRIu64
-        " slots=%u bytes=%" PRIu64,
-        sid, retired->slots[selected_index].sequence, pending_count,
+        " last_fifo_seq=%" PRIu64 " slots=%u bytes=%" PRIu64,
+        sid, retired->slots[selected_index].sequence, dxvk->trace_sequence, pending_count,
         retained_bytes);
     return VMSVGA3D_DXVK_SCREEN_READBACK_RETIRED;
 #else
@@ -15742,8 +15742,9 @@ vmsvga3d_dxvk_d3d9_retired_screen_readback_poll(
     VMVGA_TRACE_LOCAL(
         VMVGA_TRACE_3D,
         "SCREEN-READBACK backend=d3d9 phase=retired-ready sid=%u seq=%" PRIu64
-        " rects=%u wait=%u",
-        retired->sid, slot->sequence, output_rect_count, wait ? 1u : 0u);
+        " last_fifo_seq=%" PRIu64 " rects=%u wait=%u",
+        retired->sid, slot->sequence, dxvk->trace_sequence, output_rect_count,
+        wait ? 1u : 0u);
     vmsvga3d_dxvk_d3d9_retired_screen_readback_discard(dxvk);
     return VMSVGA3D_DXVK_SCREEN_READBACK_POLL_READY;
 
