@@ -802,8 +802,8 @@ void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
         trace->screen_readback_supersede_event_lines < 2) {
         VMVGA_TRACE_LOCAL(
             VMVGA_TRACE_3D,
-            "SCREEN-READBACK backend=d3d9 phase=supersede-flip old-sid=%u",
-            old_sid);
+            "SCREEN-READBACK seq=%" PRIu64 " backend=d3d9 phase=supersede-flip old-sid=%u",
+            s->trace_activity_seq, old_sid);
         trace->screen_readback_supersede_event_lines++;
     }
 }
