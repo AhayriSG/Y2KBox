@@ -657,6 +657,7 @@ struct vmsvga_state_s {
     struct vmsvga_trace_devcap_s trace_devcap[VMVGA_TRACE_DEVCAP_MAX];
     uint32_t trace_devcap_count;
     uint64_t trace_activity_seq;
+    uint64_t trace_frame_id;
     uint64_t trace_last_report_seq;
     int64_t trace_last_report_us;
     bool trace_fifo_have_stall;
@@ -765,6 +766,25 @@ uint64_t vmsvga_trace_event_sequence(const struct vmsvga_state_s *s)
     return s != NULL ? s->trace_activity_seq : 0;
 }
 
+uint64_t vmsvga_trace_frame_id(const struct vmsvga_state_s *s)
+{
+    return s != NULL ? s->trace_frame_id : 0;
+}
+
+void vmsvga_trace_frame_boundary(struct vmsvga_state_s *s,
+                                 const char *kind, uint32_t sid)
+{
+    if (!vmsvga_trace_detail_enabled(s)) {
+        return;
+    }
+
+    fprintf(stderr,
+            "VMVGA-FRAME boundary=%s frame_id=%" PRIu64 " seq=%" PRIu64
+            " sid=%u\n",
+            kind, s->trace_frame_id, s->trace_activity_seq, sid);
+    s->trace_frame_id++;
+}
+
 /* Keep every superseded-flip event in full mode, but bound simple-mode
  * output and retain interval totals plus a small per-SID histogram. */
 void vmsvga_trace_screen_readback_supersede(struct vmsvga_state_s *s,
@@ -836,6 +856,7 @@ static void vmsvga3d_trace_vgpu9_frame_state(struct vmsvga_state_s *s,
 static inline void vmsvga_trace_flight_reset(struct vmsvga_state_s *s)
 {
     vmsvga_trace_gmr2_clear(s);
+    s->trace_frame_id = 0;
 
     if (!vmsvga_trace_flight_enabled()) {
         return;
