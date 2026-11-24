@@ -883,12 +883,12 @@ host key chord; it does not inject Ctrl+Alt+L into XP. No separate
 when using this feature, because QEMU must control stderr redirection for the
 capture interval. Exceptional file/descriptor errors are still reported.
 
-Full (`on`) captures have a hard three-second maximum. The capture stops
+Full (`on`) captures have a hard two-second maximum. The capture stops
 automatically at the limit, or earlier if Ctrl+Alt+L is pressed again. Once
 stderr has been flushed and restored, Y2KBox hands the completed full log to a background worker for zlib compression and saves it as `y2kbox-log-YYYYMMDD-HHMMSS.log.gz`
 (with the same collision suffix policy). The original `.log` is removed only
 after compression succeeds; if compression fails, it is retained for recovery.
-The SDL title indicates the three-second auto-stop while a full capture is active.
+The SDL title indicates the two-second auto-stop while a full capture is active.
 Simple captures are unchanged: no automatic timeout and no automatic compression.
 The gzip stream uses zlib compression level 9 (`wb9`, maximum compression). Compression runs off the QEMU main thread so the VM can continue while the completed log is compressed. Worker-thread failures leave the original `.log` available for manual recovery.
 For performance investigations, start with Simple mode: its PERFSTATS and
