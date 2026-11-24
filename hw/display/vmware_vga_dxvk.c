@@ -16840,6 +16840,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
             next_ring_high = (uint32_t)(aligned_high + offset + size);
             clear_generation = true;
         } else {
+            did_ring_wrap = is_ring_vb && host_len > surface->d3d9_length;
             lock_offset = offset;
             lock_size = size;
             copy_src = (const uint8_t *)shadow_data + offset;
@@ -16890,6 +16891,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
             next_ring_high = (uint32_t)(aligned_high + size);
             clear_generation = true;
         } else {
+            did_ring_wrap = is_ring_vb && host_len > surface->d3d9_length;
             lock_offset = 0;
             lock_size = size;
             copy_src = (const uint8_t *)shadow_data;
@@ -16920,7 +16922,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
                                  (uint32_t)(abs_off + size));
             add_nooverwrite_bytes = true;
         } else if (shadow_size == surface->d3d9_length) {
-            did_ring_wrap = is_ring_vb;
+            did_ring_wrap = is_ring_vb && host_len > surface->d3d9_length;
             /*
              * A sub-allocated ring generation grew past the end of host_len;
              * wrap cleanly to base 0 with D3DLOCK_DISCARD from shadow so
