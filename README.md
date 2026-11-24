@@ -195,7 +195,7 @@ cases. Use Full mode when aggregate measurements are insufficient and detailed
 per-event correlation is needed.
 
 Use `-y2kboxdebugmode on` when a coding agent needs the full selected
-per-event VMVGA SYNC, fence, and 3D-command stream. Full captures automatically
+per-event VMVGA SYNC, fence, and 3D-command stream, including CPU-shadow vertex-position and UV bounds for supported float vertex formats. Full captures automatically
 stop after two seconds (or earlier with Ctrl+Alt+L), and the SDL title shows
 the two-second auto-stop while one is active. After capture ends, Y2KBox
 compresses the completed log asynchronously in a background worker using zlib's maximum compression level (9) and
