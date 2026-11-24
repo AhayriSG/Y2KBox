@@ -426,6 +426,9 @@ static bool sdl_save_log_capture_png(const char *log_filename,
     g_autofree char *png_filename = NULL;
     uint8_t *pixels = NULL;
     FILE *fp = NULL;
+    int fd;
+    int flags = O_WRONLY | O_CREAT | O_EXCL;
+    int saved_errno;
     size_t row_bytes;
     size_t image_bytes;
     int width;
@@ -494,10 +497,23 @@ static bool sdl_save_log_capture_png(const char *log_filename,
         base = g_strdup(log_filename);
     }
     png_filename = g_strconcat(base, ".png", NULL);
-    fp = g_fopen(png_filename, "wb");
-    if (fp == NULL) {
+#ifdef O_BINARY
+    flags |= O_BINARY;
+#endif
+    fd = g_open(png_filename, flags, 0666);
+    if (fd < 0) {
         error_report("Could not create diagnostic PNG %s: %s",
                      png_filename, strerror(errno));
+        g_free(pixels);
+        return false;
+    }
+    fp = fdopen(fd, "wb");
+    if (fp == NULL) {
+        saved_errno = errno;
+        g_close(fd, NULL);
+        g_unlink(png_filename);
+        error_report("Could not open diagnostic PNG stream %s: %s",
+                     png_filename, strerror(saved_errno));
         g_free(pixels);
         return false;
     }
@@ -665,7 +681,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
 #else
         if (debug_detail) {
             fprintf(stderr, "Y2KBOX-DIAG pixel_snapshot=unavailable "
-                            "reason=CONFIG_PNG_disabled\n");
+                            "reason=PNG_or_PIXMAN_disabled\n");
         }
 #endif
         sdl_log_capture_filename = filename;
@@ -722,7 +738,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
                 sdl_log_capture_console != NULL ? sdl_log_capture_console : scon);
 #else
             error_report("Full diagnostic PNG snapshot unavailable: "
-                         "this build was configured without libpng.");
+                         "this build was configured without libpng or Pixman.");
 #endif
             sdl_start_log_compression(sdl_log_capture_filename);
             sdl_log_capture_filename = NULL;
