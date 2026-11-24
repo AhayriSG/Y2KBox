@@ -1314,6 +1314,211 @@ static bool vmsvga3d_state_clear(struct vmsvga_state_s *s, uint32_t cid,
     return valid;
 }
 
+static uint64_t vmsvga3d_state_trace_hash(const uint8_t *data,
+                                                uint32_t size)
+{
+    uint64_t hash = UINT64_C(14695981039346656037);
+    uint32_t i;
+
+    for (i = 0; i < size; i++) {
+        hash ^= data[i];
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
+static void vmsvga3d_state_trace_matrix(
+    uint64_t frame, uint64_t seq, uint32_t cid, const char *name,
+    const VMSVGA3DTransformState *transform)
+{
+    if (transform == NULL || !transform->valid) {
+        fprintf(stderr,
+                "VMVGA-D3D9-TEXGEN-MATRIX frame=%" PRIu64
+                " seq=%" PRIu64 " cid=%u name=%s valid=0\\n",
+                frame, seq, cid, name);
+        return;
+    }
+
+    fprintf(stderr,
+            "VMVGA-D3D9-TEXGEN-MATRIX frame=%" PRIu64
+            " seq=%" PRIu64 " cid=%u name=%s valid=1 m=",
+            frame, seq, cid, name);
+    for (uint32_t i = 0; i < 16; i++) {
+        fprintf(stderr, "%s%.9g", i == 0 ? "" : ",",
+                (double)transform->matrix[i]);
+    }
+    fprintf(stderr, "\\n");
+}
+
+static void vmsvga3d_state_trace_cube_shadow(
+    uint64_t frame, uint64_t seq, uint32_t cid, uint32_t stage,
+    uint32_t sid, const VMSVGA3DSurface *surface)
+{
+    uint32_t levels;
+    uint32_t face;
+    uint64_t budget = UINT64_C(2) * 1024 * 1024;
+
+    if (surface == NULL ||
+        (surface->surface_flags & SVGA3D_SURFACE_CUBEMAP) == 0) {
+        return;
+    }
+
+    levels = surface->face[0].numMipLevels;
+    fprintf(stderr,
+            "VMVGA-CUBEMAP-SHADOW frame=%" PRIu64 " seq=%" PRIu64
+            " cid=%u stage=%u sid=%u levels=%u faces=%u source=cpu-shadow",
+            frame, seq, cid, stage, sid, levels,
+            SVGA3D_MAX_SURFACE_FACES);
+
+    for (face = 0; face < SVGA3D_MAX_SURFACE_FACES; face++) {
+        uint64_t index = (uint64_t)face * levels;
+        const VMSVGA3DSurfaceImage *image = NULL;
+
+        if (levels != 0 && index < surface->mip_count &&
+            surface->mips != NULL) {
+            image = &surface->mips[index];
+        }
+
+        if (image == NULL || image->data == NULL) {
+            fprintf(stderr, " f%u=missing", face);
+        } else if (image->data_size > budget) {
+            fprintf(stderr, " f%u=%ux%u/p%u/b%u/hash=budget",
+                    face, image->size.width, image->size.height,
+                    image->pitch, image->data_size);
+        } else {
+            uint64_t hash = vmsvga3d_state_trace_hash(image->data,
+                                                       image->data_size);
+            budget -= image->data_size;
+            fprintf(stderr,
+                    " f%u=%ux%u/p%u/b%u/hash=%016" PRIx64,
+                    face, image->size.width, image->size.height,
+                    image->pitch, image->data_size, hash);
+        }
+    }
+    fprintf(stderr, "\\n");
+}
+
+static void vmsvga3d_state_trace_texgen(
+    struct vmsvga_state_s *s, const VMSVGA3DContext *context, uint32_t cid)
+{
+    uint32_t stage;
+    uint64_t frame = vmsvga_trace_frame_id(s);
+    uint64_t seq = vmsvga_trace_event_sequence(s);
+    bool trace = false;
+
+    for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
+        const VMSVGA3DStateValue *flags =
+            &context->texture_state[stage][SVGA3D_TS_TEXTURETRANSFORMFLAGS];
+        const VMSVGA3DStateValue *gen =
+            &context->texture_state[stage][SVGA3D_TS_TEXCOORDGEN];
+
+        if ((flags->valid &&
+             (flags->value & (SVGA3D_TEX_TRANSFORM_R |
+                              SVGA3D_TEX_TRANSFORM_Q)) != 0) ||
+            (gen->valid && gen->value != 0)) {
+            trace = true;
+            break;
+        }
+    }
+    if (!trace) {
+        return;
+    }
+
+    vmsvga3d_state_trace_matrix(frame, seq, cid, "WORLD",
+        &context->transform[SVGA3D_TRANSFORM_WORLD]);
+    vmsvga3d_state_trace_matrix(frame, seq, cid, "VIEW",
+        &context->transform[SVGA3D_TRANSFORM_VIEW]);
+    vmsvga3d_state_trace_matrix(frame, seq, cid, "TEXTURE0",
+        &context->transform[SVGA3D_TRANSFORM_TEXTURE0]);
+
+    for (uint32_t face = 0; face < SVGA3D_FACE_MAX; face++) {
+        const VMSVGA3DMaterialState *material = &context->material[face];
+        if (!material->valid) {
+            continue;
+        }
+        fprintf(stderr,
+                "VMVGA-D3D9-TEXGEN-MATERIAL frame=%" PRIu64
+                " seq=%" PRIu64 " cid=%u face=%u valid=1 "
+                "diffuse=%.7g,%.7g,%.7g,%.7g ambient=%.7g,%.7g,%.7g,%.7g "
+                "specular=%.7g,%.7g,%.7g,%.7g emissive=%.7g,%.7g,%.7g,%.7g "
+                "power=%.7g\\n",
+                frame, seq, cid, face,
+                (double)material->material.diffuse[0],
+                (double)material->material.diffuse[1],
+                (double)material->material.diffuse[2],
+                (double)material->material.diffuse[3],
+                (double)material->material.ambient[0],
+                (double)material->material.ambient[1],
+                (double)material->material.ambient[2],
+                (double)material->material.ambient[3],
+                (double)material->material.specular[0],
+                (double)material->material.specular[1],
+                (double)material->material.specular[2],
+                (double)material->material.specular[3],
+                (double)material->material.emissive[0],
+                (double)material->material.emissive[1],
+                (double)material->material.emissive[2],
+                (double)material->material.emissive[3],
+                (double)material->material.shininess);
+    }
+
+    for (uint32_t light = 0; light < SVGA3D_NUM_LIGHTS; light++) {
+        const VMSVGA3DLightState *state = &context->light[light];
+        const SVGA3dLightData *data = &state->data;
+        if (!state->enabled_valid || state->enabled == 0) {
+            continue;
+        }
+        fprintf(stderr,
+                "VMVGA-D3D9-TEXGEN-LIGHT frame=%" PRIu64
+                " seq=%" PRIu64 " cid=%u index=%u enabled=1 "
+                "data_valid=%u type=%u pos=%.7g,%.7g,%.7g "
+                "dir=%.7g,%.7g,%.7g diffuse=%.7g,%.7g,%.7g,%.7g "
+                "ambient=%.7g,%.7g,%.7g,%.7g specular=%.7g,%.7g,%.7g,%.7g\\n",
+                frame, seq, cid, light, (unsigned)state->data_valid,
+                (unsigned)data->type,
+                (double)data->position[0], (double)data->position[1],
+                (double)data->position[2], (double)data->direction[0],
+                (double)data->direction[1], (double)data->direction[2],
+                (double)data->diffuse[0], (double)data->diffuse[1],
+                (double)data->diffuse[2], (double)data->diffuse[3],
+                (double)data->ambient[0], (double)data->ambient[1],
+                (double)data->ambient[2], (double)data->ambient[3],
+                (double)data->specular[0], (double)data->specular[1],
+                (double)data->specular[2], (double)data->specular[3]);
+    }
+
+    for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
+        const VMSVGA3DStateValue *flags =
+            &context->texture_state[stage][SVGA3D_TS_TEXTURETRANSFORMFLAGS];
+        const VMSVGA3DStateValue *gen =
+            &context->texture_state[stage][SVGA3D_TS_TEXCOORDGEN];
+        const VMSVGA3DStateValue *binding =
+            &context->texture_state[stage][SVGA3D_TS_BIND_TEXTURE];
+        VMSVGA3DSurface *surface = NULL;
+
+        if (!((flags->valid &&
+               (flags->value & (SVGA3D_TEX_TRANSFORM_R |
+                                SVGA3D_TEX_TRANSFORM_Q)) != 0) ||
+              (gen->valid && gen->value != 0))) {
+            continue;
+        }
+        fprintf(stderr,
+                "VMVGA-D3D9-TEXGEN-STATE frame=%" PRIu64
+                " seq=%" PRIu64 " cid=%u stage=%u sid=%u "
+                "transformflags=%s%08x texcoordgen=%s%08x\\n",
+                frame, seq, cid, stage,
+                binding->valid ? binding->value : SVGA3D_INVALID_ID,
+                flags->valid ? "" : "invalid/", flags->value,
+                gen->valid ? "" : "invalid/", gen->value);
+        if (binding->valid && binding->value != SVGA3D_INVALID_ID &&
+            s->svga3d != NULL && binding->value < SVGA3D_MAX_SURFACE_IDS) {
+            surface = s->svga3d->surfaces[binding->value];
+        }
+        vmsvga3d_state_trace_cube_shadow(frame, seq, cid, stage,
+            binding->valid ? binding->value : SVGA3D_INVALID_ID, surface);
+    }
+}
+
 static void vmsvga3d_state_trace_draw_snapshot(
     struct vmsvga_state_s *s, const VMSVGA3DContext *context, uint32_t cid)
 {
@@ -1462,6 +1667,7 @@ static bool vmsvga3d_state_draw_primitives(
         }
     }
 
+    vmsvga3d_state_trace_texgen(s, context, cid);
     vmsvga3d_state_trace_draw_snapshot(s, context, cid);
 
     /* Protocol validation completes here; the FIFO handler executes D3D9. */
