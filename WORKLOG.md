@@ -2005,3 +2005,11 @@ full Linux/Windows CI build and owner XP guest verification remain outstanding.
 - Recorded the historical DxWnd experiment in which a minimal EXT entry point reportedly let COD1 start but left substantial graphics corruption, especially the skybox. This is a startup lead, not a rendering fix.
 - Added the QindieGL source and historical discussion to T25's evidence while preserving its PAUSED status and independent-reassessment gate. Noted QindieGL's GPL-3.0 license for review before any code reuse in Y2KBox (GPL-2.0).
 - Documentation-only. No QindieGL patch, source changes, builds, guest modifications, guest tests, benchmarks, or CI polling were performed.
+
+## Session 109 — Record TitaniumGL as a separate OpenGL wrapper research lead
+
+- Removed the project-specific QindieGL paragraph from the README. Kept the existing general statement that application-local wrapper DLLs are one unproven alternative; the README remains focused on the approach rather than individual experimental projects.
+- Added TitaniumGL as a separate T25 research lead in TASKS.md and HANDOFF.md section 8i. Recorded the owner's COD1 observations: application-local DLL loading, pixel format/DC/context success, OpenGL 1.4, VMware SVGA II renderer string with 119 MB VRAM, numerous advertised extensions, the unresolved `0 PFDs found` line, and the subsequent missing-features rejection / `RE_SHUTDOWN (1)`.
+- Recorded that TitaniumGL's hardware and software-renderer modes produced the same broad COD1 failure. The complete extension list was not captured; no claims were made about full extension implementation, successful D3D9 acceleration, or correct rendering.
+- Kept QindieGL and TitaniumGL as distinct candidates and preserved T25's PAUSED status and independent-reassessment gate. XP requirements, release provenance, source availability, and TitaniumGL licensing remain unverified.
+- Documentation-only. No source changes, builds, guest modifications, additional guest tests, benchmarks, or CI polling were performed.
