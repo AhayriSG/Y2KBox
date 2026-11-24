@@ -12252,7 +12252,7 @@ static bool vmsvga3d_d3d10_update_subresource_live_impl(
                 "VMVGA-RESOURCE-UPDATE seq=%" PRIu64 " kind=%s sid=%u "
                 "subresource=%u format=%u box=%u,%u,%u/%ux%ux%u "
                 "row_bytes=%u rows=%u depth=%u pitch=%u plane=%u "
-                "bytes=%" PRIu64 " image=%ux%ux%u result=CPU-SHADOW-UPDATED\\n",
+                "bytes=%" PRIu64 " image=%ux%ux%u result=CPU-SHADOW-UPDATED\n",
                 vmsvga_trace_event_sequence(s),
                 surface->format == SVGA3D_BUFFER ? "buffer" : "image",
                 command->sid, command->subResource, surface->format,
