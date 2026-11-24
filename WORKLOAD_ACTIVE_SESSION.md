@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 110–119).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 111–120).
 
 ## How to use this file
 
@@ -21,11 +21,6 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 110 — Clarify T24 implementation and verification status
-- The owner confirmed that the Windows build has the intended decorated, non-resizable window and disabled titlebar maximize control. This verifies the fixed-window behavior implemented in Session 62.
-- T24 was initially marked IMPLEMENTED/yellow because CI and the remaining XP acceptance checks had not yet been recorded as verified. Session 114 supersedes that status after the owner confirmed the complete acceptance set.
-- Documentation-only. No source changes, builds, guest tests, or CI polling.
 
 ### Session 111 — Add visual task-status markers
 - Added red/yellow/green markers to all 23 TASKS.md headings, matching TODO, in-progress/partial states, and DONE respectively.
@@ -68,7 +63,7 @@
 
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
-3. **Diagnostic capture coverage remains under investigation (T19).** VB-ring pressure summaries now reset at capture start and emit at stop, but real XP capture-content coverage and repeated-interval behavior still need owner verification.
+3. **Diagnostic capture coverage remains under investigation (T19).** VB-ring pressure summaries now cover full-buffer and range uploads and preserve state across renderer recreation; real XP capture-content coverage and repeated-interval behavior still need owner verification.
 4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. **T24 fixed-size SDL display is DONE.** The owner confirms Linux and Windows SDL CI pass and all XP acceptance checks are verified: guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking. The Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. No further T24 work is pending absent a new reproducible defect.
@@ -84,6 +79,11 @@
 - Added per-surface capture-interval counters and a DXVK surface registry; Ctrl+Alt+L start resets profiling-only state and stop emits one summary per eligible live dynamic D3D9 VB surface. New surfaces inherit active capture state.
 - Defined capacity, cumulative uploaded bytes, NOOVERWRITE reused bytes, successful DISCARDs, ring-end wraps, absolute host-buffer high-water, overlap-fallback DISCARDs, and failed ring upgrade/NOOVERWRITE operations.
 - No allocator policy changes, per-upload logging, hot-path allocations, or locks. Source changes are statically reviewed only; no build or runtime test. T19 remains PAUSED pending CI and owner XP capture/repeated-interval verification.
+
+### Session 120 — Complete VB-ring profile lifecycle accounting
+- Included successful full-buffer DISCARD uploads as well as range uploads; narrowed wrap counts to actual capacity exhaustion and kept overlap/invalidation DISCARDs distinct.
+- Made the per-surface registry follow renderer teardown/recreation so active capture state and interval counters survive renderer replacement.
+- Static source-path checks only; no QEMU build/runtime test. T19 remains PAUSED pending CI and owner XP capture/repeated-interval verification.
 
 ## Key diagnostic interpretation rules
 
