@@ -928,3 +928,25 @@ These are separate runs, so their event totals are not expected to match.
 This is owner-side Windows XP capture verification, not CI evidence. No local
 build/test was run for Sessions 124–127. Keep T19 IMPLEMENTED pending
 Linux/Windows CI and any remaining repeated-interval acceptance checks.
+
+Session 128 expanded only the opt-in `on` capture. Full mode now emits a
+`VMVGA-FIFO` event for every FIFO command, with a capture-local sequence number,
+decoded name when available, command ID, FIFO offsets, remaining word count,
+and SYNC state. It also records operands for legacy 2D `SURFACE_COPY`,
+`SURFACE_FILL`, and `RECT_COPY` operations; existing `RECT_FILL` and
+`UPDATE` rectangle records remain. Full mode additionally enables the deep
+D3D9 draw and state/target traces that were previously disabled by compile-time
+developer switches. These include detailed draw planning/submission and
+render-target/texture state activity. The developer switches remain disabled
+for simple captures; the runtime full-mode selection enables them.
+
+This is intended to make 2D/3D activity easier to correlate around the NFS
+Underground 2 minimap flicker. It cannot identify a rendered object semantically
+as a minimap or HUD, and the minimap may be rendered through textured 3D draws
+rather than the 2D FIFO. Use the command sequence and neighboring operation
+records alongside existing readback/presentation events. Full-mode logs will
+be substantially larger; simple mode and inactive/default-off behavior are
+unchanged. No rendering or synchronization behavior was intentionally changed.
+Session 128 received static source review only; no build, runtime capture, XP
+verification, or CI was performed. The next owner test should be one full-mode
+capture spanning the visible flicker, not a separate test for each trace type.
