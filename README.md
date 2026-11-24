@@ -188,14 +188,18 @@ fence events, and FIFO-run-end records, plus the first eight selected
 diagnostics and fence-goal hits, and writes interval-scoped VMVGA
 flight-recorder totals when capture stops. The `Y2KBOX-PERF command` records
 retain per-command counts and timing measurements, so suppressing repetitive
-event lines does not discard command-level performance data.
+event lines does not discard command-level performance data. If performance
+optimization is the main goal, start with Simple mode: its PERFSTATS and
+`Y2KBOX-PERF` summaries may be enough to identify the major bottleneck in some
+cases. Use Full mode when aggregate measurements are insufficient and detailed
+per-event correlation is needed.
 
 Use `-y2kboxdebugmode on` when a coding agent needs the full selected
-per-event VMVGA SYNC, fence, and 3D-command stream. The SDL title identifies
-whether the next capture will use simple or full mode and shows the five-second
-auto-stop while a full capture is active. Full captures can still contain a
-large amount of data, but their maximum capture window is bounded and the
-result is automatically gzip-compressed after capture ends.
+per-event VMVGA SYNC, fence, and 3D-command stream. Full captures automatically
+stop after three seconds (or earlier with Ctrl+Alt+L), and the SDL title shows
+the three-second auto-stop while one is active. After capture ends, Y2KBox
+compresses the log in-process using zlib's maximum compression level (9) and
+saves it as `.log.gz`.
 
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
 
