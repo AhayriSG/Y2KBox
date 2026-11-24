@@ -25,3 +25,15 @@ gzip -dc logs/captures/session-126-simple.log.gz
 To keep the repository useful, commit captures that provide diagnostic value
 for an investigation rather than every temporary capture. Avoid including
 unrelated personal data or secrets in logs.
+
+## Full-mode resource and draw records
+
+The opt-in `on` capture adds high-volume records that are absent from `simple`:
+
+- `VMVGA-D3D9-BUFFER-DEFER`: each guest buffer write range and the merged deferred range.
+- `VMVGA-D3D9-BUFFER-UPLOAD`: the native D3D9 Lock range, flags/mode, decision reason, flush cause, host capacity and copied bytes. Direct full-buffer DISCARD uploads and deferred range flushes are separate records.
+- `VMVGA-RESOURCE-UPDATE`: guest-backed image/buffer subresource, update box, row/plane layout, byte count and selected backend. The record is emitted after guest MOB bytes reach the CPU shadow, before native upload completion.
+- `VMVGA-D3D9-GEOMETRY`: FIFO-sequenced draw-range summary with render target, viewport, primitive/index range and stream count. Position/UV bounds are currently explicitly unavailable (`bounds_reason=vertex-decode-not-implemented`).
+- `VMVGA-RENDER-CORRELATION`: readback submit/ready/retire events tagged with the last observed FIFO sequence. Since readback polling can be asynchronous, `last_fifo_seq` is a correlation hint, not always the originating command.
+
+These records do not dump texture pixels or force GPU readbacks. Do not infer that a SID is the minimap/HUD from its dimensions or draw pattern alone; use the resource updates, draw bindings, geometry evidence and owner-visible capture together. The added records are full-mode only; simple-mode output remains compact.
