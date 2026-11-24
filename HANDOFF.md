@@ -651,7 +651,7 @@ creating GL context: succeeded
 making context: succeeded
 0 PFDs found
 MCD acceleration found
-calling library system32/opengl32.dll succeeded
+calling library system32\opengl32.dll succeeded
 
 GLVERSION 1.4
 GL RENDERER VMware SVGA II/119MB VRAM
