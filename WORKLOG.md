@@ -2046,3 +2046,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Explicitly gated the VBox profile on an end-to-end Y2KBox proof of concept and source/licensing audit. VirtualBox's documented experimental Windows XP 3D support is evidence that the upstream guest path existed, not proof that the Y2KBox port works. T16 remains the research/feasibility track.
 - Clarified that graphics backend, guest driver, and system disk must be selected as one consistent profile; removable media and unrelated device selectors remain independent.
 - Documentation-only. No source changes, builds, guest tests, benchmarks, or CI polling.
+
+
+## Session 113 (ChatGPT), 2026-11-24 - Clarify T12 as a user-managed instance manager
+
+- Corrected Session 112's interpretation of the proposed multi-GPU architecture. T12 is not a chooser among two application-defined presets: it should become an instance manager where users create and name their own independent XP VM instances.
+- Each instance owns its persisted virtual-hardware configuration, including its virtual GPU choice, and is associated with its own system qcow2 image and guest installation. The GPU is selected per instance during creation, not as a global application setting.
+- VMware SVGA II / SVGA3D remains the currently supported/default path. VBoxVGA 5.2.x / SharedOpenGL remains only a proposed additional GPU choice for future instances, gated on an end-to-end proof of concept and source/licensing audit; T16 remains the research track.
+- Clarified that Y2KBox does not ship two fixed images or hard-coded vendor presets. Different graphics ecosystems should use separate XP instances/system images rather than sharing one installation and switching driver stacks.
+- Documentation-only. No source changes, builds, guest tests, benchmarks, or CI polling.
