@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 107–116).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 108–117).
 
 ## How to use this file
 
@@ -21,11 +21,6 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 107 — Pause guest OpenGL work for independent reassessment
-- README now describes OpenGL as a low-probability research objective and mentions application-local wrapper DLLs only as one unproven possibility.
-- T25 is PAUSED pending an independent reassessment. The next reviewer should challenge the current hypotheses and investigate alternative architectures before proposing a prototype.
-- HANDOFF section 8g records the reassessment brief and makes clear that no agent has been assigned or dispatched. No guest changes, builds, tests, or CI polling.
 
 ### Session 108 — Record QindieGL as a concrete but unproven OpenGL wrapper lead
 - Added QindieGL to T25's technical research record, including its missing `wglGetExtensionsStringEXT` implementation and the owner's COD1 failure.
@@ -73,6 +68,12 @@
 - Updated the topic map to include recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
 - Replaced the dense Sessions 82–115 prose block with a concise chronological list; detailed evidence remains in WORKLOG.md.
 - Documentation-only; no source changes, builds, tests, or CI polling.
+
+
+### Session 117 — Fix Session 115 D3D9 dynamic vertex-buffer compile failure
+- Linux and Windows CI both caught an undefined `VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC` used by the new dynamic D3D9 vertex-buffer ring code.
+- Added the missing Direct3D 9 usage flag definition (`0x00000200u`) beside the other D3D9 usage constants. The D3D9 checks remain distinct from the unrelated D3D11 `D3D11_USAGE_DYNAMIC` enum.
+- Minimal compile-only correction; no Session 115 ring behavior changed. No local QEMU build was run; GitHub Actions validation is pending and was not polled.
 
 ## Current investigation / next actions
 
