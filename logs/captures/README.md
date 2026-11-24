@@ -31,6 +31,25 @@ To keep the repository useful, commit captures that provide diagnostic value
 for an investigation rather than every temporary capture. Avoid including
 unrelated personal data or secrets in logs.
 
+## Joint Operations: D3D8 environment-mapped canopy investigation
+
+Full-mode texgen diagnostics now emit these records when a validated draw uses
+3D texture-coordinate transforms or nonzero texture-coordinate generation:
+
+- `VMVGA-D3D9-TEXGEN-MATRIX`: guest WORLD, VIEW and TEXTURE0 matrices, each
+  tagged with frame, FIFO/event sequence, context and validity.
+- `VMVGA-D3D9-TEXGEN-STATE`, `VMVGA-D3D9-TEXGEN-MATERIAL`, and
+  `VMVGA-D3D9-TEXGEN-LIGHT`: transform flags/generation, material colors and
+  shininess, plus enabled light data.
+- `VMVGA-CUBEMAP-SHADOW`: bound cube texture SID and per-face level-zero
+  dimensions, pitch, byte count and FNV-1a checksum of the CPU shadow. Hashing
+  is capped at 2 MiB per record; missing or over-budget faces are explicit.
+
+These checksums identify CPU-shadow contents only; they do not guarantee that
+the shadow is current with GPU-rendered contents or that the face orientation
+is correct. These records are Full-mode/capture gated and do not change
+rendering, synchronization, upload policy or GPU scheduling.
+
 ## Full-mode resource and draw records
 
 The opt-in `on` capture adds high-volume records that are absent from `simple`:
