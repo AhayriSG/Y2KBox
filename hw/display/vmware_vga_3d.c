@@ -2889,6 +2889,7 @@ static void vmsvga3d_renderer_realize(struct vmsvga_state_s *s)
         s->active_valid ? s->active_height : 0, s->debug, &local_err);
 
     if (vmsvga3d_dxvk_ready(s->dxvk)) {
+        vmsvga3d_dxvk_vb_ring_profile_capture(s->dxvk, s->debug_log);
         vmsvga3d_renderer_surface_renderer_set(s, s->dxvk, false);
         s->svga3d_capable = true;
         s->svga3d_dx_capable = vmsvga3d_dxvk_d3d11_ready(s->dxvk);
