@@ -3912,8 +3912,30 @@ void vmsvga3d_dxvk_surface_evict(VMSVGA3DDxvkSurface *surface)
 void vmsvga3d_dxvk_surface_set_renderer(VMSVGA3DDxvkSurface *surface,
                                         VMSVGA3DDxvk *dxvk)
 {
-    if (surface != NULL) {
-        surface->owner = dxvk;
+    VMSVGA3DDxvkSurface **link;
+
+    if (surface == NULL || surface->owner == dxvk) {
+        return;
+    }
+    if (surface->owner != NULL) {
+        for (link = &surface->owner->surfaces; *link != NULL;
+             link = &(*link)->profile_next) {
+            if (*link == surface) {
+                *link = surface->profile_next;
+                break;
+            }
+        }
+    }
+    surface->owner = dxvk;
+    surface->profile_next = NULL;
+    if (dxvk != NULL) {
+        surface->profile_next = dxvk->surfaces;
+        dxvk->surfaces = surface;
+        if (surface->vb_ring_profile_active) {
+            dxvk->vb_ring_profile_active = true;
+        } else if (dxvk->vb_ring_profile_active) {
+            surface->vb_ring_profile_active = true;
+        }
     }
 }
 
