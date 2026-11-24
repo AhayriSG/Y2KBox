@@ -5235,7 +5235,8 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                     "prim=%u count=%u indexed=%u start_vertex=%u "
                     "min_vertex=%u vertex_count=%u index_sid=%u "
                     "index_offset=%u index_width=%u streams=%u "
-                    "bounds=not-transformed\n",
+                    "position_bounds=unavailable uv_bounds=unavailable "
+                    "bounds_reason=vertex-decode-not-implemented\n",
                     vmsvga_trace_event_sequence(s), cid, i,
                     context->render_targets[SVGA3D_RT_COLOR0].sid,
                     context->render_targets[SVGA3D_RT_COLOR0].face,
