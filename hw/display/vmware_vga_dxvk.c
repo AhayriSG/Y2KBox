@@ -16418,6 +16418,20 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
                 surface->vb_ring_profile_high_water_bytes, size);
         }
     }
+    if (dxvk->vb_ring_profile_detail) {
+        fprintf(stderr,
+                "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=0 "
+                "guest_size=%u lock_offset=0 lock_size=%u flags=0x%x "
+                "mode=DISCARD reason=full-buffer-upload flush=direct "
+                "host_capacity=%u copy_bytes=%u result=%s\\n",
+                surface->sid,
+                surface->d3d9_resource_type ==
+                        VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
+                    ? "vertex" : "index",
+                size, size, VMSVGA3D_DXVK_D3DLOCK_DISCARD,
+                surface->d3d9_host_length, size,
+                vmsvga3d_dxvk_succeeded(result) ? "OK" : "FAIL");
+    }
     return vmsvga3d_dxvk_succeeded(result);
 #else
     (void)dxvk;
