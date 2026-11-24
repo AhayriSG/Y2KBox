@@ -375,7 +375,7 @@ they are not assumed to make translated guest instruction execution faster.
 
 
 ## T19 (P1) General SDL diagnostic logging capture — 🟡 IMPLEMENTED
-**Status:** CLAIMED by GPT-6 diagnostic-detail follow-up 2026-11-24 (full-mode graphics-event coverage for NFSU2 minimap flicker)
+**Status:** IMPLEMENTED (full-mode graphics-event coverage expanded; XP capture validation and Linux/Windows CI pending)
 Add an SDL2 host-side keyboard shortcut that captures a selected diagnostic
 interval across Y2KBox, without continuously generating diagnostic output.
 
@@ -427,6 +427,14 @@ interval across Y2KBox, without continuously generating diagnostic output.
   - Full capture: approximately 1.5 MB; capture header reported `capture_mode=on`. Its summary reported 766 superseded flips and `event-lines=766`, confirming all supersede events were emitted individually in full mode.
   - Owner confirmed the false unknown-register warning for the valid `SVGA_REG_BUSY` read was absent from both captures. These separate captures naturally had different event totals.
   - This verifies the inspected simple/full capture behavior on the owner's Windows XP run. It does not establish Linux/Windows CI status or repeated-interval acceptance; keep T19 IMPLEMENTED until those remaining DoD checks are satisfied.
+
+* **Full-mode graphics-event expansion (Session 128; static review only):**
+  - In `on` mode, emit a `VMVGA-FIFO` record for every FIFO command, including its monotonic capture-local sequence number, decoded name when known, command ID, FIFO offsets, remaining word count, and SYNC state. The sequence number helps correlate command dispatch with subsequent operation-level records.
+  - Add operand-level records for legacy 2D `SURFACE_COPY`, `SURFACE_FILL`, and `RECT_COPY`; existing `RECT_FILL` and `UPDATE` rectangle records remain in place.
+  - Full mode now activates the previously opt-in deep D3D9 draw and state/target diagnostics, including detailed draw planning/submission and render-target/texture state activity. The compile-time developer switches remain disabled for ordinary/simple captures; the runtime full-mode selection enables the detail.
+  - This improves visibility into the 2D FIFO and D3D9 rendering paths, but does not label a command as a minimap/HUD element or prove the cause of flicker. The minimap may itself be rendered as textured 3D geometry. Correlate the new event sequence with the visible symptom and existing readback/presentation records.
+  - Expected log volume is substantially higher in full mode. Simple mode and the default-off/inactive paths are unchanged. No rendering, scheduling, or synchronization behavior was intentionally changed.
+  - Static source review only; no local build, runtime test, XP capture, or CI run was performed. The next owner test should use one full-mode capture spanning the minimap flicker, rather than separate tests for each trace category.
 
 * **Simple-mode warning retention and dispatch classification (Sessions 124–125; static review only):**
   - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unhandled commands/escapes, `NOP_ERROR`, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
