@@ -168,7 +168,7 @@ VMPort GuestRPC, and vdagent traces—to a new timestamped
 continues running. Every capture interval gets its own file, and existing files
 are never overwritten. Simple captures remain manually stopped and are kept as
 plain-text `.log` files. Full captures automatically stop after two seconds
-(or earlier if Ctrl+Alt+L is pressed again), then are compressed asynchronously in a background worker to
+(or earlier if Ctrl+Alt+L is pressed again), then are compressed asynchronously by a background worker to
 `.log.gz`; the original `.log` is removed only when compression succeeds.
 If compression fails, the uncompressed log is preserved. At the start of each interval,
 all `Y2KBOX-PERF` counters and timing baselines reset, so each file reports only
