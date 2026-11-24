@@ -77,3 +77,9 @@
 - Moved gzip compression to a detached background worker while retaining zlib level 9 (`wb9`, maximum compression). The worker only receives the completed log after stderr is restored; it removes the source only after successful compression. The worker avoids writing status messages to redirected stderr, so it cannot contaminate a newer capture. It deletes the source `.log` only after successful compression and preserves it on failure.
 - Updated README, HANDOFF, TASKS, command-line help, and capture documentation to describe the two-second limit, maximum compression, and the guidance to start performance investigations with Simple-mode PERFSTATS/`Y2KBOX-PERF` summaries, which may be sufficient before enabling Full mode.
 - Static source/documentation review only. No local build, runtime test, XP capture, or CI was run; owner verification and Linux/Windows CI remain outstanding.
+
+
+### Session 133 — Decode CPU-shadow vertex positions and UVs
+- Full-mode `VMVGA-D3D9-GEOMETRY` now decodes raw vertex-input position and TEXCOORD0 UV bounds from the CPU shadow for indexed and non-indexed draws using FLOAT1–FLOAT4 declaration elements. The decoder validates little-endian indices and float components, base-vertex addressing, stream offsets/strides, buffer bounds and finite values; it rejects instanced streams and caps work at 65,536 vertex references per draw.
+- Records report separate position/UV reference counts, `bounds_ok`, and an explicit `bounds_reason`. No GPU readback, forced synchronization, or rendering behavior change was added.
+- Static source review only; no QEMU build, runtime test, owner XP capture, or CI. Next owner step: take one Full-mode NFSU2 capture spanning the minimap flicker and inspect the newly decoded bounds alongside surface updates and render/readback correlation. T26 remains IN PROGRESS pending useful capture evidence and Linux/Windows build/CI.
