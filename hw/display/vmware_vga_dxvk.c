@@ -16429,7 +16429,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
     }
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
-                "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=0 "
+                "VMVGA-D3D9-BUFFER-UPLOAD seq=%" PRIu64 " sid=%u type=%s guest_offset=0 "
                 "guest_size=%u lock_offset=0 lock_size=%u flags=0x%x "
                 "mode=DISCARD reason=full-buffer-upload flush=direct "
                 "host_capacity=%u copy_bytes=%u result=%s\n",
@@ -17174,7 +17174,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
                     "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
                     "mode=%s reason=%s flush=%s stage=lock result=FAIL "
                     "hr=0x%08x\n",
-                    surface->sid,
+                    dxvk->trace_sequence, surface->sid,
                     surface->d3d9_resource_type ==
                             VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
                         ? "vertex" : "index",
@@ -17227,11 +17227,11 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     }
     if (dxvk->vb_ring_profile_detail) {
         fprintf(stderr,
-                "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
+                "VMVGA-D3D9-BUFFER-UPLOAD seq=%" PRIu64 " sid=%u type=%s guest_offset=%u "
                 "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
                 "mode=%s reason=%s flush=%s ring_base=%u ring_high=%u "
                 "host_capacity=%u copy_bytes=%u result=%s\n",
-                surface->sid,
+                dxvk->trace_sequence, surface->sid,
                 surface->d3d9_resource_type ==
                         VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
                     ? "vertex" : "index",
