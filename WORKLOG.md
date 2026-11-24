@@ -2180,3 +2180,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Closed the Session 126 owner-retest follow-up. No source behavior changed; future profiling remains targeted to concrete investigations rather than adding speculative instrumentation.
 - Updated T19 and handoff records with the owner evidence. T19 remains IMPLEMENTED, not DONE: Linux/Windows CI and repeated-interval acceptance are not established by these two captures.
 - Documentation-only update. No local build, runtime test, or CI run was performed.
+
+
+## Session 128 (GPT-6), 2026-11-24 - Expand full-mode VMVGA graphics-event diagnostics
+
+- Expanded the opt-in full capture so the previously disabled deep FIFO trace runs when vmsvga_trace_detail_enabled() is true. Every FIFO command now emits a VMVGA-FIFO record with a capture-local sequence number, decoded command name when known, command ID, FIFO offsets, remaining word count, and SYNC state. Simple mode remains sampled.
+- Added operand-level VMVGA draw records for legacy 2D SURFACE_COPY, SURFACE_FILL, and RECT_COPY; existing RECT_FILL and UPDATE rectangle records are retained.
+- Made full mode activate the existing deep D3D9 draw and state/target diagnostics, previously gated only by disabled compile-time developer switches. This adds detailed draw planning/submission and render-target/texture state activity without changing rendering or synchronization behavior.
+- Updated T19 and HANDOFF to describe the expanded full-mode coverage and its limits. The records cannot identify a HUD/minimap semantically; the minimap may be rendered through textured 3D draws. One owner full-mode capture spanning the visible flicker should provide the next useful evidence.
+- Static source review only. No local QEMU build, runtime test, XP capture, or CI run was performed. Full-mode log volume is expected to increase substantially; simple and inactive/default-off paths are unchanged. T19 remains IMPLEMENTED pending owner capture validation and Linux/Windows CI.
