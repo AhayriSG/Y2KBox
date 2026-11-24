@@ -21,7 +21,7 @@ Different coding agents may take over sequentially; this shared task queue is th
    to `main`, set the task to `PAUSED` with a precise "Resume here:" note (what is
    done, what is next, what is broken). Never leave a claimed task silent.
 
-Status values: `TODO`, `CLAIMED by ...`, `PAUSED`, `DONE`. Priority: P0 first.
+Status values: `TODO`, `CLAIMED by ...`, `IMPLEMENTED` (implementation complete; acceptance evidence pending), `PAUSED`, `DONE`. `IMPLEMENTED` tasks have no known source work remaining and are not available to claim; finish their stated verification before marking them `DONE`. Priority: P0 first.
 
 ---
 
@@ -442,7 +442,7 @@ task. The GUI must expose the two pools accurately, retain the combined
 1024 MiB limit, and explain that the 3D surface budget is not the same as
 dxdiag's local framebuffer-memory figure.
 
-## T24 (P1) Fixed-size SDL guest display window  -  Status: PAUSED (implementation committed; awaiting CI + XP guest verification)
+## T24 (P1) Fixed-size SDL guest display window  -  Status: IMPLEMENTED (Windows window behavior owner-verified; CI + remaining XP checks outstanding)
 Make the SDL host window follow the VMVGA guest display surface rather than
 allowing host-side window geometry to influence the guest.
 
@@ -457,9 +457,17 @@ allowing host-side window geometry to influence the guest.
   the guest resolution. Keep `Ctrl+Alt+F` as the interactive fullscreen toggle.
 * Do not alter mouse emulation or coordinate mapping to compensate for
   host-window resizing.
-* DoD: Linux and Windows SDL builds pass CI; owner verifies windowed guest
-  resolution changes, disabled maximize/manual resize, fullscreen toggling,
-  and mouse tracking in an XP guest.
+* **Owner-confirmed Windows behavior (2026-11-24):** the built Windows
+  application presents a decorated, non-resizable window, and the titlebar
+  maximize control is disabled as intended. This confirms the fixed-window
+  behavior; it does not by itself verify guest-driven resolution changes,
+  `Ctrl+Alt+F` fullscreen switching, or mouse tracking.
+* **Remaining acceptance checks:** Linux and Windows SDL CI; owner verification
+  in XP of guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling,
+  and mouse tracking. Do not change the implementation unless one of these
+  checks exposes a real defect.
+* DoD: Linux and Windows SDL builds pass CI and the remaining owner-run XP
+  checks above are confirmed.
 
 ## T25 (P2) Investigate guest OpenGL support through VMware SVGA3D  -  Status: PAUSED (low feasibility; awaiting independent reassessment)
 Establish whether a guest-visible OpenGL path for Windows XP is feasible while preserving the existing VMware SVGA II / SVGA3D display driver, with **OpenGL 1.1 as the baseline and OpenGL 2.1 as the maximum target**. OpenGL is not currently implemented as a guest-facing API.
