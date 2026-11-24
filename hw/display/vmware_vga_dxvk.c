@@ -16368,7 +16368,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
             fprintf(stderr,
                     "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
                     "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
-                    "reason=%s flush=%s stage=lock result=FAIL hr=0x%08x\\n",
+                    "reason=%s flush=%s stage=lock result=FAIL hr=0x%08x\n",
                     surface->sid,
                     surface->d3d9_resource_type ==
                             VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
@@ -17191,7 +17191,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
                 "VMVGA-D3D9-BUFFER-UPLOAD sid=%u type=%s guest_offset=%u "
                 "guest_size=%u lock_offset=%u lock_size=%u flags=0x%x "
                 "mode=%s reason=%s flush=%s ring_base=%u ring_high=%u "
-                "host_capacity=%u copy_bytes=%u result=%s\\n",
+                "host_capacity=%u copy_bytes=%u result=%s\n",
                 surface->sid,
                 surface->d3d9_resource_type ==
                         VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER
