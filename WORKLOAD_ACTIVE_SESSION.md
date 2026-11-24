@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 98–107).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 99–108).
 
 ## How to use this file
 
@@ -26,7 +26,7 @@
 1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
 2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
 3. **Diagnostic capture coverage remains under investigation (T19).** Separate timestamped sessions and per-capture counter resets have been exercised, but unusually small later log files compared with the first capture need category-by-category comparison before declaring all output coverage complete.
-4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** COD1 with `+set r_allowSoftwareGL 1` creates/makes-current a WGL context, then fails its feature check; GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 with only three extensions (HANDOFF.md 8d / WORKLOG Session 104). VMware Workstation Player 15 explicitly documents software-emulated OpenGL in XP guests (HANDOFF.md 8e / Session 105). A conventional XP ICD requires the active display driver to advertise it through OPENGL_GETINFO; a registry-only DLL cannot simply be installed beside VMware's driver (HANDOFF.md 8f / Session 106). Do not reinstall Tools, hunt for `vm3dgl.dll`, modify/replace the VMware display driver, or install WINVBE. An application-local wrapper DLL and GL4ES / historical ANGLE D3D9 are speculative leads only; a future reviewer should independently investigate other architectures and may reject these candidates. No prototype, guest modification, or build is authorized. See HANDOFF.md 8g / WORKLOG Session 107.
+4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** COD1 with `+set r_allowSoftwareGL 1` creates/makes-current a WGL context, then fails its feature check; GLview reports Microsoft / GDI Generic / OpenGL 1.1.0 with only three extensions (HANDOFF.md 8d / WORKLOG Session 104). VMware Workstation Player 15 explicitly documents software-emulated OpenGL in XP guests (HANDOFF.md 8e / Session 105). A conventional XP ICD requires the active display driver to advertise it through OPENGL_GETINFO; a registry-only DLL cannot simply be installed beside VMware's driver (HANDOFF.md 8f / Session 106). Do not reinstall Tools, hunt for `vm3dgl.dll`, modify/replace the VMware display driver, or install WINVBE. An application-local wrapper DLL and GL4ES / historical ANGLE D3D9 are speculative leads only; a future reviewer should independently investigate other architectures and may reject these candidates. QindieGL is now documented as a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical experimental patch reportedly got COD1 to start with severe graphics corruption. No prototype, guest modification, or build is authorized. See HANDOFF.md 8g–8h / WORKLOG Sessions 107–108.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
 6. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
@@ -38,11 +38,6 @@
 - A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
 - Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
 
-
-### Session 98 — Move project-purpose FAQ to the bottom of the README
-- Moved the merged compatibility-layer and preservation answer to the final FAQ position, after the technical questions.
-- Preserved the approved answer wording; only section order changed.
-- Documentation-only; no builds, benchmarks, tests, guest validation, or CI polling.
 
 ### Session 99 — Add guest OpenGL investigation to the task queue
 - Added T25 to investigate a Windows XP guest OpenGL path through VMware SVGA3D, targeting OpenGL 1.1 baseline through OpenGL 2.1 maximum.
