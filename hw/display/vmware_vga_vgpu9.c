@@ -5066,6 +5066,12 @@ static bool vmsvga3d_d3d9_decode_geometry_bounds(
                        (const uint8_t *)index_surface->mips[0].data +
                            index_offset, sizeof(raw_index));
             }
+            if (raw_index < plan->indexed.min_vertex_index ||
+                raw_index - plan->indexed.min_vertex_index >=
+                    plan->indexed.num_vertices) {
+                *reason = "index-outside-draw-vertex-range";
+                return false;
+            }
             effective_index = (int64_t)plan->indexed.base_vertex_index +
                               raw_index;
             if (effective_index < 0 || effective_index > UINT32_MAX) {
