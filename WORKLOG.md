@@ -2086,3 +2086,9 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
   - Local sandbox lacks `meson`/`ninja`/`mingw32-gcc`, so full Linux/Windows QEMU builds were not run locally.
   - Ran `git diff --check`, `#if`/`#endif` balance check across all 5 modified files, QOM header API check against `include/qom/object.h`, and a standalone `gcc -std=gnu11 -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wsign-compare -Wshadow -O2` verification harness exercising F1 '99-'02 invalidate-ring cycles (`3` discards / `3,997` `NOOVERWRITE` over `1,000` cycles), Hitman 2 `4.5 MiB` VB tiny writes (`0` discards / `6,000` `NOOVERWRITE`), FIFA `1 MiB` ring wraparound + same-offset thrash guard, mid-generation ring wrap shadow preservation, repeated `full_range` ring upgrade, eviction budget accounting, and GART property naming / transaction batching — all passed.
   - GitHub Actions Linux/Windows CI and owner Windows TCG in-game re-captures (FIFA 2003, Hitman 2 Sicily fade, F1 '99-'02) are pending after push.
+
+## Session 116 (ChatGPT), 2026-11-24 - Reorganize WORKLOG_INDEX for scanability and coverage
+
+- Reworked the topic map to include the recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
+- Replaced the dense Sessions 82–115 prose block with a concise, consistently formatted chronological list. The index remains a navigation summary; detailed evidence and history stay in the append-only WORKLOG.md.
+- Preserved the Session 81 CI note and all existing historical session references. No source changes, builds, tests, or CI polling.
