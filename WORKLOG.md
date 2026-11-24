@@ -2200,3 +2200,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added full-only `VMVGA-RENDER-CORRELATION` markers for readback submit/ready/retire/supersede events. They carry the last observed FIFO sequence; asynchronous polling means this is a correlation hint rather than guaranteed source-command identity.
 - Updated `TASKS.md` (T26 remains IN PROGRESS), `HANDOFF.md`, and `logs/captures/README.md`. No GPU readbacks, forced synchronization, rendering changes, or upload-policy changes were intentionally introduced.
 - Static source review only. No local QEMU build, tests, Windows XP capture, or CI was run. The owner should take one full-mode NFSU2 capture spanning visible flicker and inspect surfaces 29/35, 404 and 410–446 together. Do not label any resource as the minimap without geometry/visual evidence.
+
+
+## Session 130 (GPT-6), 2026-11-24 - Bound and automatically compress full diagnostic captures
+
+- Limited only full (`-y2kboxdebugmode on`) SDL captures to five seconds with a QEMU realtime timer. Ctrl+Alt+L can still stop a full capture early; the SDL title now advertises the automatic limit while it is active.
+- After the diagnostic streams stop, stderr is flushed and restored before compression. The completed full log is compressed in-process with zlib to the matching `.log.gz` filename; the original `.log` is removed only after successful compression. Exclusive output creation prevents overwriting an existing gzip file, and compression failures retain the original text log.
+- Simple mode is unchanged: manual start/stop, no timeout, and plain-text `.log` output. No external gzip executable is required. Runtime logs remain in the launch working directory and are not automatically committed to the repository.
+- Added the zlib dependency to the SDL source set and updated README, HANDOFF, TASKS, and capture documentation.
+- Static source review only. No local QEMU build, runtime test, XP capture, or CI run was performed; Linux/Windows CI and owner verification remain required.
