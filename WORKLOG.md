@@ -2055,3 +2055,10 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - VMware SVGA II / SVGA3D remains the currently supported/default path. VBoxVGA 5.2.x / SharedOpenGL remains only a proposed additional GPU choice for future instances, gated on an end-to-end proof of concept and source/licensing audit; T16 remains the research track.
 - Clarified that Y2KBox does not ship two fixed images or hard-coded vendor presets. Different graphics ecosystems should use separate XP instances/system images rather than sharing one installation and switching driver stacks.
 - Documentation-only. No source changes, builds, guest tests, benchmarks, or CI polling.
+
+## Session 114 (ChatGPT), 2026-11-24 - Complete T24 owner acceptance verification
+
+- The owner clarified that every T24 acceptance check previously listed as outstanding had already been verified: Linux and Windows SDL CI pass, and XP guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking all work.
+- Corrected T24 from IMPLEMENTED/yellow to DONE/green. Recorded the complete owner-confirmed acceptance set and removed the stale remaining-checks list.
+- The Windows decorated, non-resizable window and disabled titlebar maximize control remain documented as verified behavior.
+- Documentation-only. No source changes, builds, guest tests, or CI polling were performed in this session; the verification results above are the owner's confirmation.
