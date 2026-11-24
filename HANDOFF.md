@@ -977,9 +977,9 @@ the opt-in `on` capture:
   is dumped.
 - `VMVGA-D3D9-GEOMETRY` adds a per-range summary correlated with the FIFO
   sequence, target, viewport, primitive/index range and stream count. It now
-  decodes vertex-space position and TEXCOORD0 UV bounds from the CPU shadow for
+  decodes raw vertex-input position and TEXCOORD0 UV bounds from the CPU shadow for
   indexed and non-indexed draws using FLOAT1–FLOAT4 declaration elements. These
-  are vertex-space values, not transformed screen-space coordinates. Unsupported
+  are raw vertex-input values, not transformed screen-space coordinates. Unsupported
   formats, unavailable shadows, instancing, invalid indices and oversized draws
   report an explicit `bounds_reason`; decoding is capped at 65,536 vertices and
   performs no GPU readback or forced synchronization.
