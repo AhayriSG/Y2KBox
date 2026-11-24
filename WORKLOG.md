@@ -2153,3 +2153,12 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added explicit warning records when the SVGA3D dispatcher receives an out-of-range command ID or an in-range command ID with no metadata. Existing FIFO/3D stall, fence-goal, and abnormal SYNC/FIFO diagnostics remain on their existing paths.
 - This is targeted hardening, not a universal severity framework. QEMU/DXVK stderr error-reporting remains captured independently of VMVGA event sampling, but silent internal fallbacks are not guaranteed to be visible. Repeated-warning aggregation is not implemented and pathological repeated warnings can still generate repeated lines. A broader source-wide severity audit remains open.
 - Static source review only. No QEMU build, runtime test, CI run, or owner XP capture was performed. T19 remains IMPLEMENTED pending platform CI and owner verification of simple/full captures and repeated intervals.
+
+
+## Session 125 (ChatGPT), 2026-11-24 - Correct VMVGA warning placement after owner capture flood
+
+- Reviewed the owner's one-second simple capture, in which repeated `VMVGA-WARN unknown FIFO command=...` and `unknown register write index=21 value=39` records accounted for roughly 90% of the log.
+- Identified the cause in `hw/display/vmware_vga.c`: the generic FIFO warning ran before command dispatch, labelling every command unknown before the legacy switch and SVGA3D handler could recognize it; the register warning likewise ran before the register switch, labelling valid writes such as `SVGA_REG_SYNC` as unknown.
+- Moved the generic FIFO warning into the final unhandled-command path, after the legacy switch and SVGA3D dispatcher decline the command, and limited it to non-3D commands so the SVGA3D-specific unknown-command diagnostics remain authoritative. Moved the unknown-register-write warning into the register switch's `default` case.
+- Updated T19 task and handoff guidance to document the owner-capture finding and corrected classification. Repeated-warning aggregation remains a separate possible improvement; it was not implemented in this correction.
+- Static source/documentation review only. No local build, runtime test, CI run, or post-fix owner capture was performed. The owner should repeat the same short simple-mode capture to confirm valid SYNC writes and handled FIFO commands no longer generate unknown warnings.

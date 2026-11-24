@@ -419,8 +419,9 @@ interval across Y2KBox, without continuously generating diagnostic output.
   owner verifies hotkey, output coverage, and repeated intervals in an XP guest.
   No branch or PR.
 
-* **Simple-mode warning retention hardening (Session 124; static review only):**
-  - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unknown/invalid commands and escapes, `NOP_ERROR`, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
+* **Simple-mode warning retention and dispatch classification (Sessions 124–125; static review only):**
+  - Added capture-gated `VMVGA-WARN` records for explicit legacy FIFO/2D rejection cases that previously existed only as `VPRINT` messages (normally compiled out unless `VERBOSE`), including unhandled commands/escapes, `NOP_ERROR`, invalid geometry/ROP/surface operations, invalid cursor payloads, oversized cursor payloads, allocation failures, invalid GMR2 flags, invalid Screen definitions, ignored fence-goal values, BIOS writes, and unknown register accesses.
+  - Session 125 corrected two misplaced warnings discovered in an owner simple-mode capture: the generic FIFO warning now occurs only after the legacy switch and SVGA3D dispatcher both decline an unhandled non-3D command; SVGA3D keeps its own unknown-command diagnostics. The unknown-register-write warning now lives only in the register switch's `default` case. Recognized FIFO commands and valid register writes are no longer mislabeled as unknown.
   - Added explicit warning records for SVGA3D command IDs outside the known range and in-range IDs with no command metadata. Existing 3D stall, FIFO stall, fence-goal, and abnormal SYNC/FIFO conditions remain independently visible.
   - This is targeted retention, not a universal severity framework. QEMU/DXVK errors emitted through their own stderr/error-reporting paths are not controlled by the VMVGA event sampler; full source-wide severity audit and repeated-warning aggregation remain future work. No build/runtime/CI validation yet.
   

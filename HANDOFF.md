@@ -886,17 +886,23 @@ capture interval. Exceptional file/descriptor errors are still reported.
 Simple-mode sampling is not intended to suppress explicit warnings. The VMVGA
 legacy FIFO path emits capture-gated `VMVGA-WARN` records for identified invalid,
 unknown, rejected, and allocation-failure cases (including the explicit
-`NOP_ERROR` FIFO command) that were previously only `VPRINT` diagnostics (and therefore normally compiled out). The SVGA3D
-dispatcher also records out-of-range command IDs and in-range IDs without
-metadata. Existing FIFO/3D stalls and abnormal SYNC/fence conditions retain
-their independent reporting paths.
+`NOP_ERROR` FIFO command) that were previously only `VPRINT` diagnostics (and
+therefore normally compiled out). The generic unknown-FIFO warning is emitted
+only after both the legacy command switch and SVGA3D dispatcher decline an
+unhandled non-3D command; SVGA3D records its own out-of-range command IDs and
+in-range IDs without metadata. Unknown register writes are warned only from
+the register switch's `default` case. This placement matters: warnings before
+dispatch incorrectly labelled recognized commands and valid register writes
+as unknown, producing a large warning flood in the owner's 2026-11-24 simple
+capture. Session 125 corrected those two placements. Existing FIFO/3D stalls
+and abnormal SYNC/fence conditions retain their independent reporting paths.
 
 This is targeted coverage, not a universal severity classifier. QEMU/DXVK
 error-reporting paths that write to stderr remain in the capture independently
 of simple-mode event sampling, but internal fallbacks that return silently
 cannot be guaranteed to appear. Repeated-warning aggregation is not yet
-implemented; a guest that triggers a warning on every iteration can still
-produce repeated lines. Full source-wide audit and owner capture verification
+implemented; a genuinely unsupported command that repeats can still produce
+repeated lines. Full source-wide severity audit and owner capture verification
 remain necessary.
 
 The generalized naming, debug-mode separation, and targeted warning-retention

@@ -6257,8 +6257,6 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
          * by the default path, preserving the existing stall semantics.
          */
 
-        VMVGA_TRACE_WARNING("unknown FIFO command=%u", cmd);
-
         switch (cmd) {
         case SVGA_CMD_INVALID_CMD:
             if (len < 1) {
@@ -7746,6 +7744,14 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 len = 0;
                 VPRINT("rewind command %u in SVGA command FIFO\n", cmd);
                 break;
+            }
+            /*
+             * Both the legacy switch and SVGA3D dispatcher declined this
+             * command. SVGA3D has its own unknown-command diagnostics, so keep
+             * this generic warning for unhandled non-3D FIFO commands only.
+             */
+            if (cmd < SVGA_3D_CMD_BASE || cmd >= SVGA_3D_CMD_MAX) {
+                VMVGA_TRACE_WARNING("unknown FIFO command=%u", cmd);
             }
             s->fifo_stop = fifo_start;
             s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
@@ -9903,8 +9909,6 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
                           trace_vmware_value_write(s->index, value));
     }
 
-    VMVGA_TRACE_WARNING("unknown register write index=%u value=%u", s->index, value);
-
     switch (s->index) {
     case SVGA_REG_ID:
         if (value == SVGA_ID_0 || value == SVGA_ID_1 || value == SVGA_ID_2) {
@@ -10343,6 +10347,8 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
              value);
       break;
   default:
+      VMVGA_TRACE_WARNING("unknown register write index=%u value=%u", s->index,
+                          value);
       VPRINT("default register %u with the value of %u\n", s->index, value);
   }
 

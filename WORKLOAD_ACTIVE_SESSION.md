@@ -1,6 +1,6 @@
 # Y2KBox active session context
 
-> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 115–124).
+> Rolling working summary derived from `WORKLOG.md`. This is a navigation and continuity aid, not a replacement for the append-only historical record. `TASKS.md` remains authoritative for task status; `HANDOFF.md` remains authoritative for project decisions and operating instructions. The ten sessions below are the latest ten entries currently recorded in `WORKLOG.md` (Sessions 116–125).
 
 ## How to use this file
 
@@ -21,86 +21,53 @@
 
 ## Latest ten worklog sessions
 
-
-### Session 113 — Clarify T12 as a user-managed instance manager
-- T12 now describes a launcher/instance manager where users create and name independent XP VM instances and select virtual hardware, including the virtual GPU, per instance.
-- Each instance has independently persisted hardware configuration and its own system disk/guest installation. No hard-coded vendor presets or two bundled XP images are implied.
-- VMVGA/SVGA3D remains the supported path. VBoxVGA 5.2.x/SharedOpenGL is only a future research candidate, gated on an end-to-end proof of concept and licensing/source audit; it is not selectable today.
-- Documentation-only; no source changes, builds, guest tests, benchmarks, or CI polling.
-
-### Session 114 — Complete T24 owner acceptance verification
-- The owner confirmed Linux and Windows SDL CI pass, and XP guest-driven resolution changes, Ctrl+Alt+F fullscreen toggling, and mouse tracking all work.
-- T24 is now DONE/green. TASKS.md records the complete acceptance set and no outstanding checks.
-- Documentation-only; no source changes, builds, guest tests, or CI polling. The verification results are the owner's confirmation.
-
-### Session 115 — T13e / T13e-F1: ScreenTarget flip supersession, dynamic VB ring sub-allocation, and O(1) GART unparent + FIFO txn batching
-- Recorded owner post-Session 80 Windows TCG validation captures: FIFA 2003 improved to ~85.7 FPS (`25.352 s` / `2,172` flips, playable, slow-motions gone), Hitman 2 Sicily fade showed `2,913` unpresented sync ScreenTarget readbacks (`2.410 s` = 60.3% wall time) at ~767 FPS, and F1 '99-'02 spent `3.711 s` (68% of `fifo_run`) in `71,979` `INVALIDATE` `D3DLOCK_DISCARD` VB renames.
-- Implemented three targeted VMVGA/DXVK/GART fixes on `main`: (1) steady-state FIFO full-screen D3D9 flip supersession (`vmsvga3d_screen_target_try_supersede_flip_live`) + eager staging copy in `retire_latest`; (2) per-surface ring sub-allocation for dynamic D3D9 vertex buffers (`4 MiB` lazy upgrade, `32 MiB` global extra budget, `SetStreamSource` `d3d9_ring_base` offset) + guarded `<= 2 MiB` overlap-`DISCARD`; (3) O(1) `"vmsvga-gart-%u[0]"` QOM property deletion + FIFO-pass GART `memory_region_transaction` batching (flushed before fences, disable, and FIFO exit).
-- Verified locally with `git diff --check`, preprocessor/header checks, and standalone `gcc -Werror` logic tests (no local `meson`/`mingw32-gcc`). Linux/Windows CI and owner Windows TCG in-game re-captures are pending.
-
 ### Session 116 — Reorganize WORKLOG_INDEX for scanability and coverage
 - Updated the topic map to include recent T24 acceptance work and Session 115's T13e / VMVGA / DXVK performance changes, including dedicated Hitman 2 coverage.
-- Replaced the dense Sessions 82–115 prose block with a concise chronological list; detailed evidence remains in WORKLOG.md.
 - Documentation-only; no source changes, builds, tests, or CI polling.
 
-
 ### Session 117 — Fix Session 115 D3D9 dynamic vertex-buffer compile failure
-- Linux and Windows CI both caught an undefined `VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC` used by the new dynamic D3D9 vertex-buffer ring code.
-- Added the missing Direct3D 9 usage flag definition (`0x00000200u`) beside the other D3D9 usage constants. The D3D9 checks remain distinct from the unrelated D3D11 `D3D11_USAGE_DYNAMIC` enum.
-- Minimal compile-only correction; no Session 115 ring behavior changed. No local QEMU build was run; GitHub Actions validation is pending and was not polled.
+- Added the missing Direct3D 9 `D3DUSAGE_DYNAMIC` value (`0x00000200u`) after Linux and Windows CI caught the undefined constant.
+- No local QEMU build was run; the compile correction was pushed separately.
+
+### Session 118 — Define narrow VB-ring profiling handoff
+- Defined a focused capture-stop per-surface dynamic D3D9 VB-ring profile and its interval-only counters.
+- Documentation-only handoff; no source/build/runtime validation.
+
+### Session 119 — Add capture-interval dynamic VB ring pressure profiling
+- Added per-surface profiling-only counters and a surface registry; capture start resets interval counters and stop emits one summary per eligible live dynamic D3D9 VB.
+- Static source review only; no build/runtime test. Owner XP capture and CI verification pending.
+
+### Session 120 — Complete VB-ring profile lifecycle accounting
+- Included full-buffer and range uploads, distinguished ring wraps from other DISCARD causes, and preserved profiling state across renderer recreation.
+- Static review only; no build/runtime test.
+
+### Session 121 — Preserve observed VB-ring capacity on failed appends
+- Record successful host-ring upgrades in `capacity_bytes` even if the following NOOVERWRITE operation fails.
+- No allocator behavior change; static review only.
+
+### Session 122 — Compact and detailed VMVGA diagnostic capture modes
+- Added sampled simple capture and full selected per-event VMVGA output, with interval-scoped flight-recorder reset/final summary and per-command performance counts.
+- Static review only; no build, CI, or owner XP verification.
+
+### Session 123 — One global Y2KBox diagnostic-level flag
+- Added `-y2kboxdebugmode off|simple|on`; off disables diagnostics, simple selects compact capture, and on selects full selected per-event logging. Default remains off.
+- No build, runtime test, or CI run.
+
+### Session 124 — Preserve explicit VMVGA warnings in simple captures
+- Routed identified legacy invalid/unknown/rejected cases and SVGA3D unknown-command cases through capture-gated warning records.
+- Targeted retention only; repeated-warning aggregation and a universal severity classifier were not implemented. Static review only.
+
+### Session 125 — Correct VMVGA warning placement after owner capture flood
+- The owner's one-second capture showed valid FIFO commands and the valid `SVGA_REG_SYNC` write being labelled unknown because warnings ran before dispatch.
+- Generic FIFO warning now runs only after the legacy switch and SVGA3D dispatcher decline an unhandled non-3D command; unknown register warning now runs only in the register switch's `default` case.
+- Updated T19 task/handoff documentation. Static review only; no build, runtime test, CI, or post-fix XP capture.
 
 ## Current investigation / next actions
 
-1. **T13e-F1 / Windows TCG profiling remains active.** The owner supplied a dry-weather capture on 2026-11-23 with `capture_ms=23526`; `cpu.exec` reported 3,415 intervals, 23.515560 s total, 19.554 ms max, 3,164 intervals over 1 ms, 1,064 over 10 ms, and none over 100 ms. This is an interval summary, not workload attribution; inspect the complete capture and compare only equivalent scenes/settings before proposing code changes.
-2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** The owner supplied a sub-second menu capture while investigating static-background rendering. Analyze that capture and current VMVGA/D3D8 path; do not claim a fix or infer visual correctness from CI.
-3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Verify all three levels, log sizes/content, and repeated intervals in XP; the existing VB-ring pressure summaries remain part of capture stop output.
-4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check (HANDOFF 8d / Session 104). VMware documents software-emulated OpenGL in XP guests (8e / 105), and conventional XP ICD discovery requires the active display driver's OPENGL_GETINFO escape (8f / 106). QindieGL is a concrete but unproven app-local GL-to-D3D9 lead: its source lacks `wglGetExtensionsStringEXT`, and a historical minimal-entry-point experiment reportedly reached COD1 startup with severe graphics corruption (8h / 108). TitaniumGL is a separate lead: the owner observed COD1 loading its DLL, creating/making-current an OpenGL 1.4 context, and seeing numerous extensions plus renderer `VMware SVGA II/119MB VRAM`; COD1 still rejects the card, with the same broad result in hardware and software modes. The `0 PFDs found` line and failed capability check are unresolved (8i / 109). Do not prototype, modify the guest/driver, build, or test while T25 remains paused. See HANDOFF 8g–8i / Sessions 107–109.
+1. **T13e-F1 / Windows TCG profiling remains active.** Keep workload and scene identical when comparing captures; distinguish measured facts from attribution hypotheses.
+2. **Hitman 2: Silent Assassin D3D8 visual issue remains open.** Analyze owner captures and current VMVGA/D3D8 path; do not infer visual correctness from CI.
+3. **T19 diagnostic capture modes are IMPLEMENTED; owner acceptance remains pending.** `-y2kboxdebugmode off|simple|on` selects disabled, compact sampled capture, or full selected per-event VMVGA logging (default: `off`). Ctrl+Alt+L captures the selected mode, with interval-scoped flight-recorder summaries and retained per-command count/timing records. Session 125 corrected warning placement after the owner capture exposed false unknown-FIFO and unknown-register warnings. Re-run the same short simple capture; then verify all levels, log content/size, and repeated intervals in XP. Repeated genuine-warning aggregation remains a possible follow-up, not implemented.
+4. **T25 guest OpenGL investigation is PAUSED (low feasibility; awaiting independent reassessment).** Native XP GDI Generic exposes OpenGL 1.1.0 with three extensions; COD1 with software GL creates/makes-current a context but fails its feature check. VMware documents software-emulated OpenGL in XP guests. QindieGL and TitaniumGL remain unproven leads with unresolved compatibility/quality limitations. Do not prototype, modify the guest/driver, build, or test while T25 remains paused.
 5. Keep the F1 crowded-grid, FIFA residual hitches, and Hitman 2 D3D8 rendering issue as distinct investigations unless evidence connects them. Do not reopen the resolved general FlatView scene-transition stall without new evidence.
-6. **T24 fixed-size SDL display is DONE.** The owner confirms Linux and Windows SDL CI pass and all XP acceptance checks are verified: guest-driven resolution changes, `Ctrl+Alt+F` fullscreen toggling, and mouse tracking. The Windows window is decorated, non-resizable, and has its titlebar maximize control disabled. No further T24 work is pending absent a new reproducible defect.
+6. **T24 fixed-size SDL display is DONE.** The owner confirmed Linux/Windows SDL CI and all XP acceptance checks: guest-driven resolution changes, Ctrl+Alt+F fullscreen toggle, and mouse tracking. The Windows window is decorated and non-resizable with titlebar maximize disabled.
 7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
-
-
-### Session 118 — Define narrow VB-ring profiling handoff
-- T19 remains PAUSED: static wiring review confirms the Ctrl+Alt+L capture controls existing performance counters, VMVGA/VMPort diagnostic gates, relevant trace events, and the Windows TCG vCPU profiler, but actual capture-content completeness still requires owner XP verification.
-- Added a focused Gemini 4 Neon follow-up for one capture-stop `Y2KBOX-PROF subsystem=vmvga.vb_ring` record per eligible dynamic D3D9 VB surface, with interval-only counters for capacity, allocation/high-water, NOOVERWRITE reuse, DISCARD/wrap, overlap discard, and allocation failures.
-- No source changes or tests. Preserve Session 115 allocator behavior; avoid per-upload logging and broader profiling expansion.
-
-### Session 119 — Implement capture-interval VB-ring pressure profiling
-- Added per-surface capture-interval counters and a DXVK surface registry; Ctrl+Alt+L start resets profiling-only state and stop emits one summary per eligible live dynamic D3D9 VB surface. New surfaces inherit active capture state.
-- Defined capacity, cumulative uploaded bytes, NOOVERWRITE reused bytes, successful DISCARDs, ring-end wraps, absolute host-buffer high-water, overlap-fallback DISCARDs, and failed ring upgrade/NOOVERWRITE operations.
-- No allocator policy changes, per-upload logging, hot-path allocations, or locks. Source changes are statically reviewed only; no build or runtime test. T19 remains PAUSED pending CI and owner XP capture/repeated-interval verification.
-
-### Session 120 — Complete VB-ring profile lifecycle accounting
-- Included successful full-buffer DISCARD uploads as well as range uploads; narrowed wrap counts to actual capacity exhaustion and kept overlap/invalidation DISCARDs distinct.
-- Made the per-surface registry follow renderer teardown/recreation so active capture state and interval counters survive renderer replacement.
-- Static source-path checks only; no QEMU build/runtime test. T19 remains PAUSED pending CI and owner XP capture/repeated-interval verification.
-
-### Session 121 — Preserve observed VB-ring capacity on failed appends
-- Record a successful host-ring upgrade in `capacity_bytes` immediately, even if the following NOOVERWRITE lock fails.
-- No allocator behavior change. Static inspection only; no build/runtime test. T19 remains PAUSED pending CI and owner XP capture verification.
-
-## Key diagnostic interpretation rules
-
-- Performance counters can be nested. Do not add child phase totals to enclosing command/FIFO totals.
-- Counters whose implementation uses `qemu_perf_stats_mark()` measure intervals between marks (event cadence), not operation execution time.
-- Overlapping lock dimensions (aggregate, vertex/index, full/partial, flags, size buckets) are not additive.
-- A green CI run proves build/test coverage only; it does not prove XP guest gameplay or visual correctness.
-- Keep the exact same repeatable owner workload for performance comparisons. Distinguish measured facts, owner observations, hypotheses, and verified fixes.
-
-
-### Session 122 — Compact and detailed VMVGA diagnostic capture modes
-- Default Ctrl+Alt+L summary mode samples repetitive SYNC/fence/FIFO-run-end/3D-command events instead of printing every occurrence; existing stalls, failures, state changes, and fence-goal events remain visible.
-- Added a full selected per-event VMVGA output mode alongside compact sampled capture. Both modes retain per-command performance counts/timing.
-- Reset VMVGA flight-recorder counters at capture start and emit the interval's final flight summary/FIFO histogram at stop. SDL title and capture header identify the mode.
-- Static review only; no build, CI, or owner XP verification. T19 is IMPLEMENTED pending CI and owner validation.
-
-
-### Session 123 — One global Y2KBox diagnostic-level flag
-- `-y2kboxdebugmode off|simple|on`: off disables diagnostics, simple uses compact sampled capture, on restores full selected per-event logging. Default remains off.
-- Removed the user-facing VMVGA `-global` instruction. The parser maps the Y2KBox-wide setting internally; SDL title and capture header identify simple/full mode.
-- Static review only; no build, runtime test, or CI run. Owner verification of all three values and both capture outputs remains pending.
-
-### Session 124 — Preserve explicit VMVGA warnings in simple captures
-- Routed identified invalid/unknown/rejected legacy FIFO and register cases, `NOP_ERROR`, cursor payload/allocation failures, and invalid GMR2/Screen inputs through capture-gated `VMVGA-WARN` records; added equivalent warnings for unknown SVGA3D command IDs/metadata.
-- Existing stall, fence-goal, and abnormal SYNC/FIFO records remain independently visible. Routine repetitive events stay sampled.
-- Targeted coverage only: no universal severity classifier or repeated-warning aggregation yet. Static review only; no build/runtime/CI/XP verification.
