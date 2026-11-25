@@ -304,6 +304,14 @@ typedef struct CPUTLBDesc {
     CPUTLBEntry vtable[CPU_VTLB_SIZE];
     CPUTLBEntryFull vfulltlb[CPU_VTLB_SIZE];
     CPUTLBEntryFull *fulltlb;
+    /*
+     * Dirty-slot tracking for fast->table so flushes on mostly-empty large
+     * dynamic TLBs avoid memsetting the entire table.  Protected by tlb.c.lock.
+     */
+    uint64_t dirty_chunks;
+    uint32_t dirty_count;
+    uint8_t dirty_chunk_shift;
+    uint32_t dirty_indices[64];
 } CPUTLBDesc;
 
 /*

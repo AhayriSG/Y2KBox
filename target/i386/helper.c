@@ -189,9 +189,15 @@ void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3)
 {
     env->cr[3] = new_cr3;
     if (env->cr[0] & CR0_PG_MASK) {
+        const MMUIdxMap idxmap =
+            (1u << MMU_KSMAP64_IDX) | (1u << MMU_KSMAP32_IDX) |
+            (1u << MMU_USER64_IDX) | (1u << MMU_USER32_IDX) |
+            (1u << MMU_KNOSMAP64_IDX) | (1u << MMU_KNOSMAP32_IDX) |
+            (1u << MMU_NESTED_IDX);
+
         qemu_log_mask(CPU_LOG_MMU,
                         "CR3 update: CR3=" TARGET_FMT_lx "\n", new_cr3);
-        tlb_flush(env_cpu(env));
+        tlb_flush_by_mmuidx(env_cpu(env), idxmap);
     }
 }
 

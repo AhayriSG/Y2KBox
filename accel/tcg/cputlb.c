@@ -276,15 +276,70 @@ static void tlb_mmu_resize_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast,
         fast->table = g_try_new(CPUTLBEntry, new_size);
         desc->fulltlb = g_try_new(CPUTLBEntryFull, new_size);
     }
+
+    /* Fresh uninitialized fast->table requires a full memset on next flush. */
+    desc->dirty_chunk_shift = ctz64(new_size) > 6 ? (uint8_t)(ctz64(new_size) - 6) : 0;
+    desc->dirty_chunks = ~UINT64_C(0);
+    desc->dirty_count = ARRAY_SIZE(desc->dirty_indices);
+}
+
+static inline void tlb_mark_index_dirty_locked(CPUTLBDesc *desc, size_t index)
+{
+    if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices)) {
+        desc->dirty_indices[desc->dirty_count++] = (uint32_t)index;
+    }
+    desc->dirty_chunks |= UINT64_C(1) << (index >> desc->dirty_chunk_shift);
 }
 
 static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
 {
+    size_t n_entries = tlb_n_entries(fast);
+
     desc->n_used_entries = 0;
     desc->large_page_addr = -1;
     desc->large_page_mask = -1;
     desc->vindex = 0;
-    memset(fast->table, -1, sizeof_tlb(fast));
+
+    if (desc->dirty_chunks != 0) {
+        if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices) &&
+            (size_t)desc->dirty_count * 16 < n_entries) {
+            uint32_t i;
+
+            for (i = 0; i < desc->dirty_count; i++) {
+                memset(&fast->table[desc->dirty_indices[i]], -1,
+                       sizeof(CPUTLBEntry));
+            }
+        } else if (desc->dirty_chunks == ~UINT64_C(0)) {
+            memset(fast->table, -1, sizeof_tlb(fast));
+        } else {
+            uint64_t chunks = desc->dirty_chunks;
+            size_t chunk_entries = (size_t)1 << desc->dirty_chunk_shift;
+
+            while (chunks != 0) {
+                unsigned start_bit = ctz64(chunks);
+                uint64_t shifted = chunks >> start_bit;
+                unsigned run = (shifted == ~UINT64_C(0))
+                                   ? (64 - start_bit)
+                                   : ctz64(~shifted);
+                size_t start_idx = (size_t)start_bit << desc->dirty_chunk_shift;
+                size_t count = (size_t)run * chunk_entries;
+
+                if (start_idx < n_entries) {
+                    if (count > n_entries - start_idx) {
+                        count = n_entries - start_idx;
+                    }
+                    memset(&fast->table[start_idx], -1,
+                           count * sizeof(CPUTLBEntry));
+                }
+                if (start_bit + run >= 64) {
+                    break;
+                }
+                chunks &= ~(((UINT64_C(1) << run) - 1) << start_bit);
+            }
+        }
+    }
+    desc->dirty_count = 0;
+    desc->dirty_chunks = 0;
     memset(desc->vtable, -1, sizeof(desc->vtable));
 }
 
@@ -307,6 +362,9 @@ static void tlb_mmu_init(CPUTLBDesc *desc, CPUTLBDescFast *fast, int64_t now)
     fast->mask = (n_entries - 1) << CPU_TLB_ENTRY_BITS;
     fast->table = g_new(CPUTLBEntry, n_entries);
     desc->fulltlb = g_new(CPUTLBEntryFull, n_entries);
+    desc->dirty_chunk_shift = ctz64(n_entries) > 6 ? (uint8_t)(ctz64(n_entries) - 6) : 0;
+    desc->dirty_chunks = ~UINT64_C(0);
+    desc->dirty_count = ARRAY_SIZE(desc->dirty_indices);
     tlb_mmu_flush_locked(desc, fast);
 }
 
@@ -1184,6 +1242,7 @@ void tlb_set_page_full(CPUState *cpu, int mmu_idx,
                     MMU_DATA_STORE, prot & PAGE_WRITE);
 
     copy_tlb_helper_locked(te, &tn);
+    tlb_mark_index_dirty_locked(desc, index);
     tlb_n_used_entries_inc(cpu, mmu_idx);
     qemu_spin_unlock(&tlb->c.lock);
 }
@@ -1330,6 +1389,7 @@ static bool victim_tlb_hit(CPUState *cpu, size_t mmu_idx, size_t index,
             copy_tlb_helper_locked(&tmptlb, tlb);
             copy_tlb_helper_locked(tlb, vtlb);
             copy_tlb_helper_locked(vtlb, &tmptlb);
+            tlb_mark_index_dirty_locked(&cpu->neg.tlb.d[mmu_idx], index);
             qemu_spin_unlock(&cpu->neg.tlb.c.lock);
 
             CPUTLBEntryFull *f1 = &cpu->neg.tlb.d[mmu_idx].fulltlb[index];
