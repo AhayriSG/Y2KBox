@@ -419,6 +419,14 @@ typedef struct vmsvga3d_surface_s {
     SVGA3dRect screen_handoff_write_rects[VMSVGA3D_SCREEN_TARGET_DAMAGE_RECTS];
     bool screen_handoff_write_overflow;
     bool legacy_active;
+    /*
+     * On XP XDDM, a fullscreen D3D9 A8R8G8B8 swapchain keeps the display
+     * primary surface as X8R8G8B8 while defining the backbuffer as A8R8G8B8
+     * and alternating between both surfaces.  When a flip chain pairs an X8
+     * and A8 target of matching geometry, promote the X8 partner's native
+     * D3D9 storage to A8R8G8B8 while preserving the guest-visible format.
+     */
+    bool d3d9_swapchain_alpha_promoted;
     /* Diagnostic-only legacy presentation bookkeeping.  These fields are
      * touched only while the local debug trace gate is enabled. */
     uint64_t trace_vgpu9_write_count;
@@ -453,6 +461,8 @@ static bool vmsvga3d_d3d10_raw_copy_subresource_live(
     uint32_t source_subresource, VMSVGA3DSurface *destination,
     uint32_t destination_subresource, const SVGA3dCopyBox *copy_box,
     SVGA3dBox *destination_box_out, uint32_t route_cmd, bool convert_copy);
+static void vmsvga3d_legacy_surface_bindings_dirty(
+    struct vmsvga_state_s *s, uint32_t sid);
 static void vmsvga3d_legacy_surface_evict(
     struct vmsvga_state_s *s, VMSVGA3DSurface *surface);
 static bool vmsvga3d_d3d10_constant_buffers_refresh_sid_live(
@@ -564,6 +574,7 @@ struct vmsvga3d_state_s {
     uint32_t screen_target_frontend_commit_backend;
     uint64_t screen_target_frontend_commit_sequence;
     uint32_t legacy_present_sid;
+    uint32_t last_presented_sid;
     SVGA3dSurfaceFormat legacy_present_format;
     uint32_t legacy_present_d3d9_format;
     uint32_t legacy_present_width;
@@ -2543,6 +2554,7 @@ vmsvga3d_state_ensure(struct vmsvga_state_s *s)
             s->svga3d->screen_target_frontend_commit_sequence = 0;
             s->svga3d->screen_target_write_sid = SVGA3D_INVALID_ID;
             s->svga3d->legacy_present_sid = SVGA3D_INVALID_ID;
+            s->svga3d->last_presented_sid = SVGA3D_INVALID_ID;
             s->svga3d->trace_vgpu9_last_present_sid = SVGA3D_INVALID_ID;
         }
     }
@@ -2864,6 +2876,7 @@ static void vmsvga3d_renderer_realize(struct vmsvga_state_s *s)
         s->svga3d->screen_target_frontend_commit_sequence = 0;
         vmsvga3d_screen_target_write_tracking_reset_live(s, false);
         vmsvga3d_legacy_present_reset_live(s);
+        s->svga3d->last_presented_sid = SVGA3D_INVALID_ID;
     }
 
     s->svga3d_capable = false;
@@ -2947,6 +2960,7 @@ static void vmsvga3d_renderer_unrealize(struct vmsvga_state_s *s)
         s->svga3d->screen_target_frontend_commit_sequence = 0;
         vmsvga3d_screen_target_write_tracking_reset_live(s, false);
         vmsvga3d_legacy_present_reset_live(s);
+        s->svga3d->last_presented_sid = SVGA3D_INVALID_ID;
     }
 
     s->svga3d_capable = false;
@@ -3667,6 +3681,9 @@ static void vmsvga3d_surface_commit(struct vmsvga_state_s *s,
             old_surface->dxvk_surface, vmsvga3d_surface_destroy_view_live, s);
     }
 
+    if (redefined && sid == state->last_presented_sid) {
+        state->last_presented_sid = SVGA3D_INVALID_ID;
+    }
     vmsvga3d_surface_free(old_surface);
     state->surfaces[sid] = surface;
     vmsvga3d_surface_account_add(state, surface);
@@ -3895,6 +3912,9 @@ static void vmsvga2d_surface_commit(struct vmsvga_state_s *s,
         vmsvga3d_screen_target_write_tracking_reset_live(s, false);
     }
 
+    if (redefined && sid == state->last_presented_sid) {
+        state->last_presented_sid = SVGA3D_INVALID_ID;
+    }
     vmsvga3d_surface_account_remove(state, old_surface);
     vmsvga3d_surface_free(old_surface);
     state->surfaces[sid] = surface;
@@ -4375,8 +4395,68 @@ static void vmsvga3d_surface_destroy_live(struct vmsvga_state_s *s,
             surface->dxvk_surface, vmsvga3d_surface_destroy_view_live, s);
     }
 
+    if (sid == state->last_presented_sid) {
+        state->last_presented_sid = SVGA3D_INVALID_ID;
+    }
     vmsvga3d_surface_free(surface);
     state->surfaces[sid] = NULL;
+}
+
+static void vmsvga3d_note_swapchain_flip_alpha(struct vmsvga_state_s *s,
+                                               uint32_t sid_a,
+                                               uint32_t sid_b)
+{
+    struct vmsvga3d_state_s *state = s != NULL ? s->svga3d : NULL;
+    VMSVGA3DSurface *a;
+    VMSVGA3DSurface *b;
+    VMSVGA3DSurface *x8;
+    VMSVGA3DSurface *a8;
+    const SVGA3dSurfaceAllFlags incompatible_flags =
+        SVGA3D_SURFACE_1D | SVGA3D_SURFACE_VOLUME | SVGA3D_SURFACE_CUBEMAP;
+
+    if (state == NULL || sid_a == SVGA3D_INVALID_ID ||
+        sid_b == SVGA3D_INVALID_ID || sid_a == sid_b ||
+        sid_a >= SVGA3D_MAX_SURFACE_IDS || sid_b >= SVGA3D_MAX_SURFACE_IDS) {
+        return;
+    }
+
+    a = state->surfaces[sid_a];
+    b = state->surfaces[sid_b];
+    if (a == NULL || b == NULL || a->mips == NULL || b->mips == NULL ||
+        a->mip_count != 1 || b->mip_count != 1 ||
+        a->array_elements != 1 || b->array_elements != 1 ||
+        a->face[0].numMipLevels != 1 || b->face[0].numMipLevels != 1 ||
+        (a->surface_flags & incompatible_flags) != 0 ||
+        (b->surface_flags & incompatible_flags) != 0 ||
+        a->multisample_count != b->multisample_count ||
+        a->mips[0].size.depth != 1 || b->mips[0].size.depth != 1 ||
+        a->mips[0].size.width == 0 || a->mips[0].size.height == 0 ||
+        a->mips[0].size.width != b->mips[0].size.width ||
+        a->mips[0].size.height != b->mips[0].size.height) {
+        return;
+    }
+
+    if (a->format == SVGA3D_X8R8G8B8 && b->format == SVGA3D_A8R8G8B8) {
+        x8 = a;
+        a8 = b;
+    } else if (b->format == SVGA3D_X8R8G8B8 && a->format == SVGA3D_A8R8G8B8) {
+        x8 = b;
+        a8 = a;
+    } else {
+        return;
+    }
+
+    if (x8->d3d9_swapchain_alpha_promoted) {
+        return;
+    }
+
+    x8->d3d9_swapchain_alpha_promoted = true;
+    vmsvga3d_legacy_surface_bindings_dirty(s, x8->sid);
+    VMVGA_TRACE_LOCAL(
+        VMVGA_TRACE_3D,
+        "D3D9-SWAPCHAIN-ALPHA sid=%u partner=%u size=%ux%u "
+        "promote=X8R8G8B8->A8R8G8B8",
+        x8->sid, a8->sid, x8->mips[0].size.width, x8->mips[0].size.height);
 }
 
 static bool vmsvga3d_handle_surface_define(struct vmsvga_state_s *s,
@@ -10146,6 +10226,12 @@ static bool vmsvga3d_handle_blit_surface_to_screen(
                 vmsvga3d_d3d9_accel_result_name(accel), copy_count);
     }
 
+    if (valid && state != NULL) {
+        vmsvga3d_note_swapchain_flip_alpha(s, state->last_presented_sid,
+                                           body->srcImage.sid);
+        state->last_presented_sid = body->srcImage.sid;
+    }
+
     if (trace_3d && valid) {
         vmsvga3d_trace_vgpu9_present(s, body->srcImage.sid, "screen-blit");
     }
@@ -10282,6 +10368,11 @@ static bool vmsvga3d_handle_present(struct vmsvga_state_s *s,
     }
 
     if (valid) {
+        if (state != NULL) {
+            vmsvga3d_note_swapchain_flip_alpha(s, state->last_presented_sid,
+                                               body->sid);
+            state->last_presented_sid = body->sid;
+        }
         if (VMVGA_TRACE_LOCAL_ENABLED(VMVGA_TRACE_3D)) {
             vmsvga3d_trace_vgpu9_present(s, body->sid, "present");
         }
@@ -16595,6 +16686,13 @@ static bool vmsvga2d_screen_target_bind_live(
         }
     }
 
+    if (sid != SVGA3D_INVALID_ID) {
+        vmsvga3d_note_swapchain_flip_alpha(
+            s, old_sid != SVGA3D_INVALID_ID ? old_sid
+                                            : s->svga3d->last_presented_sid,
+            sid);
+        s->svga3d->last_presented_sid = sid;
+    }
     s->svga3d->active_screen_target_sid = sid;
     s->svga3d->screen_target_dirty_sid = SVGA3D_INVALID_ID;
     return true;

@@ -11459,6 +11459,13 @@ static bool vmsvga3d_d3d10_screen_target_bind_live(
         }
     }
 
+    if (sid != SVGA3D_INVALID_ID) {
+        vmsvga3d_note_swapchain_flip_alpha(
+            s, old_sid != SVGA3D_INVALID_ID ? old_sid
+                                            : s->svga3d->last_presented_sid,
+            sid);
+        s->svga3d->last_presented_sid = sid;
+    }
     s->svga3d->active_screen_target_sid = sid;
     s->svga3d->screen_target_dirty_sid = SVGA3D_INVALID_ID;
     return true;

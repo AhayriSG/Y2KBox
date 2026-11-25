@@ -3007,7 +3007,10 @@ static bool vmsvga3d_dxvk_resource_plan(
     }
 
     info.surface_flags = surface->surface_flags;
-    info.format = surface->format;
+    info.format = (surface->d3d9_swapchain_alpha_promoted &&
+                   surface->format == SVGA3D_X8R8G8B8)
+                      ? SVGA3D_A8R8G8B8
+                      : surface->format;
     info.size = surface->mips[0].size;
     info.mip_levels = surface->face[0].numMipLevels;
     info.multisample_count = surface->multisample_count;
@@ -3682,9 +3685,19 @@ static bool vmsvga3d_dxvk_materialize_surface_ex(
                 VMSVGA3D_DXVK_BUFFER_FLUSH_REPLACE)) {
             return false;
         }
-        /* Preserve GPU-written RGB contents before changing resource use.
-         * Native input-only video simply retains the authoritative shadow. */
-        if (vmsvga3d_video_yuv(surface->format) &&
+        /* Preserve GPU-written RGB contents before changing resource use or
+         * promoting a swapchain X8R8G8B8 partner to A8R8G8B8.  Native
+         * input-only video simply retains the authoritative shadow. */
+        if ((vmsvga3d_video_yuv(surface->format) ||
+             (upload_cpu && surface->d3d9_swapchain_alpha_promoted &&
+              surface->multisample_count <= 1 && surface->mip_count == 1 &&
+              surface->mips != NULL &&
+              before.format == D3D9_FMT_X8R8G8B8 &&
+              plan.primary.format == D3D9_FMT_A8R8G8B8 &&
+              (before.has_bounce ||
+               ((before.usage & D3D9_USAGE_RENDERTARGET) == 0 &&
+                before.resource_type !=
+                    VMSVGA3D_D3D9_HOST_RESOURCE_SURFACE)))) &&
             !vmsvga3d_dxvk_readback_image(s->dxvk, surface->dxvk_surface,
                 surface->format, 0, &surface->mips[0])) {
             return false;
