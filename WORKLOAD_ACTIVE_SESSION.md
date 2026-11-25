@@ -62,14 +62,9 @@
 - Locked Ctrl+Alt+L while a Full capture is active so only the two-second realtime timer (or shutdown cleanup) stops it; Simple mode retains manual toggle.
 - Updated SDL title and capture docs; static review only.
 
-### Session 138 — Experimental Y2KBOX_ENVMAP_FIX (Joint Operations glass)
-- Captures show the helicopter glass is one additive cube-map reflection draw per frame (cube SID 25, reflection-vector texgen, COUNT3). The guest's TEXTURE0 matrix for it is not a rotation (partial VIEW elements, zero last row/column) while VIEW is; Y2KBox passes it through unchanged. Before `89c97603` the transform flags `S|T|R` mapped to DISABLE and texgen was ignored, which is why older builds looked different.
-- Added opt-in `Y2KBOX_ENVMAP_FIX=1` (default off): for cube + reflection-vector texgen + COUNT3 stages with orthonormal VIEW and non-orthonormal TEXTURE0, send the transposed VIEW rotation to D3D9; restore otherwise. Full-mode `VMVGA-D3D9-ENVMAP-FIX` records.
-- Standalone compile/behaviour test on real captured matrices only; no QEMU build, CI or visual validation. If the owner confirms the glass, make it unconditional and drop the env switch.
-
-### Session 139 — Joint Operations glass: cube content analysis
-- Cube SID 25 has five black CPU-shadow faces and one lavender -Y face; the guest matrix under D3D semantics samples only the black +/-X/+/-Z faces. Real hardware and the older build show a uniform tint, so the likely defect is lost/missing face content, not the matrix. `Y2KBOX_ENVMAP_FIX` stays opt-in and is probably not the real fix.
-- Added Full-mode `VMVGA-CUBEMAP-HOST` (DXVK readback of each cube face into a scratch buffer, max two per capture) to compare host texture vs CPU shadow. Standalone compile/behaviour test only; no build, CI or capture yet.
+### Sessions 138–139 — Joint Operations reflection investigation (closed)
+- The experimental `Y2KBOX_ENVMAP_FIX` VIEW-matrix substitution was retired. It was not the underlying fix and has been removed from the renderer.
+- Session 141 fixed the canopy reflection by preserving GPU-rendered cube-map faces during D3D9 render-target materialization. Keep the separate Full-mode texgen, matrix, material/light and cube-map diagnostics; they remain observational and are not part of the retired workaround.
 
 ### Session 140 — Fix NFS Underground 2 minimap flickering (mixed A8/X8 flip chain)
 - Root cause proven from `logs/captures/y2kbox-log-20261125-001003-nfsu2.png`, `135526.png`, and `135526.log.gz`: XP XDDM alternates `BIND_GB_SCREENTARGET` between `sid=1` (`640x480` `X8R8G8B8`) and `sid=2` (`640x480` `A8R8G8B8`). NFSU2 writes backbuffer alpha (`COLORWRITEENABLE=0x08`, leaving `DstA ≈ 0.72` in the minimap rect) and composites the minimap (`tex=486`) with `DESTALPHA`/`INVDESTALPHA`. D3D9/DXVK gave `sid=1` no alpha (`DESTALPHA=1.0`, bright) and `sid=2` real alpha (`0.72`, darker).
