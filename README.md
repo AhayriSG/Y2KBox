@@ -246,7 +246,7 @@ This is an engineering and preservation choice, not a claim that hardware virtua
 
 That doesn't mean Y2KBox is free of external dependencies, though. Its current graphics implementation still has to interoperate with legacy guest-side graphics drivers and virtual GPU protocols, including the VMware SVGA driver used by Windows XP guests. That driver is long out of active development, and we do not control its source code, internal decisions, or release schedule. A potential future additional VirtualBox VGA implementation, alongside the existing VMware SVGA path, would bring a different challenge: limited access to the relevant guest-driver source.
 
-The important distinction is where our control begins. Once guest commands reach the virtual GPU interface, Y2KBox implements the virtual device behavior and its host-side D3D9 rendering backend. The resulting D3D9 calls are then handled by the host's D3D9 runtime and driver or, when configured, translated through DXVK. So while some upstream components remain external dependencies, Y2KBox controls substantial parts of the emulation and rendering work that follows.
+The important distinction is where our control begins. Once guest commands reach the virtual GPU interface, Y2KBox implements the virtual device behavior and its host-side D3D9 rendering backend. The resulting D3D9 calls are then handled by the host's D3D9 runtime and driver or, when configured, translated through DXVK. So while some upstream components remain external dependencies, Y2KBox still controls substantial parts of the emulation and rendering work that follows.
 
 ### Why is the current guest RAM target 2 GiB?
 
