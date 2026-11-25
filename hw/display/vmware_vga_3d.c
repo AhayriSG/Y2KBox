@@ -202,6 +202,9 @@ typedef struct vmsvga3d_context_s {
     bool legacy_viewport_dirty;
     bool legacy_scissor_dirty;
     bool legacy_full_replay;
+    /* Bitmask of texture stages whose native D3D9 texture transform is
+     * currently replaced by the Y2KBOX_ENVMAP_FIX corrected matrix. */
+    uint8_t envmap_override_stages;
     bool viewport_valid;
     bool scissor_valid;
     bool z_range_valid;

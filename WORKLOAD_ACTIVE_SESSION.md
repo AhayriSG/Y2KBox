@@ -19,28 +19,6 @@
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped capture in the launch working directory; simple mode stays as a manually stopped `.log`, while full mode auto-stops at two seconds (or can be stopped early) and is compressed to `.log.gz` after stderr is restored.
 
-### Session 122 — Compact and detailed VMVGA diagnostic capture modes
-- Added sampled simple capture and full selected per-event VMVGA output, with interval-scoped flight-recorder reset/final summary and per-command performance counts.
-- Static review only; no build, CI, or owner XP verification.
-
-### Session 123 — One global Y2KBox diagnostic-level flag
-- Added `-y2kboxdebugmode off|simple|on`; off disables diagnostics, simple selects compact capture, and on selects full selected per-event logging. Default remains off.
-- No build, runtime test, or CI run.
-
-### Session 124 — Preserve explicit VMVGA warnings in simple captures
-- Routed identified legacy invalid/unknown/rejected cases and SVGA3D unknown-command cases through capture-gated warning records.
-- Targeted retention only; repeated-warning aggregation and a universal severity classifier were not implemented. Static review only.
-
-### Session 125 — Correct VMVGA warning placement after owner capture flood
-- The owner's one-second capture showed valid FIFO commands and the valid `SVGA_REG_SYNC` write being labelled unknown because warnings ran before dispatch.
-- Generic FIFO warning now runs only after the legacy switch and SVGA3D dispatcher decline an unhandled non-3D command; unknown register warning now runs only in the register switch's `default` case.
-- Updated T19 task/handoff documentation. Static review only; no build, runtime test, CI, or post-fix XP capture.
-
-### Session 126 — Bound superseded-flip logging and fix BUSY read classification
-- Confirmed register index 22 is the valid `SVGA_REG_BUSY`; moved unknown-read warnings into the read switch's `default` case.
-- Simple mode now logs the first two D3D9 supersede-flip events and reports capture totals, first/last SID, a four-SID histogram, and overflow-event count for additional SIDs. Full mode keeps every event.
-- This changes diagnostics only, not readback/flip behavior. Static source review only; no build/runtime test or CI.
-
 ### Session 127 — Record owner verification and close diagnostic logging follow-up
 - Owner Windows XP captures verified simple mode (about 48 KB; 734 supersede flips, two individual lines, SID counts 367/367) and full mode (about 1.5 MB; 766 supersede flips and 766 individual lines).
 - Both headers confirmed their selected modes, and the false unknown-read warning for valid `SVGA_REG_BUSY` was absent from both captures.
@@ -102,3 +80,8 @@
 - T26 continued with Full-mode-only texgen state tracing: WORLD/VIEW/TEXTURE0 matrices, texture-transform/coordinate-generation flags, material and enabled-light values, and level-zero cube-map CPU-shadow face metadata/FNV-1a checksums (2 MiB hashing cap per record).
 - Correlation fields include guest frame, event/FIFO seq, context, stage and SID. CPU-shadow hashes do not establish GPU-current texture contents or correct face orientation. Simple/off modes and renderer scheduling are unchanged.
 - Static source review only; no build, CI, owner capture, or visual validation. Next: take a Full capture of Joint Operations and correlate the reported draw seq 60582 / cube SID 25 with the missing windshield. T26 remains IN PROGRESS.
+
+### Session 138 — Experimental Y2KBOX_ENVMAP_FIX (Joint Operations glass)
+- Captures show the helicopter glass is one additive cube-map reflection draw per frame (cube SID 25, reflection-vector texgen, COUNT3). The guest's TEXTURE0 matrix for it is not a rotation (partial VIEW elements, zero last row/column) while VIEW is; Y2KBox passes it through unchanged. Before `89c97603` the transform flags `S|T|R` mapped to DISABLE and texgen was ignored, which is why older builds looked different.
+- Added opt-in `Y2KBOX_ENVMAP_FIX=1` (default off): for cube + reflection-vector texgen + COUNT3 stages with orthonormal VIEW and non-orthonormal TEXTURE0, send the transposed VIEW rotation to D3D9; restore otherwise. Full-mode `VMVGA-D3D9-ENVMAP-FIX` records.
+- Standalone compile/behaviour test on real captured matrices only; no QEMU build, CI or visual validation. If the owner confirms the glass, make it unconditional and drop the env switch.
