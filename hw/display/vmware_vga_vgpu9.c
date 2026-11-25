@@ -4137,13 +4137,22 @@ static bool vmsvga3d_dxvk_apply_context_fixed_state(
     }
 
     if (full_replay || context->legacy_transform_dirty != 0) {
-        for (i = SVGA3D_TRANSFORM_MIN; i < SVGA3D_TRANSFORM_MAX; i++) {
+        uint64_t mask;
+
+        QEMU_BUILD_BUG_ON(SVGA3D_TRANSFORM_MAX >= 64);
+        mask = (UINT64_C(1) << SVGA3D_TRANSFORM_MAX) -
+               (UINT64_C(1) << SVGA3D_TRANSFORM_MIN);
+        if (!full_replay) {
+            mask &= context->legacy_transform_dirty;
+        }
+
+        while (mask != 0) {
             uint32_t d3d_transform;
 
-            if (!context->transform[i].valid ||
-                (!full_replay &&
-                 (context->legacy_transform_dirty &
-                  (UINT64_C(1) << i)) == 0)) {
+            i = (uint32_t)ctz64(mask);
+            mask &= mask - 1u;
+
+            if (!context->transform[i].valid) {
                 continue;
             }
 
@@ -4170,48 +4179,69 @@ static bool vmsvga3d_dxvk_apply_context_fixed_state(
     }
 
     if (full_replay || render_state_dirty) {
-        for (i = SVGA3D_RS_MIN; i < SVGA3D_RS_MAX; i++) {
-        VMSVGA3DD3D9RenderStatePlan plan;
-        SVGA3dRenderState state = { 0 };
-        VMSVGA3DD3D9TranslateResult translated;
-        uint32_t op;
+        uint32_t word;
 
-        if (!context->render_state[i].valid ||
-            (!full_replay &&
-             (context->legacy_render_state_dirty[i / 64u] &
-              (UINT64_C(1) << (i % 64u))) == 0)) {
-            continue;
-        }
+        QEMU_BUILD_BUG_ON(SVGA3D_RS_MIN >= 64);
+        for (word = 0; word < VMSVGA3D_LEGACY_RS_DIRTY_WORDS; word++) {
+            uint32_t base = word * 64u;
+            uint32_t remaining =
+                base < SVGA3D_RS_MAX ? (SVGA3D_RS_MAX - base) : 0u;
+            uint64_t valid_mask = remaining >= 64u
+                                      ? ~UINT64_C(0)
+                                      : ((UINT64_C(1) << remaining) - 1u);
+            uint64_t mask = full_replay
+                                ? valid_mask
+                                : (context->legacy_render_state_dirty[word] &
+                                   valid_mask);
 
-        state.state = i;
-        state.uintValue = context->render_state[i].value;
-        translated = vmsvga3d_d3d9_render_state(&state, &plan);
+            if (word == 0 && SVGA3D_RS_MIN > 0) {
+                mask &= ~((UINT64_C(1) << SVGA3D_RS_MIN) - 1u);
+            }
 
-        if (translated == VMSVGA3D_D3D9_TRANSLATE_INVALID) {
-            VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
-                    "D3D9-FIXED fail stage=render-translate svga_state=%u "
-                    "value=0x%08x",
-                    i, state.uintValue);
-            return false;
-        }
+            while (mask != 0) {
+                VMSVGA3DD3D9RenderStatePlan plan;
+                SVGA3dRenderState state = { 0 };
+                VMSVGA3DD3D9TranslateResult translated;
+                uint32_t op;
 
-        if (translated == VMSVGA3D_D3D9_TRANSLATE_IGNORE) {
-            continue;
-        }
+                i = base + (uint32_t)ctz64(mask);
+                mask &= mask - 1u;
 
-        for (op = 0; op < plan.count; op++) {
-            if (!vmsvga3d_dxvk_set_render_state(s->dxvk, plan.ops[op].state,
-                                                plan.ops[op].value)) {
-                VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
-                        "D3D9-FIXED fail stage=render-set svga_state=%u "
-                        "svga_value=0x%08x d3d_state=%u d3d_value=0x%08x "
-                        "op=%u/%u",
-                        i, state.uintValue, plan.ops[op].state,
-                        plan.ops[op].value, op, plan.count);
-                return false;
+                if (!context->render_state[i].valid) {
+                    continue;
+                }
+
+                state.state = i;
+                state.uintValue = context->render_state[i].value;
+                translated = vmsvga3d_d3d9_render_state(&state, &plan);
+
+                if (translated == VMSVGA3D_D3D9_TRANSLATE_INVALID) {
+                    VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
+                            "D3D9-FIXED fail stage=render-translate svga_state=%u "
+                            "value=0x%08x",
+                            i, state.uintValue);
+                    return false;
+                }
+
+                if (translated == VMSVGA3D_D3D9_TRANSLATE_IGNORE) {
+                    continue;
+                }
+
+                for (op = 0; op < plan.count; op++) {
+                    if (!vmsvga3d_dxvk_set_render_state(s->dxvk,
+                                                        plan.ops[op].state,
+                                                        plan.ops[op].value)) {
+                        VMVGA_TRACE_LOCAL(VMVGA_TRACE_3D,
+                                "D3D9-FIXED fail stage=render-set svga_state=%u "
+                                "svga_value=0x%08x d3d_state=%u d3d_value=0x%08x "
+                                "op=%u/%u",
+                                i, state.uintValue, plan.ops[op].state,
+                                plan.ops[op].value, op, plan.count);
+                        return false;
+                    }
+                }
             }
         }
-    }
     }
 
     if (full_replay || context->legacy_material_dirty != 0) {
@@ -4326,25 +4356,31 @@ static bool vmsvga3d_dxvk_apply_context_textures(
     uint32_t stage;
     uint32_t name;
 
+    QEMU_BUILD_BUG_ON(SVGA3D_TS_MAX >= 64);
     for (stage = 0; stage < VMSVGA3D_MAX_SAMPLERS; stage++) {
+        uint64_t mask;
+
         if (!full_replay && context->legacy_texture_state_dirty[stage] == 0) {
             continue;
         }
-        for (name = SVGA3D_TS_MIN; name < SVGA3D_TS_MAX; name++) {
+        mask = (UINT64_C(1) << SVGA3D_TS_MAX) - (UINT64_C(1) << SVGA3D_TS_MIN);
+        if (!full_replay) {
+            mask &= context->legacy_texture_state_dirty[stage];
+        }
+        if (stage < VMSVGA3D_D3D9_MAX_TEXTURE_STAGES) {
+            mask &= ~((UINT64_C(1) << SVGA3D_TS_TEXCOORDINDEX) |
+                      (UINT64_C(1) << SVGA3D_TS_TEXCOORDGEN));
+        }
+
+        while (mask != 0) {
             VMSVGA3DD3D9TextureStatePlan plan;
             SVGA3dTextureState state = { 0 };
             VMSVGA3DD3D9TranslateResult translated;
 
-            if (stage < VMSVGA3D_D3D9_MAX_TEXTURE_STAGES &&
-                (name == SVGA3D_TS_TEXCOORDINDEX ||
-                 name == SVGA3D_TS_TEXCOORDGEN)) {
-                continue;
-            }
+            name = (uint32_t)ctz64(mask);
+            mask &= mask - 1u;
 
-            if (!context->texture_state[stage][name].valid ||
-                (!full_replay &&
-                 (context->legacy_texture_state_dirty[stage] &
-                  (UINT64_C(1) << name)) == 0)) {
+            if (!context->texture_state[stage][name].valid) {
                 continue;
             }
 
@@ -4848,18 +4884,48 @@ static bool vmsvga3d_dxvk_apply_context_shaders(
                 return false;
             }
 
+            if (!full_replay) {
+                uint32_t word_count = (limit + 63u) / 64u;
+                uint64_t any_dirty = 0;
+                uint32_t w;
+
+                for (w = 0; w < word_count; w++) {
+                    any_dirty |= dirty[w];
+                }
+                if (any_dirty == 0) {
+                    continue;
+                }
+            }
+
             for (reg = 0; reg < limit;) {
                 uint32_t run_start;
                 uint32_t run_count = 0;
 
-                while (reg < limit &&
-                       (!constants[reg].valid ||
-                        (!full_replay &&
-                         (dirty[reg / 64u] &
-                          (UINT64_C(1) << (reg % 64u))) == 0))) {
-                    reg++;
+                if (full_replay) {
+                    while (reg < limit && !constants[reg].valid) {
+                        reg++;
+                    }
+                } else {
+                    while (reg < limit) {
+                        uint32_t w = reg / 64u;
+                        uint32_t bit = reg % 64u;
+                        uint64_t mask = dirty[w] >> bit;
+
+                        if (mask == 0) {
+                            reg = (w + 1u) * 64u;
+                            continue;
+                        }
+                        reg += (uint32_t)ctz64(mask);
+                        if (reg >= limit) {
+                            break;
+                        }
+                        if (constants[reg].valid) {
+                            break;
+                        }
+                        reg++;
+                    }
                 }
-                if (reg == limit) {
+                if (reg >= limit) {
                     break;
                 }
 

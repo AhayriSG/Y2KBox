@@ -34,6 +34,7 @@
 #include "qapi/error.h"
 #include "system/system.h"
 #include "qemu/cutils.h"
+#include "qemu/host-utils.h"
 #include "qemu/main-loop.h"
 #include "qemu/timer.h"
 #ifdef __SSE2__

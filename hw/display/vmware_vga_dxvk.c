@@ -72,6 +72,8 @@ struct vmsvga3d_dxvk_s {
     VMSVGA3DDxvkD3D9Query *d3d9_queries;
     VMSVGA3DDxvkD3D9GBQuery *d3d9_gb_queries;
     GHashTable *d3d9_vertex_declarations;
+    VMSVGA3DDxvkD3D9VertexDeclarationKey d3d9_last_vertex_decl_key;
+    void *d3d9_last_vertex_decl;
     void *d3d9_legacy_present_render_target;
     void *d3d9_legacy_present_staging;
     uint32_t d3d9_legacy_present_width;
@@ -2739,6 +2741,7 @@ static void vmsvga3d_dxvk_guest_objects_purge(VMSVGA3DDxvk *dxvk)
         g_hash_table_destroy(dxvk->d3d9_vertex_declarations);
         dxvk->d3d9_vertex_declarations = NULL;
     }
+    dxvk->d3d9_last_vertex_decl = NULL;
 
     vmsvga3d_dxvk_d3d9_legacy_present_reset(dxvk);
 
@@ -18828,8 +18831,30 @@ void *vmsvga3d_dxvk_vertex_declaration_get_cached(
     VMSVGA3DDxvkD3D9VertexDeclarationKey *stored_key;
     void *declaration;
 
-    if (!vmsvga3d_dxvk_ready(dxvk) ||
-        !vmsvga3d_dxvk_vertex_declaration_key(elements, &lookup_key)) {
+    if (!vmsvga3d_dxvk_ready(dxvk) || elements == NULL) {
+        return NULL;
+    }
+
+    if (dxvk->d3d9_last_vertex_decl != NULL) {
+        uint32_t count = dxvk->d3d9_last_vertex_decl_key.element_count;
+        uint32_t i;
+
+        for (i = 0; i < count; i++) {
+            if (memcmp(&elements[i],
+                       &dxvk->d3d9_last_vertex_decl_key.elements[i],
+                       sizeof(elements[i])) != 0) {
+                break;
+            }
+            if (elements[i].stream == VMSVGA3D_D3D9_DECL_END_STREAM) {
+                if (i + 1u == count) {
+                    return dxvk->d3d9_last_vertex_decl;
+                }
+                break;
+            }
+        }
+    }
+
+    if (!vmsvga3d_dxvk_vertex_declaration_key(elements, &lookup_key)) {
         return NULL;
     }
 
@@ -18842,6 +18867,8 @@ void *vmsvga3d_dxvk_vertex_declaration_get_cached(
         declaration = g_hash_table_lookup(dxvk->d3d9_vertex_declarations,
                                           &lookup_key);
         if (declaration != NULL) {
+            dxvk->d3d9_last_vertex_decl_key = lookup_key;
+            dxvk->d3d9_last_vertex_decl = declaration;
             return declaration;
         }
     }
@@ -18849,6 +18876,7 @@ void *vmsvga3d_dxvk_vertex_declaration_get_cached(
     if (g_hash_table_size(dxvk->d3d9_vertex_declarations) >=
         VMSVGA3D_DXVK_D3D9_VERTEX_DECL_CACHE_LIMIT) {
         g_hash_table_remove_all(dxvk->d3d9_vertex_declarations);
+        dxvk->d3d9_last_vertex_decl = NULL;
     }
 
     declaration = vmsvga3d_dxvk_vertex_declaration_create(dxvk, elements);
@@ -18863,6 +18891,8 @@ void *vmsvga3d_dxvk_vertex_declaration_get_cached(
     }
     *stored_key = lookup_key;
     g_hash_table_insert(dxvk->d3d9_vertex_declarations, stored_key, declaration);
+    dxvk->d3d9_last_vertex_decl_key = lookup_key;
+    dxvk->d3d9_last_vertex_decl = declaration;
 
     return declaration;
 }
