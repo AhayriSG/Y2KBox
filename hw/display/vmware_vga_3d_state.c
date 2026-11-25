@@ -1465,6 +1465,86 @@ static void vmsvga3d_state_trace_cube_shadow(
     fprintf(stderr, "\n");
 }
 
+/*
+ * Full-mode only: read each level-0 cube face back from the DXVK/D3D9 texture
+ * into a private scratch image (never the CPU shadow) and log average bytes.
+ * CPU-shadow hashes cannot show GPU-only content (render-target writes,
+ * GPU copies), so this separates "the guest never wrote the face" from "the
+ * host texture lost it".  Bytes 0..2 of X8R8G8B8/A8R8G8B8 are B,G,R on
+ * little-endian hosts.  Limited to two records per capture.
+ */
+static void vmsvga3d_state_trace_cube_host(
+    struct vmsvga_state_s *s, uint64_t frame, uint64_t seq, uint32_t cid,
+    uint32_t stage, uint32_t sid, VMSVGA3DSurface *surface)
+{
+    static uint64_t last_seq;
+    static uint32_t emitted;
+    uint32_t levels;
+    uint32_t face;
+
+    if (seq < last_seq) {
+        emitted = 0;
+    }
+    last_seq = seq;
+
+    if (emitted >= 2 || s == NULL || surface == NULL ||
+        (surface->surface_flags & SVGA3D_SURFACE_CUBEMAP) == 0 ||
+        surface->dxvk_surface == NULL || surface->mips == NULL ||
+        !vmsvga3d_dxvk_ready(s->dxvk) ||
+        (surface->format != SVGA3D_X8R8G8B8 &&
+         surface->format != SVGA3D_A8R8G8B8)) {
+        return;
+    }
+    levels = surface->face[0].numMipLevels;
+    if (levels == 0) {
+        return;
+    }
+    emitted++;
+
+    fprintf(stderr,
+            "VMVGA-CUBEMAP-HOST frame=%" PRIu64 " seq=%" PRIu64
+            " cid=%u stage=%u sid=%u levels=%u source=dxvk-readback"
+            " bytes012=B,G,R",
+            frame, seq, cid, stage, sid, levels);
+
+    for (face = 0; face < SVGA3D_MAX_SURFACE_FACES; face++) {
+        uint32_t index = face * levels;
+        VMSVGA3DSurfaceImage scratch;
+        uint32_t red = 0;
+        uint32_t green = 0;
+        uint32_t blue = 0;
+        const char *status;
+
+        if (index >= surface->mip_count ||
+            surface->mips[index].data_size == 0 ||
+            surface->mips[index].data_size > UINT32_C(1024) * 1024) {
+            fprintf(stderr, " f%u=skipped", face);
+            continue;
+        }
+        scratch = surface->mips[index];
+        scratch.data = g_try_malloc0(scratch.data_size);
+        if (scratch.data == NULL) {
+            fprintf(stderr, " f%u=alloc-failed", face);
+            continue;
+        }
+        if (!vmsvga3d_dxvk_readback_image(s->dxvk, surface->dxvk_surface,
+                                          surface->format, index, &scratch)) {
+            fprintf(stderr, " f%u=readback-failed", face);
+        } else {
+            status = vmsvga3d_state_trace_cube_avg_rgb(&scratch,
+                                                       surface->format,
+                                                       &red, &green, &blue);
+            if (strcmp(status, "ok") == 0) {
+                fprintf(stderr, " f%u=avg=%u,%u,%u", face, red, green, blue);
+            } else {
+                fprintf(stderr, " f%u=%s", face, status);
+            }
+        }
+        g_free(scratch.data);
+    }
+    fprintf(stderr, "\n");
+}
+
 static void vmsvga3d_state_trace_texgen(
     struct vmsvga_state_s *s, const VMSVGA3DContext *context, uint32_t cid)
 {
@@ -1588,6 +1668,8 @@ static void vmsvga3d_state_trace_texgen(
             surface = s->svga3d->surfaces[binding->value];
         }
         vmsvga3d_state_trace_cube_shadow(frame, seq, cid, stage,
+            binding->valid ? binding->value : SVGA3D_INVALID_ID, surface);
+        vmsvga3d_state_trace_cube_host(s, frame, seq, cid, stage,
             binding->valid ? binding->value : SVGA3D_INVALID_ID, surface);
     }
 }

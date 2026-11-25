@@ -19,11 +19,6 @@
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped capture in the launch working directory; simple mode stays as a manually stopped `.log`, while full mode auto-stops at two seconds (or can be stopped early) and is compressed to `.log.gz` after stderr is restored.
 
-### Session 127 — Record owner verification and close diagnostic logging follow-up
-- Owner Windows XP captures verified simple mode (about 48 KB; 734 supersede flips, two individual lines, SID counts 367/367) and full mode (about 1.5 MB; 766 supersede flips and 766 individual lines).
-- Both headers confirmed their selected modes, and the false unknown-read warning for valid `SVGA_REG_BUSY` was absent from both captures.
-- Session 126's owner-retest follow-up is closed. T19 remains IMPLEMENTED pending Linux/Windows CI and repeated-interval acceptance; no local build or CI was performed.
-
 ### Session 128 — Expand full-mode VMVGA graphics-event diagnostics
 - Full capture now emits every FIFO command with a capture-local sequence number and command metadata; adds operands for legacy 2D surface copy/fill and rectangle copy.
 - Full mode also enables deep D3D9 draw planning/submission and render-target/texture state traces previously disabled by compile-time developer switches. Simple mode and inactive/default-off behavior remain unchanged.
@@ -85,3 +80,7 @@
 - Captures show the helicopter glass is one additive cube-map reflection draw per frame (cube SID 25, reflection-vector texgen, COUNT3). The guest's TEXTURE0 matrix for it is not a rotation (partial VIEW elements, zero last row/column) while VIEW is; Y2KBox passes it through unchanged. Before `89c97603` the transform flags `S|T|R` mapped to DISABLE and texgen was ignored, which is why older builds looked different.
 - Added opt-in `Y2KBOX_ENVMAP_FIX=1` (default off): for cube + reflection-vector texgen + COUNT3 stages with orthonormal VIEW and non-orthonormal TEXTURE0, send the transposed VIEW rotation to D3D9; restore otherwise. Full-mode `VMVGA-D3D9-ENVMAP-FIX` records.
 - Standalone compile/behaviour test on real captured matrices only; no QEMU build, CI or visual validation. If the owner confirms the glass, make it unconditional and drop the env switch.
+
+### Session 139 — Joint Operations glass: cube content analysis
+- Cube SID 25 has five black CPU-shadow faces and one lavender -Y face; the guest matrix under D3D semantics samples only the black +/-X/+/-Z faces. Real hardware and the older build show a uniform tint, so the likely defect is lost/missing face content, not the matrix. `Y2KBOX_ENVMAP_FIX` stays opt-in and is probably not the real fix.
+- Added Full-mode `VMVGA-CUBEMAP-HOST` (DXVK readback of each cube face into a scratch buffer, max two per capture) to compare host texture vs CPU shadow. Standalone compile/behaviour test only; no build, CI or capture yet.
