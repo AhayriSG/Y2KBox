@@ -19,21 +19,6 @@
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
 - Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped capture in the launch working directory; simple mode stays as a manually stopped `.log`, while full mode auto-stops at two seconds (or can be stopped early) and is compressed to `.log.gz` after stderr is restored.
 
-### Session 128 — Expand full-mode VMVGA graphics-event diagnostics
-- Full capture now emits every FIFO command with a capture-local sequence number and command metadata; adds operands for legacy 2D surface copy/fill and rectangle copy.
-- Full mode also enables deep D3D9 draw planning/submission and render-target/texture state traces previously disabled by compile-time developer switches. Simple mode and inactive/default-off behavior remain unchanged.
-- Static source review only; no local build, XP capture, runtime test, or CI. Next owner step: one full-mode NFSU2 capture spanning visible minimap flicker. T19 remains IMPLEMENTED pending XP validation and Linux/Windows CI.
-
-### Session 129 — Add full-mode D3D9 resource and render correlation records
-- T26 is IN PROGRESS. Full mode now logs each deferred guest buffer range and merged range (`VMVGA-D3D9-BUFFER-DEFER`), plus direct full-buffer DISCARD and deferred native range Lock decisions (`VMVGA-D3D9-BUFFER-UPLOAD`), with FIFO sequence, ranges, flags/mode/reason, flush cause and copied bytes.
-- Guest-backed image/buffer updates emit subresource, box, row/plane layout, byte count and backend after MOB data reaches the CPU shadow (`VMVGA-RESOURCE-UPDATE`). Each D3D9 draw range emits FIFO-sequenced target/viewport/primitive/index/stream metadata (`VMVGA-D3D9-GEOMETRY`). Full-only `VMVGA-RENDER-CORRELATION` records connect readback events to the last observed FIFO sequence.
-- Position/UV bounds are explicitly unavailable pending safe CPU-shadow vertex decoding. No GPU readback or forced synchronization was added. Static review only; no build, runtime test, XP capture, or CI.
-
-### Session 130 — Bound and gzip full diagnostic captures
-- Full-mode captures automatically stop after two seconds, with Ctrl+Alt+L still available for an earlier stop. The SDL title advertises the time limit while full capture is active.
-- After stderr is restored, full logs are compressed asynchronously in a background worker to `.log.gz`; the original `.log` is deleted only after successful compression. Failures preserve the original. Simple captures remain manually stopped and uncompressed.
-- Static source review only; no local build, runtime test, owner capture, or CI.
-
 ## Current investigation / next actions
 
 1. **T13e-F1 / Windows TCG profiling remains active.** Keep workload and scene identical when comparing captures; distinguish measured facts from attribution hypotheses.
@@ -51,6 +36,10 @@
 - Updated README, HANDOFF, TASKS, command-line help, and capture documentation to describe the two-second limit, maximum compression, and the guidance to start performance investigations with Simple-mode PERFSTATS/`Y2KBOX-PERF` summaries, which may be sufficient before enabling Full mode.
 - Static source/documentation review only. No local build, runtime test, XP capture, or CI was run; owner verification and Linux/Windows CI remain outstanding.
 
+
+### Session 132 — Shorten full captures to 2s and compress asynchronously
+- Reduced Full-mode capture limit from 3s to 2s and moved zlib level-9 gzip compression onto a detached QEMU worker thread after stderr restoration; original `.log` is deleted only on success.
+- Static source review only; owner runtime verification and Linux/Windows CI remain outstanding.
 
 ### Session 133 — Decode CPU-shadow vertex positions and UVs
 - Full-mode `VMVGA-D3D9-GEOMETRY` now decodes raw vertex-input position and TEXCOORD0 UV bounds from the CPU shadow for indexed and non-indexed draws using FLOAT1–FLOAT4 declaration elements. The decoder validates little-endian indices and float components, base-vertex addressing, stream offsets/strides, buffer bounds and finite values; it rejects instanced streams and caps work at 65,536 vertex references per draw.
@@ -76,6 +65,10 @@
 - Correlation fields include guest frame, event/FIFO seq, context, stage and SID. CPU-shadow hashes do not establish GPU-current texture contents or correct face orientation. Simple/off modes and renderer scheduling are unchanged.
 - Static source review only; no build, CI, owner capture, or visual validation. Next: take a Full capture of Joint Operations and correlate the reported draw seq 60582 / cube SID 25 with the missing windshield. T26 remains IN PROGRESS.
 
+### Session 137 — Make Full diagnostic capture non-cancellable
+- Locked Ctrl+Alt+L while a Full capture is active so only the two-second realtime timer (or shutdown cleanup) stops it; Simple mode retains manual toggle.
+- Updated SDL title and capture docs; static review only.
+
 ### Session 138 — Experimental Y2KBOX_ENVMAP_FIX (Joint Operations glass)
 - Captures show the helicopter glass is one additive cube-map reflection draw per frame (cube SID 25, reflection-vector texgen, COUNT3). The guest's TEXTURE0 matrix for it is not a rotation (partial VIEW elements, zero last row/column) while VIEW is; Y2KBox passes it through unchanged. Before `89c97603` the transform flags `S|T|R` mapped to DISABLE and texgen was ignored, which is why older builds looked different.
 - Added opt-in `Y2KBOX_ENVMAP_FIX=1` (default off): for cube + reflection-vector texgen + COUNT3 stages with orthonormal VIEW and non-orthonormal TEXTURE0, send the transposed VIEW rotation to D3D9; restore otherwise. Full-mode `VMVGA-D3D9-ENVMAP-FIX` records.
@@ -84,3 +77,8 @@
 ### Session 139 — Joint Operations glass: cube content analysis
 - Cube SID 25 has five black CPU-shadow faces and one lavender -Y face; the guest matrix under D3D semantics samples only the black +/-X/+/-Z faces. Real hardware and the older build show a uniform tint, so the likely defect is lost/missing face content, not the matrix. `Y2KBOX_ENVMAP_FIX` stays opt-in and is probably not the real fix.
 - Added Full-mode `VMVGA-CUBEMAP-HOST` (DXVK readback of each cube face into a scratch buffer, max two per capture) to compare host texture vs CPU shadow. Standalone compile/behaviour test only; no build, CI or capture yet.
+
+### Session 140 — Fix NFS Underground 2 minimap flickering (mixed A8/X8 flip chain)
+- Root cause proven from `logs/captures/y2kbox-log-20261125-001003-nfsu2.png`, `135526.png`, and `135526.log.gz`: XP XDDM alternates `BIND_GB_SCREENTARGET` between `sid=1` (`640x480` `X8R8G8B8`) and `sid=2` (`640x480` `A8R8G8B8`). NFSU2 writes backbuffer alpha (`COLORWRITEENABLE=0x08`, leaving `DstA ≈ 0.72` in the minimap rect) and composites the minimap (`tex=486`) with `DESTALPHA`/`INVDESTALPHA`. D3D9/DXVK gave `sid=1` no alpha (`DESTALPHA=1.0`, bright) and `sid=2` real alpha (`0.72`, darker).
+- Implemented targeted fix (`053f0644`): when flips/presents pair matching-geometry single-mip 2D `X8R8G8B8` and `A8R8G8B8` targets, promote only the `X8` partner's native D3D9 resource plan to `A8R8G8B8` (preserving guest format and GPU RGB contents on rematerialization). Homogeneous `X8/X8` swapchains and offscreen `X8` surfaces are untouched.
+- Verified with standalone `gcc -Wall -Wextra -Werror -Wformat=2` unit tests only; no QEMU build, CI, or XP runtime capture yet. Next: owner XP visual check on NFSU2 track select and Linux/Windows CI (T27 IMPLEMENTED).
