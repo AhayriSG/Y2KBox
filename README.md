@@ -188,11 +188,10 @@ fence events, and FIFO-run-end records, plus the first eight selected
 diagnostics and fence-goal hits, and writes interval-scoped VMVGA
 flight-recorder totals when capture stops. The `Y2KBOX-PERF command` records
 retain per-command counts and timing measurements, so suppressing repetitive
-event lines does not discard command-level performance data. If performance
-optimization is the main goal, start with Simple mode: its PERFSTATS and
-`Y2KBOX-PERF` summaries may be enough to identify the major bottleneck in some
-cases. Use Full mode when aggregate measurements are insufficient and detailed
-per-event correlation is needed.
+event lines does not discard command-level performance data. Use Simple mode's
+`PERF STATS` as the reference for performance analysis. Use Full mode when
+aggregate measurements are insufficient and detailed per-event correlation is
+needed.
 
 Use `-y2kboxdebugmode on` when a coding agent needs the full selected
 per-event VMVGA SYNC, fence, and 3D-command stream, including CPU-shadow vertex-position and UV bounds for supported float vertex formats. Full captures automatically
@@ -202,6 +201,8 @@ compresses the completed log asynchronously in a background worker using zlib's 
 saves it as `.log.gz`.
 
 **Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
+
+**PERF STATS guidance:** For performance analysis and comparisons, use **only the `PERF STATS` from Simple logging mode** as the reference. Full logging enables substantially more diagnostic instrumentation, which can affect timing and add overhead. Therefore, **ignore `PERF STATS` from Full-mode logs** when evaluating or comparing normal emulation performance. Full-mode logs remain valuable for detailed technical investigation; their event traces, state snapshots, and other diagnostics can help identify the cause of a problem, but their performance statistics are not a benchmarking reference.
 
 **Helping optimize games:** The `Y2KBOX-PERF` statistics in these logs can help developers investigate performance bottlenecks. If a game runs poorly, share the relevant log and describe the game, scene, resolution, settings, and reproduction steps. Developers—or an LLM-assisted coding agent—can analyze the measurements and, when necessary, add targeted profiling counters to investigate areas that the existing statistics do not cover. You do not need to modify the emulator or add instrumentation yourself.
 
@@ -227,7 +228,7 @@ Also, **one guest vCPU does not mean QEMU is restricted to one host thread**. QE
 
 Modern CPUs provide hardware virtualization through technologies such as Intel VT-x and AMD-V. QEMU can expose that acceleration through host hypervisor interfaces—for example, **WHPX** on Windows and **Hypervisor.framework (HVF)** on macOS. Those interfaces are supplied by their respective operating-system vendors and are not open-source components that this project can independently maintain. Making one of them a hard requirement for CPU execution would put a fundamental part of Y2KBox's future in the hands of a platform vendor: its availability, behavior, compatibility, and long-term support would be outside the project's control.
 
-Y2KBox therefore takes a different approach on Windows: use QEMU's **TCG software CPU emulator**, rather than requiring WHPX or another proprietary hypervisor interface. This costs performance and makes optimization work more demanding, but it keeps the CPU execution engine within the project’s open-source codebase and avoids making a vendor-controlled host API a prerequisite for running the guest. The same principle is why the Linux product uses **KVM**: it is an open-source Linux kernel virtualization interface, rather than a proprietary platform API. Linux KVM is currently mandatory for Linux builds; Windows builds use TCG. macOS/HVF is not a supported host target at present.
+Y2KBox therefore takes a different approach on Windows: use QEMU's **TCG software CPU emulator**, rather than requiring WHPX or another proprietary hypervisor interface. This costs performance and makes optimization work more demanding, but it keeps the CPU execution engine within the project's open-source codebase and avoids making a vendor-controlled host API a prerequisite for running the guest. The same principle is why the Linux product uses **KVM**: it is an open-source Linux kernel virtualization interface, rather than a proprietary platform API. Linux KVM is currently mandatory for Linux builds; Windows builds use TCG. macOS/HVF is not a supported host target at present.
 
 This is an engineering and preservation choice, not a claim that hardware virtualization is inherently undesirable. KVM remains the right fit for the Linux product, while Windows TCG gives Y2KBox a path that does not depend on WHPX being available or supported indefinitely. The trade-off is deliberate: prioritize an implementation the project can inspect, maintain, optimize, and carry forward over relying on a closed host interface for a core capability.
 
