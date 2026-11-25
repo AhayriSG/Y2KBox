@@ -258,9 +258,7 @@ details, and measurements are indexed under TCG performance in `WORKLOG_INDEX.md
 * **Current resume:** start with the latest owner-supplied capture. Establish its
   exact game, scene, weather, resolution, and duration before comparing against a
   matching baseline. Inspect the complete `Y2KBOX-PERF`/`Y2KBOX-PROF` records;
-  `cpu.exec` aggregate timing alone does not identify a bottleneck. Keep F1 crowded-
-  grid profiling separate from FIFA residual hitches and the Hitman 2 D3D8 static-
-  background issue requiring owner visual confirmation; agents may analyze supplied captures. Make no source change until a repeatable hotspot
+  `cpu.exec` aggregate timing alone does not identify a bottleneck. Keep F1 crowded-grid profiling separate from FIFA residual hitches; agents may analyze supplied captures. Make no source change until a repeatable hotspot
   is isolated.
 * **T13a x87: PAUSED.** Existing guarded host-x87 fast paths remain: arithmetic,
   square root, exact integer loads, and normal-finite FST m32/m64 stores, with
