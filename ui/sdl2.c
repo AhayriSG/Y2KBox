@@ -66,6 +66,7 @@ static int gui_saved_grab;
 static int gui_fullscreen;
 static int gui_grab_code = KMOD_LALT | KMOD_LCTRL;
 static bool sdl_log_capture_enabled;
+static bool sdl_log_capture_full;
 static int sdl_log_capture_saved_stderr = -1;
 static char *sdl_log_capture_filename;
 static struct sdl2_console *sdl_log_capture_console;
@@ -710,6 +711,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         sdl_log_capture_filename = filename;
         sdl_log_capture_console = scon;
         sdl_log_capture_enabled = true;
+        sdl_log_capture_full = debug_detail;
         if (debug_detail) {
             if (!sdl_log_capture_timer) {
                 sdl_log_capture_timer = timer_new_ms(QEMU_CLOCK_REALTIME,
@@ -754,6 +756,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
             return;
         }
         sdl_log_capture_enabled = false;
+        sdl_log_capture_full = false;
         if (debug_detail && sdl_log_capture_filename) {
 #if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
             sdl_log_capture_snapshot_result(
@@ -824,8 +827,7 @@ static void sdl_update_caption(struct sdl2_console *scon)
     if (debug_available && sdl_log_capture_enabled) {
         if (debug_detail) {
             snprintf(log_status, sizeof(log_status),
-                     " - Diagnostic logging (full; auto-stops at 2s; %s to stop)",
-                     hotkey);
+                     " - Diagnostic logging (full; hotkey locked; auto-stops at 2s)");
         } else {
             snprintf(log_status, sizeof(log_status),
                      " - Diagnostic logging (simple mode; %s to stop)", hotkey);
@@ -1109,7 +1111,9 @@ static void handle_keydown(SDL_Event *ev)
             break;
         case SDL_SCANCODE_L:
             scon->gui_keysym = true;
-            sdl_toggle_log_capture(scon);
+            if (!sdl_log_capture_enabled || !sdl_log_capture_full) {
+                sdl_toggle_log_capture(scon);
+            }
             break;
         case SDL_SCANCODE_0:
             sdl2_window_resize(scon);
