@@ -812,7 +812,7 @@ static void vmsvga3d_d3d9_texture_plan(
 
     if (plan->normalized_surface_flags & SVGA3D_SURFACE_CUBEMAP) {
         vmsvga3d_d3d9_create_desc(&plan->primary, D3D9_RTYPE_CUBE_TEXTURE,
-                                  surface, surface->mip_levels, plan->base_usage,
+                                  surface, surface->mip_levels, plan->post_usage,
                                   plan->actual_format, D3D9_POOL_DEFAULT);
         plan->primary.height = plan->primary.width;
         plan->primary.depth = 1;
@@ -3637,10 +3637,17 @@ static bool vmsvga3d_dxvk_materialize_surface_ex(
         }
         break;
     case VMSVGA3D_D3D9_RESOURCE_USE_COLOR_TARGET:
-        compatible =
-            (before.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_TEXTURE ||
-             before.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_SURFACE) &&
-            (before.usage & D3D9_USAGE_RENDERTARGET) != 0;
+        if (plan.primary.resource_type == D3D9_RTYPE_CUBE_TEXTURE) {
+            compatible =
+                before.resource_type ==
+                    VMSVGA3D_D3D9_HOST_RESOURCE_CUBE_TEXTURE &&
+                (before.usage & D3D9_USAGE_RENDERTARGET) != 0;
+        } else {
+            compatible =
+                (before.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_TEXTURE ||
+                 before.resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_SURFACE) &&
+                (before.usage & D3D9_USAGE_RENDERTARGET) != 0;
+        }
         break;
     case VMSVGA3D_D3D9_RESOURCE_USE_DEPTH_TARGET:
         if (plan.primary.resource_type == D3D9_RTYPE_TEXTURE) {

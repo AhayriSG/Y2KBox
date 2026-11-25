@@ -4066,6 +4066,13 @@ static bool vmsvga3d_dxvk_surface_plan_compatible(
             return false;
         }
     case VMSVGA3D_D3D9_RESOURCE_USE_COLOR_TARGET:
+        if (plan->primary.resource_type ==
+            VMSVGA3D_DXVK_D3D9_RTYPE_CUBETEXTURE) {
+            return surface->d3d9_resource_type ==
+                       VMSVGA3D_D3D9_HOST_RESOURCE_CUBE_TEXTURE &&
+                   (surface->d3d9_usage &
+                    VMSVGA3D_DXVK_D3DUSAGE_RENDERTARGET) != 0;
+        }
         return (surface->d3d9_resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_SURFACE ||
                 surface->d3d9_resource_type == VMSVGA3D_D3D9_HOST_RESOURCE_TEXTURE) &&
                (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_RENDERTARGET) != 0;
