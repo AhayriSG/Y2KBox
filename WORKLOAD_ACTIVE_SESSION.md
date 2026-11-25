@@ -17,7 +17,7 @@
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
 - Keep the owner-approved guest/device constraints in `HANDOFF.md`; do not infer that a standalone test or green CI proves in-game correctness.
 - **Build/CI workflow:** Gemini 4 Neon alone has standing authorization for ordinary local QEMU builds and standard checks; all other agents need explicit owner authorization. Gemini 4 Neon also has standing authorization for relevant, bounded benchmarks/A-B; other agents still need explicit authorization. GitHub Actions remains authoritative; report local results separately. Markdown-only commits run only the lightweight detector; Linux/Windows jobs are skipped. After pushing, do not poll CI.
-- Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped capture in the launch working directory; simple mode stays as a manually stopped `.log`, while full mode auto-stops at two seconds (or can be stopped early) and is compressed to `.log.gz` after stderr is restored.
+- Diagnostic captures are independent sessions: every Ctrl+Alt+L start resets counters and writes a new timestamped capture in the launch working directory. Simple mode stays as a manually stopped `.log`; Full mode runs for its fixed two-second window and cannot be stopped early (Ctrl+Alt+L is ignored while active). After stderr is restored, Full mode saves one optional CPU-display-surface `.png` beside the log when the existing libpng/Pixman features are available, then compresses the `.log` asynchronously to `.log.gz`.
 
 ## Current investigation / next actions
 
