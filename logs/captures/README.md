@@ -3,8 +3,10 @@
 This directory holds selected diagnostic logs captured manually from Y2KBox.
 
 Capture logs normally and add selected captures here as `.log.gz` files.
-Full (`on`) captures are automatically stopped after two seconds (or earlier
-with Ctrl+Alt+L) and compressed by Y2KBox after stderr is restored using zlib level 9 (maximum compression) in a background worker, keeping compression off the QEMU main thread. Simple
+Full (`on`) captures cannot be manually stopped: Ctrl+Alt+L is ignored while
+Full mode is active, and the capture automatically stops after two seconds.
+The hotkey remains available to start Full mode and to manually stop Simple mode.
+Completed Full captures are compressed by Y2KBox after stderr is restored using zlib level 9 (maximum compression) in a background worker, keeping compression off the QEMU main thread. Simple
 captures remain uncompressed `.log` files; compress those manually when they
 are worth keeping. Automatic capture compression writes to the launch working
 directory and does not add files to this repository. These are ordinary text
