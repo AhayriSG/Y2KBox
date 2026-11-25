@@ -30,13 +30,6 @@
 7. Update the selected task entry and append the next worklog session when new implementation, measurements, or verified conclusions are produced.
 
 
-### Session 131 — Shorten full diagnostic captures and maximize gzip compression
-- Reduced the full-mode automatic capture limit from five seconds to two seconds; manual early stop and the simple-mode behavior are unchanged.
-- Moved gzip compression to a detached background worker while retaining zlib level 9 (`wb9`, maximum compression). The worker only receives the completed log after stderr is restored; it removes the source only after successful compression. The worker avoids writing status messages to redirected stderr, so it cannot contaminate a newer capture. It deletes the source `.log` only after successful compression and preserves it on failure.
-- Updated README, HANDOFF, TASKS, command-line help, and capture documentation to describe the two-second limit, maximum compression, and the guidance to start performance investigations with Simple-mode PERFSTATS/`Y2KBOX-PERF` summaries, which may be sufficient before enabling Full mode.
-- Static source/documentation review only. No local build, runtime test, XP capture, or CI was run; owner verification and Linux/Windows CI remain outstanding.
-
-
 ### Session 132 — Shorten full captures to 2s and compress asynchronously
 - Reduced Full-mode capture limit from 3s to 2s and moved zlib level-9 gzip compression onto a detached QEMU worker thread after stderr restoration; original `.log` is deleted only on success.
 - Static source review only; owner runtime verification and Linux/Windows CI remain outstanding.
@@ -82,3 +75,8 @@
 - Root cause proven from `logs/captures/y2kbox-log-20261125-001003-nfsu2.png`, `135526.png`, and `135526.log.gz`: XP XDDM alternates `BIND_GB_SCREENTARGET` between `sid=1` (`640x480` `X8R8G8B8`) and `sid=2` (`640x480` `A8R8G8B8`). NFSU2 writes backbuffer alpha (`COLORWRITEENABLE=0x08`, leaving `DstA ≈ 0.72` in the minimap rect) and composites the minimap (`tex=486`) with `DESTALPHA`/`INVDESTALPHA`. D3D9/DXVK gave `sid=1` no alpha (`DESTALPHA=1.0`, bright) and `sid=2` real alpha (`0.72`, darker).
 - Implemented targeted fix (`053f0644`): when flips/presents pair matching-geometry single-mip 2D `X8R8G8B8` and `A8R8G8B8` targets, promote only the `X8` partner's native D3D9 resource plan to `A8R8G8B8` (preserving guest format and GPU RGB contents on rematerialization). Homogeneous `X8/X8` swapchains and offscreen `X8` surfaces are untouched.
 - Verified with standalone `gcc -Wall -Wextra -Werror -Wformat=2` unit tests only; no QEMU build, CI, or XP runtime capture yet. Next: owner XP visual check on NFSU2 track select and Linux/Windows CI (T27 IMPLEMENTED).
+
+### Session 141 — NFS Underground 2 in-game performance investigation and optimizations (T13)
+- Analyzed authoritative Simple-mode capture (`y2kbox-log-20261125-151337.log`, 4.9 s, 52 frames ≈ 10.6 FPS) and Full-mode workload capture (`145935.log.gz`/`.png`, timings ignored). Isolated four concrete bottlenecks across VMVGA D3D9 and TCG without speculative risky changes.
+- Delivered 4 commits on `main`: `a6fbfab` (recognize `CUBE_TEXTURE` as compatible for D3D9 color targets, fixing cube-map face eviction/re-upload during `clear_materialize` 55.2 ms / `d3d9_draw_state` 97.5 ms spikes and preventing cube-face loss), `6d8c79b` (`PageDesc.code_bitmap` fast path in `tb_invalidate_phys_range_fast` targeting ~5.8% vCPU `notdirty_write` mixed-page overhead), `0e91a16` (sparse/chunked `CPUTLB` flushes + `CR3` `MMU_PHYS_IDX` skip targeting `ntdll!memset` 6.00%), and `a7eb600` (`ctz64` bitmask state-apply + 1-entry vertex-decl MRU cache across 99,216 draws).
+- Verified with standalone `gcc -std=gnu11 -Wall -Wextra -Werror -O2` unit tests only; no full QEMU build, CI, or XP re-capture yet. Next: Linux/Windows CI and owner Simple-mode NFSU2 re-capture plus cube-map visual check (NFSU2 & Joint Operations).
