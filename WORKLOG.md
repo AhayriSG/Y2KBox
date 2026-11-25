@@ -2256,3 +2256,11 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Kept the instrumentation behind `vmsvga_trace_detail_enabled()` and restricted it to draws using 3D transform flags or nonzero texcoord generation. No renderer, upload, synchronization, or scheduling behavior was changed.
 - Updated T26, HANDOFF and capture documentation. T26 remains IN PROGRESS pending owner Full-mode Joint Operations capture and Linux/Windows CI.
 - Verification: remote source/static review only. No local QEMU build (not authorized), runtime capture, owner XP visual verification, or CI was run. The initial commit's record terminators and capture guard were corrected in a follow-up commit; current source was fetched back and inspected.
+
+
+### Session 137 — Make Full diagnostic capture non-cancellable (2026-11-25)
+
+- Restored the intended Full-mode lockout on the rolled-back single-PNG baseline. While a Full capture is active, Ctrl+Alt+L is consumed but does not stop or toggle the capture; the existing QEMU realtime timer remains the only normal stop path and fires at two seconds.
+- Simple mode retains its existing manual Ctrl+Alt+L start/stop behavior. Internal shutdown cleanup and the timer callback can still stop an active capture safely.
+- The SDL window title now states that the Full-mode hotkey is locked and the capture auto-stops at two seconds. Updated the capture README and T19 safety-limit documentation to match.
+- Static source review and remote GitHub content updates only. No local build, runtime test, XP capture, or CI was run; Linux/Windows CI and owner runtime verification remain pending.
