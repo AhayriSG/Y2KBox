@@ -990,9 +990,11 @@ the opt-in `on` capture:
   Full mode additionally emits `VMVGA-D3D9-TEXGEN-MATRIX` for WORLD, VIEW and
   TEXTURE0; `VMVGA-D3D9-TEXGEN-STATE`, `...-MATERIAL` and `...-LIGHT`
   for transformed-coordinate draws; and `VMVGA-CUBEMAP-SHADOW` with bounded
-  level-zero CPU-shadow face checksums. These are diagnostic snapshots, not
-  proof of native GPU contents or correct cube-face orientation. The records
-  are capture-gated and must not change rendering or scheduling.
+  level-zero CPU-shadow face checksums and average RGB for supported
+  `X8R8G8B8`/`A8R8G8B8` faces, labeled by cube direction. These are
+  diagnostic snapshots, not proof of native GPU contents or correct
+  cube-face orientation. The records are capture-gated and must not change
+  rendering or scheduling.
 - `VMVGA-RENDER-CORRELATION` adds full-only readback submit/ready/retire
   markers carrying the last observed FIFO sequence. Because readback completion
   can be asynchronous, this is a nearby correlation hint, not a guaranteed

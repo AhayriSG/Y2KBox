@@ -43,14 +43,17 @@ Full-mode texgen diagnostics now emit these records when a validated draw uses
 - `VMVGA-D3D9-TEXGEN-STATE`, `VMVGA-D3D9-TEXGEN-MATERIAL`, and
   `VMVGA-D3D9-TEXGEN-LIGHT`: transform flags/generation, material colors and
   shininess, plus enabled light data.
-- `VMVGA-CUBEMAP-SHADOW`: bound cube texture SID and per-face level-zero
-  dimensions, pitch, byte count and FNV-1a checksum of the CPU shadow. Hashing
-  is capped at 2 MiB per record; missing or over-budget faces are explicit.
+- `VMVGA-CUBEMAP-SHADOW`: bound cube texture SID, format, and per-face
+  level-zero dimensions, pitch, byte count, average RGB (for
+  `X8R8G8B8`/`A8R8G8B8`), and FNV-1a checksum of the CPU shadow. Faces are
+  labeled `+X`, `-X`, `+Y`, `-Y`, `+Z`, `-Z`. Average colours and hashes
+  share the existing 2 MiB per-record budget; missing, unsupported-format,
+  invalid-layout and over-budget faces are explicit.
 
-These checksums identify CPU-shadow contents only; they do not guarantee that
-the shadow is current with GPU-rendered contents or that the face orientation
-is correct. These records are Full-mode/capture gated and do not change
-rendering, synchronization, upload policy or GPU scheduling.
+Average colours and checksums describe CPU-shadow contents only; they do not
+guarantee that the shadow is current with GPU-rendered contents or that the
+face orientation is correct. These records are Full-mode/capture gated and do
+not change rendering, synchronization, upload policy or GPU scheduling.
 
 ## Full-mode resource and draw records
 
