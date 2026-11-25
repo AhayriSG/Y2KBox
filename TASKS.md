@@ -419,7 +419,8 @@ interval across Y2KBox, without continuously generating diagnostic output.
   Remove shell-level `2>` redirection guidance; it prevents interval capture.
 * **Full-mode safety limit:** a full (`on`) capture automatically stops after
   two seconds, including when the tester forgets to press the hotkey again.
-  Ctrl+Alt+L can stop it earlier. After stderr is flushed and restored, the
+  Ctrl+Alt+L is ignored while Full mode is active; the two-second timeout is
+  mandatory. After stderr is flushed and restored, the
   completed full capture is compressed to the same timestamped `.log.gz`
   filename using zlib compression level 9 (maximum); the uncompressed `.log` is removed only after gzip succeeds.
   If compression fails, retain the original `.log`. Simple captures remain
@@ -589,7 +590,8 @@ Extend T19's opt-in full capture using the 2026-11-24 NFS Underground 2 capture 
 * **Verification:** static source review only. No QEMU build, local tests, owner capture, or CI was run. Keep T26 IN PROGRESS until the owner full-mode capture confirms the decoded records are useful and Linux/Windows build/CI validation passes. Simple and inactive/default-off paths are intended to remain unchanged.
 
 * **Session 130–131 follow-up (2026-11-24):** full captures now have a two-second
-  QEMU realtime-timer limit and can still be stopped early with Ctrl+Alt+L.
+  QEMU realtime-timer limit. Full captures cannot be manually cancelled with
+  Ctrl+Alt+L; the hotkey remains available for Simple-mode manual stop.
   After stderr restoration, full-mode `.log` files are compressed asynchronously in a background worker
   with zlib level 9 (maximum compression) to `.log.gz`; the source is deleted
   only after successful gzip completion. Compression uses exclusive file
