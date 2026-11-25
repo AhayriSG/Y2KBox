@@ -234,11 +234,11 @@ Also, **one guest vCPU does not mean QEMU is restricted to one host thread**. QE
 
 ### Why not make a proprietary hypervisor API mandatory?
 
-Y2KBox deliberately avoids making a proprietary hypervisor API a mandatory part of its architecture. On Linux, we use KVM, which provides hardware-assisted virtualization through an established, open interface. On Windows, we use QEMU's TCG software emulation instead of depending on WHPX (Windows Hypervisor Platform).
+Y2KBox deliberately avoids making a proprietary hypervisor API a mandatory part of its architecture. On Linux, we use KVM, which provides hardware-assisted virtualization through an established, open interface. On Windows, we use QEMU's **open-source TCG software emulator** instead of depending on WHPX (Windows Hypervisor Platform).
 
 WHPX is a Windows API that allows applications such as QEMU to use the Windows hypervisor for hardware-assisted virtualization. However, it introduces an external dependency on a platform interface whose availability and long-term direction are outside our control. Making it mandatory would tie Y2KBox's ability to run on Windows to Microsoft's implementation and support decisions.
 
-TCG takes a different approach. It performs CPU emulation in software, avoiding the need for a Windows hypervisor API. This has performance implications compared with hardware-assisted virtualization, but it also gives us an implementation we can inspect, maintain, optimize, and carry forward independently of a proprietary host interface.
+TCG takes a different approach. It performs CPU emulation entirely in software and is part of QEMU's open-source codebase. This means its implementation is available for us to inspect, modify, optimize, and maintain rather than depending on a proprietary host hypervisor interface. Software emulation has performance implications compared with hardware-assisted virtualization, but it gives Y2KBox direct control over a fundamental part of its execution environment.
 
 This is an engineering and preservation choice, not a claim that hardware virtualization is inherently undesirable. KVM remains the right fit for the Linux product, while Windows TCG gives Y2KBox a path that does not depend on WHPX being available or supported indefinitely. The trade-off is deliberate: prioritize an implementation the project can inspect, maintain, optimize, and carry forward over relying on a closed host interface for a core capability.
 
