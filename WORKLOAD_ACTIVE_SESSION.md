@@ -12,7 +12,6 @@
 ## Current project state and working constraints
 
 - Repository: [AhayriSG/Y2KBox](https://github.com/AhayriSG/Y2KBox), `main`.
-- **Hitman 2: Silent Assassin fullscreen-exit freeze — FIXED** in commit [`384e8a2f6588e513e20d00674cdc85f469803fd7`](https://github.com/AhayriSG/Y2KBox/commit/384e8a2f6588e513e20d00674cdc85f469803fd7). The previously listed D3D8 menu visual concern was a mistaken report, not a confirmed defect; no fix or further investigation is needed.
 - This summary can lag behind `main`; verify the current branch HEAD and task status before making changes.
 - Y2KBox targets 32-bit Windows XP. Linux product runtime is KVM-only; Windows product runtime is TCG-only. Performance optimization work targets Windows TCG.
 - VMware SVGA/SVGA3D via VMVGA is the sole active display/3D path. SDL is a fixed-size virtual monitor: guest resolution controls window client size; host resizing must not change guest geometry; fullscreen toggle is Ctrl+Alt+F.
