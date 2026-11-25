@@ -192,7 +192,47 @@ struct PageDesc {
     QemuSpin lock;
     /* list of TBs intersecting this ram page */
     uintptr_t first_tb;
+    /*
+     * 64-bit coarse coverage bitmap dividing the target page into 64 equal
+     * chunks (64 bytes per bit on 4 KiB pages).  A set bit indicates at least
+     * one TB on this page may intersect that chunk; a clear bit guarantees no
+     * TB intersects it, allowing tb_invalidate_phys_range_fast() to reject
+     * non-overlapping stores to mixed code/data pages without allocating a
+     * page_collection or walking the TB list.
+     */
+    uint64_t code_bitmap;
 };
+
+static inline uint64_t page_code_bitmap_mask(tb_page_addr_t start,
+                                             tb_page_addr_t last)
+{
+    unsigned shift = TARGET_PAGE_BITS > 6 ? TARGET_PAGE_BITS - 6 : 0;
+    unsigned b0 = (start & ~TARGET_PAGE_MASK) >> shift;
+    unsigned b1 = (last & ~TARGET_PAGE_MASK) >> shift;
+
+    tcg_debug_assert(((start ^ last) & TARGET_PAGE_MASK) == 0);
+    tcg_debug_assert(b0 <= b1 && b1 < 64);
+    return (~UINT64_C(0) >> (63 - (b1 - b0))) << b0;
+}
+
+static inline uint64_t tb_page_code_bitmap_mask(const TranslationBlock *tb,
+                                                unsigned int n)
+{
+    tb_page_addr_t tb_start, tb_last;
+
+    if (unlikely(tb->size == 0)) {
+        return ~UINT64_C(0);
+    }
+    tb_start = tb_page_addr0(tb);
+    tb_last = tb_start + tb->size - 1;
+    if (n == 0) {
+        tb_last = MIN(tb_last, tb_start | ~TARGET_PAGE_MASK);
+    } else {
+        tb_start = tb_page_addr1(tb);
+        tb_last = tb_start + (tb_last & ~TARGET_PAGE_MASK);
+    }
+    return page_code_bitmap_mask(tb_start, tb_last);
+}
 
 void page_table_config_init(void)
 {
@@ -673,6 +713,7 @@ static void tb_remove_all_1(int level, void **lp)
         for (i = 0; i < V_L2_SIZE; ++i) {
             page_lock(&pd[i]);
             pd[i].first_tb = (uintptr_t)NULL;
+            pd[i].code_bitmap = 0;
             page_unlock(&pd[i]);
         }
     } else {
@@ -706,6 +747,7 @@ static void tb_page_add(PageDesc *p, TranslationBlock *tb, unsigned int n)
     tb->page_next[n] = p->first_tb;
     page_already_protected = p->first_tb != 0;
     p->first_tb = (uintptr_t)tb | n;
+    p->code_bitmap |= tb_page_code_bitmap_mask(tb, n);
 
     /*
      * If some code is already present, then the pages are already
@@ -742,6 +784,9 @@ static void tb_page_remove(PageDesc *pd, TranslationBlock *tb)
     PAGE_FOR_EACH_TB(unused, unused, pd, tb1, n1) {
         if (tb1 == tb) {
             *pprev = tb1->page_next[n1];
+            if (!pd->first_tb) {
+                pd->code_bitmap = 0;
+            }
             return;
         }
         pprev = &tb1->page_next[n1];
@@ -1119,6 +1164,7 @@ tb_invalidate_phys_page_range__locked(CPUState *cpu,
     PageForEachNext n;
     bool current_tb_modified = false;
     TranslationBlock *current_tb = NULL;
+    uint64_t remaining_bitmap = 0;
 
     /* Range may not cross a page. */
     tcg_debug_assert(((start ^ last) & TARGET_PAGE_MASK) == 0);
@@ -1157,11 +1203,18 @@ tb_invalidate_phys_page_range__locked(CPUState *cpu,
                 cpu_restore_state_from_tb(cpu, current_tb, retaddr);
             }
             do_tb_phys_invalidate(tb, true);
+        } else if (unlikely(tb->size == 0)) {
+            remaining_bitmap = ~UINT64_C(0);
+        } else {
+            remaining_bitmap |= page_code_bitmap_mask(tb_start, tb_last);
         }
     }
 
+    p->code_bitmap = remaining_bitmap;
+
     /* if no code remaining, no need to continue to use slow writes */
     if (!p->first_tb) {
+        p->code_bitmap = 0;
         tlb_unprotect_code(start);
     }
 
@@ -1217,15 +1270,67 @@ void tb_invalidate_phys_range(CPUState *cpu, tb_page_addr_t start,
 void tb_invalidate_phys_range_fast(CPUState *cpu, ram_addr_t start,
                                    unsigned len, uintptr_t ra)
 {
-    PageDesc *p = page_find(start >> TARGET_PAGE_BITS);
+    PageDesc *p;
 
+    if (unlikely(len == 0)) {
+        return;
+    }
+
+    p = page_find(start >> TARGET_PAGE_BITS);
     if (p) {
         ram_addr_t last = start + len - 1;
-        struct page_collection *pages = page_collection_lock(start, last);
+        uint64_t mask = page_code_bitmap_mask(start, last);
+        TranslationBlock *tb;
+        PageForEachNext n;
+        bool need_invalidate = false;
 
-        tb_invalidate_phys_page_range__locked(cpu, pages, p,
-                                              start, last, ra);
-        page_collection_unlock(pages);
+        tcg_debug_assert(((start ^ last) & TARGET_PAGE_MASK) == 0);
+
+        /*
+         * Mixed code/data guest pages hit this path on every data store while
+         * any TB remains on the page.  Check the single PageDesc under its
+         * own lock first so non-overlapping stores avoid allocating a
+         * page_collection/QTree and calling tcg_tb_lookup().
+         */
+        page_lock(p);
+        if (!p->first_tb) {
+            p->code_bitmap = 0;
+            tlb_unprotect_code(start);
+            page_unlock(p);
+            return;
+        }
+        if ((p->code_bitmap & mask) == 0) {
+            page_unlock(p);
+            return;
+        }
+        PAGE_FOR_EACH_TB(start, last, p, tb, n) {
+            tb_page_addr_t tb_start, tb_last;
+
+            if (unlikely(tb->size == 0)) {
+                need_invalidate = true;
+                break;
+            }
+            tb_start = tb_page_addr0(tb);
+            tb_last = tb_start + tb->size - 1;
+            if (n == 0) {
+                tb_last = MIN(tb_last, tb_start | ~TARGET_PAGE_MASK);
+            } else {
+                tb_start = tb_page_addr1(tb);
+                tb_last = tb_start + (tb_last & ~TARGET_PAGE_MASK);
+            }
+            if (!(tb_last < start || tb_start > last)) {
+                need_invalidate = true;
+                break;
+            }
+        }
+        page_unlock(p);
+
+        if (unlikely(need_invalidate)) {
+            struct page_collection *pages = page_collection_lock(start, last);
+            tb_invalidate_phys_page_range__locked(cpu, pages, p,
+                                                  start, last, ra);
+            page_collection_unlock(pages);
+        }
     }
 }
 
