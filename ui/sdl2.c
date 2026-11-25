@@ -67,6 +67,12 @@ static int gui_fullscreen;
 static int gui_grab_code = KMOD_LALT | KMOD_LCTRL;
 static bool sdl_log_capture_enabled;
 static bool sdl_log_capture_full;
+static bool sdl_log_capture_hotkey_latched;
+static bool sdl_log_hotkey_lctrl_down;
+static bool sdl_log_hotkey_lalt_down;
+static bool sdl_log_hotkey_lshift_down;
+static bool sdl_log_hotkey_rctrl_down;
+static bool sdl_log_hotkey_l_down;
 static int sdl_log_capture_saved_stderr = -1;
 static char *sdl_log_capture_filename;
 static struct sdl2_console *sdl_log_capture_console;
@@ -596,6 +602,49 @@ static void sdl_log_capture_snapshot_result(const char *log_filename,
 
 static void sdl_toggle_log_capture(struct sdl2_console *scon);
 
+static bool sdl_log_capture_hotkey_keys_released(void)
+{
+    if (ctrl_grab) {
+        return !sdl_log_hotkey_rctrl_down && !sdl_log_hotkey_l_down;
+    } else if (alt_grab) {
+        return !sdl_log_hotkey_lctrl_down && !sdl_log_hotkey_lalt_down &&
+               !sdl_log_hotkey_lshift_down && !sdl_log_hotkey_l_down;
+    }
+    return !sdl_log_hotkey_lctrl_down && !sdl_log_hotkey_lalt_down &&
+           !sdl_log_hotkey_l_down;
+}
+
+static void sdl_log_capture_hotkey_update(SDL_KeyboardEvent *key, bool down)
+{
+    switch (key->keysym.scancode) {
+    case SDL_SCANCODE_LCTRL:
+        sdl_log_hotkey_lctrl_down = down;
+        break;
+    case SDL_SCANCODE_LALT:
+        sdl_log_hotkey_lalt_down = down;
+        break;
+    case SDL_SCANCODE_LSHIFT:
+        sdl_log_hotkey_lshift_down = down;
+        break;
+    case SDL_SCANCODE_RCTRL:
+        sdl_log_hotkey_rctrl_down = down;
+        break;
+    case SDL_SCANCODE_L:
+        sdl_log_hotkey_l_down = down;
+        break;
+    default:
+        break;
+    }
+}
+
+static void sdl_log_capture_hotkey_maybe_unlatch(void)
+{
+    if (sdl_log_capture_hotkey_latched && !sdl_log_capture_full &&
+        sdl_log_capture_hotkey_keys_released()) {
+        sdl_log_capture_hotkey_latched = false;
+    }
+}
+
 static void sdl_log_capture_timeout(void *opaque)
 {
     (void)opaque;
@@ -757,6 +806,7 @@ static void sdl_toggle_log_capture(struct sdl2_console *scon)
         }
         sdl_log_capture_enabled = false;
         sdl_log_capture_full = false;
+        sdl_log_capture_hotkey_maybe_unlatch();
         if (debug_detail && sdl_log_capture_filename) {
 #if defined(CONFIG_PNG) && defined(CONFIG_PIXMAN)
             sdl_log_capture_snapshot_result(
@@ -1111,8 +1161,12 @@ static void handle_keydown(SDL_Event *ev)
             break;
         case SDL_SCANCODE_L:
             scon->gui_keysym = true;
-            if (!sdl_log_capture_enabled || !sdl_log_capture_full) {
+            if (!sdl_log_capture_hotkey_latched &&
+                (!sdl_log_capture_enabled || !sdl_log_capture_full)) {
                 sdl_toggle_log_capture(scon);
+                if (sdl_log_capture_full) {
+                    sdl_log_capture_hotkey_latched = true;
+                }
             }
             break;
         case SDL_SCANCODE_0:
@@ -1162,6 +1216,7 @@ static void handle_keyup(SDL_Event *ev)
 
     scon->ignore_hotkeys = false;
     sdl2_process_key(scon, &ev->key);
+    sdl_log_capture_hotkey_maybe_unlatch();
 }
 
 static void handle_textinput(SDL_Event *ev)
@@ -1361,6 +1416,12 @@ static void handle_windowevent(SDL_Event *ev)
         scon->ignore_hotkeys = get_mod_state();
         break;
     case SDL_WINDOWEVENT_FOCUS_LOST:
+        sdl_log_hotkey_lctrl_down = false;
+        sdl_log_hotkey_lalt_down = false;
+        sdl_log_hotkey_lshift_down = false;
+        sdl_log_hotkey_rctrl_down = false;
+        sdl_log_hotkey_l_down = false;
+        sdl_log_capture_hotkey_maybe_unlatch();
         if (gui_grab && !gui_fullscreen) {
             sdl_grab_end(scon);
         }
@@ -1409,10 +1470,12 @@ void sdl2_poll_events(struct sdl2_console *scon)
         switch (ev->type) {
         case SDL_KEYDOWN:
             idle = 0;
+            sdl_log_capture_hotkey_update(&ev->key, true);
             handle_keydown(ev);
             break;
         case SDL_KEYUP:
             idle = 0;
+            sdl_log_capture_hotkey_update(&ev->key, false);
             handle_keyup(ev);
             break;
         case SDL_TEXTINPUT:
