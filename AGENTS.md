@@ -64,6 +64,11 @@ sections; do not restart the full-history read.
   both the branch HEAD and target blob SHA still match what you inspected. If
   either moved, abort that write, refetch, and reapply to the new content.
 - Serialize writes to `main`; coordinate task overlap through `TASKS.md`.
+- Keep implementation and documentation history separate: commit code changes
+  in an implementation commit, then put **all modified `.md` files for that
+  task into one combined documentation commit**. Never split the Markdown
+  documentation updates for a task across multiple commits. For documentation-
+  only tasks, use a single documentation commit.
 - Commit small, coherent, safe checkpoints proactively. Never knowingly push
   broken or internally inconsistent changes. Never force-push.
 - Before pausing: push the latest safe recoverable state; set the task to
