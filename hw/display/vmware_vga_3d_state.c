@@ -1350,12 +1350,62 @@ static void vmsvga3d_state_trace_matrix(
     fprintf(stderr, "\n");
 }
 
+static const char *vmsvga3d_state_trace_cube_avg_rgb(
+    const VMSVGA3DSurfaceImage *image, SVGA3dSurfaceFormat format,
+    uint32_t *red, uint32_t *green, uint32_t *blue)
+{
+    uint64_t red_sum = 0;
+    uint64_t green_sum = 0;
+    uint64_t blue_sum = 0;
+    uint64_t pixel_count;
+    uint64_t required;
+    uint32_t x;
+    uint32_t y;
+
+    /* These formats store R, G, B in the first three bytes on little-endian
+     * hosts.  Do not guess channel order for other surface formats. */
+    if (format != SVGA3D_X8R8G8B8 && format != SVGA3D_A8R8G8B8) {
+        return "unsupported-format";
+    }
+    if (image == NULL || image->data == NULL ||
+        image->size.width == 0 || image->size.height == 0 ||
+        image->pitch < (uint64_t)image->size.width * 4u) {
+        return "invalid-layout";
+    }
+
+    required = (uint64_t)image->pitch * image->size.height;
+    if (required > image->data_size) {
+        return "invalid-layout";
+    }
+
+    pixel_count = (uint64_t)image->size.width * image->size.height;
+    for (y = 0; y < image->size.height; y++) {
+        const uint8_t *row = image->data + (size_t)y * image->pitch;
+
+        for (x = 0; x < image->size.width; x++) {
+            const uint8_t *pixel = row + (size_t)x * 4u;
+
+            red_sum += pixel[0];
+            green_sum += pixel[1];
+            blue_sum += pixel[2];
+        }
+    }
+
+    *red = red_sum / pixel_count;
+    *green = green_sum / pixel_count;
+    *blue = blue_sum / pixel_count;
+    return "ok";
+}
+
 static void vmsvga3d_state_trace_cube_shadow(
     uint64_t frame, uint64_t seq, uint32_t cid, uint32_t stage,
     uint32_t sid, const VMSVGA3DSurface *surface)
 {
     uint32_t levels;
     uint32_t face;
+    static const char *const face_names[SVGA3D_MAX_SURFACE_FACES] = {
+        "+X", "-X", "+Y", "-Y", "+Z", "-Z"
+    };
     uint64_t budget = UINT64_C(2) * 1024 * 1024;
 
     if (surface == NULL ||
@@ -1366,9 +1416,10 @@ static void vmsvga3d_state_trace_cube_shadow(
     levels = surface->face[0].numMipLevels;
     fprintf(stderr,
             "VMVGA-CUBEMAP-SHADOW frame=%" PRIu64 " seq=%" PRIu64
-            " cid=%u stage=%u sid=%u levels=%u faces=%u source=cpu-shadow",
+            " cid=%u stage=%u sid=%u levels=%u faces=%u source=cpu-shadow"
+            " format=%u",
             frame, seq, cid, stage, sid, levels,
-            SVGA3D_MAX_SURFACE_FACES);
+            SVGA3D_MAX_SURFACE_FACES, (uint32_t)surface->format);
 
     for (face = 0; face < SVGA3D_MAX_SURFACE_FACES; face++) {
         uint64_t index = (uint64_t)face * levels;
@@ -1382,17 +1433,33 @@ static void vmsvga3d_state_trace_cube_shadow(
         if (image == NULL || image->data == NULL) {
             fprintf(stderr, " f%u=missing", face);
         } else if (image->data_size > budget) {
-            fprintf(stderr, " f%u=%ux%u/p%u/b%u/hash=budget",
-                    face, image->size.width, image->size.height,
-                    image->pitch, image->data_size);
+            fprintf(stderr,
+                    " f%u(%s)=%ux%u/p%u/b%u/hash=budget/avg=budget",
+                    face, face_names[face], image->size.width,
+                    image->size.height, image->pitch, image->data_size);
         } else {
+            uint32_t red, green, blue;
+            const char *avg_status =
+                vmsvga3d_state_trace_cube_avg_rgb(image, surface->format,
+                                                  &red, &green, &blue);
             uint64_t hash = vmsvga3d_state_trace_hash(image->data,
                                                        image->data_size);
+
             budget -= image->data_size;
-            fprintf(stderr,
-                    " f%u=%ux%u/p%u/b%u/hash=%016" PRIx64,
-                    face, image->size.width, image->size.height,
-                    image->pitch, image->data_size, hash);
+            if (strcmp(avg_status, "ok") == 0) {
+                fprintf(stderr,
+                        " f%u(%s)=%ux%u/p%u/b%u/avg_rgb=%u,%u,%u"
+                        "/hash=%016" PRIx64,
+                        face, face_names[face], image->size.width,
+                        image->size.height, image->pitch, image->data_size,
+                        red, green, blue, hash);
+            } else {
+                fprintf(stderr,
+                        " f%u(%s)=%ux%u/p%u/b%u/avg=%s/hash=%016" PRIx64,
+                        face, face_names[face], image->size.width,
+                        image->size.height, image->pitch, image->data_size,
+                        avg_status, hash);
+            }
         }
     }
     fprintf(stderr, "\n");
