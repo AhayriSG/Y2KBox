@@ -146,69 +146,77 @@ default is `off`):
 
 - `off`: diagnostics disabled; Ctrl+Alt+L is unavailable.
 - `simple`: compact capture with bounded samples of repetitive VMVGA events
-  and interval summaries. Explicit VMVGA warnings for malformed/unknown commands,
-  rejected operations, invalid register accesses, and allocation failures are
-  emitted independently of routine-event sampling.
-- `on`: full selected per-event VMVGA logging, preserving the detailed mode
-  used before compact capture was introduced.
+  and interval summaries. It preserves explicit warnings for malformed or
+  unknown commands, rejected operations, invalid register accesses, allocation
+  failures, stalls, and other important state changes.
+- `on`: Full logging, with the selected per-event VMVGA SYNC, fence, and
+  3D-command stream, including CPU-shadow vertex-position and UV bounds for
+  supported float vertex formats.
 
-Simple mode reduces normal repetition; it is not intended to filter warnings or
-errors. Some malformed FIFO packets are reported through the existing
-`VMVGA-FIFO-STALL` diagnostics, while routine SYNC/fence/command events remain
-sampled. This is targeted warning coverage, not a claim that every internal
-fallback or unexpected condition throughout QEMU/DXVK has a universal severity
-classification.
+Simple mode samples the first four SYNC writes/results, fence events, and
+FIFO-run-end records, plus the first eight selected 3D-command records. It also
+writes interval-scoped VMVGA flight-recorder totals when capture stops.
+The `Y2KBOX-PERF command` records retain per-command counts and timing
+measurements; sampling repetitive event lines does not discard command-level
+performance data. Simple mode is intended to reduce routine log volume, not
+to hide warnings or errors. Some malformed FIFO packets are reported through
+`VMVGA-FIFO-STALL` diagnostics.
 
-This is the command-line equivalent of the future T12 GUI's diagnostic-level
-setting.
-With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press once
-to capture general Y2KBox diagnostics—including performance counters, VMVGA,
-VMPort GuestRPC, and vdagent traces—to a new timestamped
-`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory. The VM
-continues running. Every capture interval gets its own file, and existing files
-are never overwritten. Simple captures remain manually stopped and are kept as
-plain-text `.log` files. Full captures automatically stop after two seconds
-(or earlier if Ctrl+Alt+L is pressed again), then are compressed asynchronously by a background worker to
-`.log.gz`; the original `.log` is removed only when compression succeeds.
-If compression fails, the uncompressed log is preserved. At the start of each interval,
-all `Y2KBOX-PERF` counters and timing baselines reset, so each file reports only
-work measured during that capture; the VM and guest state are not restarted.
-When debug mode is enabled but capture is inactive, the diagnostic streams
-remain disabled: no continuous VMVGA/GuestRPC logging, no vdagent trace output,
-and no routine capture start/stop messages in the command prompt. The hotkey
-is unavailable when debug mode is off. No separate `-trace "vdagent*"`
-option is needed; the hotkey enables the relevant diagnostic trace events only
-for the selected interval. Do **not** use shell-level `2> y2kbox-log.log`
-redirection with this feature: it redirects stderr before QEMU starts and
-defeats interval capture.
+With debug mode enabled, the SDL title advertises **Ctrl+Alt+L**. Press it to
+start a capture in a new timestamped
+`y2kbox-log-YYYYMMDD-HHMMSS.log` file in the launch working directory.
+Existing files are never overwritten, and the VM continues running. Each
+capture starts with fresh `Y2KBOX-PERF` counters and timing baselines; it does
+not restart the VM or guest state.
 
-**Capture verbosity:** `simple` samples the first four SYNC writes/results,
-fence events, and FIFO-run-end records, plus the first eight selected
-3D-command records. It preserves existing stall/failure/state-change
-diagnostics and fence-goal hits, and writes interval-scoped VMVGA
-flight-recorder totals when capture stops. The `Y2KBOX-PERF command` records
-retain per-command counts and timing measurements, so suppressing repetitive
-event lines does not discard command-level performance data. Use Simple mode's
-`PERF STATS` as the reference for performance analysis. Use Full mode when
-aggregate measurements are insufficient and detailed per-event correlation is
-needed.
+- **Simple capture** continues until Ctrl+Alt+L is pressed again. It remains a
+  plain-text `.log` file.
+- **Full capture** automatically stops after two seconds. Once started, it
+  cannot be manually stopped with Ctrl+Alt+L; the hotkey is not a cancel
+  command during Full capture. The SDL title indicates the active two-second
+  capture.
 
-Use `-y2kboxdebugmode on` when a coding agent needs the full selected
-per-event VMVGA SYNC, fence, and 3D-command stream, including CPU-shadow vertex-position and UV bounds for supported float vertex formats. Full captures automatically
-stop after two seconds (or earlier with Ctrl+Alt+L), and the SDL title shows
-the two-second auto-stop while one is active. After capture ends, Y2KBox
-compresses the completed log asynchronously in a background worker using zlib's maximum compression level (9) and
-saves it as `.log.gz`.
+When Full capture stops, Y2KBox attempts to save one PNG screenshot of the
+guest display surface, using the same filename as the log with a `.png`
+extension. This is a CPU-display-surface snapshot, not a sequence of frames.
+The PNG is unavailable in builds configured without libpng or Pixman, and a
+snapshot can also fail; check the log's `Y2KBOX-DIAG pixel_snapshot_result`
+record. Full logs are then compressed asynchronously by a background worker
+using zlib compression level 9 and saved as `.log.gz`. The original `.log`
+is removed only after compression succeeds; if compression fails, it is
+preserved. The PNG remains alongside the compressed log.
 
-**Performance overhead:** Recording diagnostics introduces some overhead from timestamp collection, counter updates, and diagnostic output. You may notice lower performance while a capture is active; this is expected. For meaningful performance comparisons, reproduce the same game scene with the same resolution and settings, and use comparable capture durations.
+The hotkey enables the relevant VMVGA, VMPort GuestRPC, vdagent, and
+performance diagnostics only for the selected capture interval. When debug mode
+is enabled but capture is inactive, these diagnostic streams remain disabled.
+No separate `-trace "vdagent*"` option is needed. Do **not** use shell-level
+`2> y2kbox-log.log` redirection with this feature: it redirects stderr before
+QEMU starts and defeats interval capture.
 
-**PERF STATS guidance:** For performance analysis and comparisons, use **only the `PERF STATS` from Simple logging mode** as the reference. Full logging enables substantially more diagnostic instrumentation, which can affect timing and add overhead. Therefore, **ignore `PERF STATS` from Full-mode logs** when evaluating or comparing normal emulation performance. Full-mode logs remain valuable for detailed technical investigation; their event traces, state snapshots, and other diagnostics can help identify the cause of a problem, but their performance statistics are not a benchmarking reference.
+**Performance guidance:** Recording diagnostics adds overhead from timestamp
+collection, counter updates, and diagnostic output. For performance analysis
+and comparisons, use **only `PERF STATS` from Simple mode** as the reference.
+Full mode enables substantially more instrumentation and can affect timing, so
+ignore its `PERF STATS` when evaluating normal emulation performance. Full
+logs are for detailed technical investigation—event traces and state snapshots
+can help diagnose graphics or rendering problems, but Full-mode performance
+statistics are not a benchmarking reference. For comparisons, reproduce the
+same game scene, resolution, settings, and similar capture duration.
 
-**Helping optimize games:** The `Y2KBOX-PERF` statistics in these logs can help developers investigate performance bottlenecks. If a game runs poorly, share the relevant log and describe the game, scene, resolution, settings, and reproduction steps. Developers—or an LLM-assisted coding agent—can analyze the measurements and, when necessary, add targeted profiling counters to investigate areas that the existing statistics do not cover. You do not need to modify the emulator or add instrumentation yourself.
+**Helping optimize games:** If a game runs poorly, share the Simple-mode log
+and describe the game, scene, resolution, settings, and reproduction steps.
+Developers or an LLM-assisted coding agent can analyze the measurements and
+add targeted profiling counters if the existing statistics do not cover the
+suspected bottleneck. Performance counters help locate execution cost, but
+visual glitches may require Full-mode logs, the PNG screenshot, or additional
+targeted diagnostics.
 
-Performance counters help identify where execution time is being spent, but they do not necessarily explain visual glitches. Graphics problems may require additional diagnostic traces, screenshots, or short captures.
-
-**Advanced graphics diagnostics:** Developers investigating VMware SVGA graphics issues can optionally enable `VMVGA_TRACE_DEEP_GB_UPDATE` at compile time to capture detailed successful GB-UPDATE operations. This trace is **disabled by default** because it can generate substantial logging volume. It is intended for targeted graphics investigations, not ordinary tester logging. The regular diagnostic hotkey does not require this compile-time option.
+**Advanced graphics diagnostics:** Developers investigating VMware SVGA graphics
+issues can optionally enable `VMVGA_TRACE_DEEP_GB_UPDATE` at compile time to
+capture detailed successful GB-UPDATE operations. This trace is **disabled by
+default** because it can generate substantial logging volume. It is intended
+for targeted graphics investigations, not ordinary tester logging; the regular
+diagnostic hotkey does not require it.
 
 ### Which version of QEMU is Y2KBox based on?
 
