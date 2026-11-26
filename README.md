@@ -31,8 +31,10 @@ append-only [WORKLOG.md](WORKLOG.md); never load the full archive by default.
 [CLAUDE.md](CLAUDE.md) and [GEMINI.md](GEMINI.md) are short tool-specific entrypoints.
 At handoff, append the session to the worklog and add its concise summary to the
 rolling ten-session file. The Claude Code Stop hook enforces that summary; it does
-not apply to other agents. Contributors work directly on `main`; coordinate task
-claims and serialize commits.
+not apply to other agents. External contributions should follow
+[`CONTRIBUTING.md`](CONTRIBUTING.md): submit a pull request targeting `main` and
+wait for the required CI checks and maintainer review before merging. Direct pushes
+to `main` are reserved for maintainers and explicitly owner-authorized agents.
 
 ## Fixed target
 

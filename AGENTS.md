@@ -30,8 +30,10 @@ available. On takeover, resume from the recorded task status and exact
 `Resume here:` instruction; do not repeat completed work or full onboarding
 unless the repository state is genuinely unclear. Before handing off, record
 all meaningful progress and the next action using the checkpoint procedure.
-The default owner workflow is one active agent at a time; concurrent agents
-must explicitly coordinate task claims and serialize writes to `main`.
+The default maintainer workflow is one active agent at a time; concurrent
+maintainer agents must explicitly coordinate task claims and serialize writes
+to `main`. External contributors use the branch-and-pull-request workflow in
+`CONTRIBUTING.md`; they must not push directly to `main`.
 
 ## Fresh-session onboarding (token-efficient)
 
@@ -57,13 +59,23 @@ sections; do not restart the full-history read.
 
 ## Repository workflow
 
-- Work directly on `main`. Do not create branches or pull requests unless the
-  owner explicitly changes this policy.
-- Claim a task in `TASKS.md` before starting. Follow its claim/update protocol.
-- Before every write, fetch the latest `main` and the exact target file. Verify
-  both the branch HEAD and target blob SHA still match what you inspected. If
-  either moved, abort that write, refetch, and reapply to the new content.
-- Serialize writes to `main`; coordinate task overlap through `TASKS.md`.
+- **External contributors:** use a fork or an authorized feature branch and
+  submit a pull request targeting `main`. Direct pushes to `main` are reserved
+  for repository maintainers. Follow `CONTRIBUTING.md`; do not bypass required
+  CI checks or merge your own contribution.
+- **Maintainers and owner-authorized coding agents:** may use the direct-to-`main`
+  workflow described below. This is a maintainer privilege, not a project-wide
+  restriction on branches or pull requests.
+- Claim or coordinate task ownership before starting. Maintainers and their
+  authorized agents follow the claim/update protocol in `TASKS.md`; external
+  contributors should coordinate a task claim with a maintainer rather than
+  editing the shared task queue directly.
+- For the maintainer direct-to-`main` workflow, before every write fetch the
+  latest `main` and the exact target file. Verify both the branch HEAD and target
+  blob SHA still match what you inspected. If either moved, abort that write,
+  refetch, and reapply to the new content.
+- Serialize maintainer writes to `main`; coordinate task overlap through
+  `TASKS.md`.
 - Keep implementation and documentation history separate: commit code changes
   in an implementation commit, then put **all modified `.md` files for that
   task into one combined documentation commit**. Never split the Markdown
@@ -130,9 +142,11 @@ sections; do not restart the full-history read.
 
 The Y2KBox repository owner (`AhayriSG`) may explicitly authorize AI agents to
 research, design, implement, modify, test, and document changes in this
-repository, including core features and performance optimizations. Authorized
-changes may be committed directly to Y2KBox `main`, subject to normal review,
-correctness, and verification requirements.
+repository, including core features and performance optimizations. Owner-
+authorized coding agents may use the maintainer workflow and commit directly
+to Y2KBox `main`, subject to correctness and verification requirements.
+This owner authorization does not grant ordinary external contributors direct
+write access or exempt their contributions from the pull-request workflow.
 
 This authorization applies **only** to `AhayriSG/Y2KBox`. It does not override
 upstream QEMU policy, authorize AI-generated contributions to upstream QEMU, or

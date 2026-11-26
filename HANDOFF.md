@@ -13,16 +13,19 @@ Repo: https://github.com/AhayriSG/Y2KBox , branch `main` (always keep it buildin
    `WORKLOG_INDEX.md`. Do not read this entire handoff, the entire task archive,
    or the full `WORKLOG.md` by default. Use the index to open only relevant
    historical sessions, and verify important old claims against current source
-   and current owner decisions. Claim an unclaimed task (highest priority first)
-   directly on `main` using the protocol at the top of `TASKS.md`.
+   and current owner decisions. This handoff describes the owner/maintainer
+   workflow; external contributors should follow `CONTRIBUTING.md` and submit
+   pull requests to `main`.
 2. Follow the model-specific local build policy in section 7: Gemini 4 Neon has
    standing authorization for ordinary local configure/build and standard checks;
    all other agents need explicit owner authorization. Gemini 4 Neon also has
    standing authorization for relevant, bounded benchmark/A-B work; all other
    agents need explicit authorization. Claude's configured status hook reports pushed CI/Codacy results on a later prompt; Gemini/Codex sessions must finish without polling and leave result review to the owner or a later session.
-3. Work directly on `main`, commit small, and push often. Do not create branches or
-   pull requests. Before every write, fetch the latest `main` and the exact target file;
-   verify the HEAD and file blob SHA, and abort/reapply if either has moved. Never force-push.
+3. **Owner/maintainer agent workflow:** work directly on `main`, commit small,
+   and push often. Do not create branches or pull requests for this authorized
+   maintainer workflow. Before every write, fetch the latest `main` and the exact
+   target file; verify the HEAD and file blob SHA, and abort/reapply if either has
+   moved. Never force-push. This is not the workflow for external contributors.
 4. Checkpoint proactively; do not wait until the execution budget is nearly exhausted.
    Push a coherent, safe, recoverable state directly to `main` (never knowingly push
    broken or internally inconsistent changes), then update `TASKS.md` with the current
@@ -814,7 +817,7 @@ Shader and post-processing integration
 
 ### 1. Session Handoff Protocol (Before Budget Ends)
 * **Never leave `main` broken.**
-* **Code & State:** Commit and push the current safe state directly to `main` (no branches, PRs, or force-pushes). The normal workflow is one active agent at a time with serialized writes. Before every write, fetch the latest `main` and the exact target file; verify both the branch HEAD and target blob SHA still match what was inspected. If either moved, abort, refetch, and reapply to the new content. Do not use a blind fetch/rebase as a substitute for this check. Use `git revert` for reverting commits rather than whole-file restores; verify file identity before shell-based edits.
+* **Code & State (owner/maintainer agents):** Commit and push the current safe state directly to `main`; this is the owner's authorized maintainer workflow, not the contributor policy. External contributors use feature branches and pull requests as described in `CONTRIBUTING.md`. Never force-push. For direct maintainer writes, fetch the latest `main` and the exact target file before every write; verify both the branch HEAD and target blob SHA still match what was inspected. If either moved, abort, refetch, and reapply to the new content. Do not use a blind fetch/rebase as a substitute for this check. Use `git revert` for reverting commits rather than whole-file restores; verify file identity before shell-based edits.
 * **TASKS.md:** Update status to `PAUSED` and add a "Resume here:" note.
 * **WORKLOG.md:** Append what you did, evidence (numbers, commands), and what broke.
   Keep it as the complete historical record; never prune old sessions.

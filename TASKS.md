@@ -1,17 +1,21 @@
 # Y2KBox task queue
 
-Different coding agents may take over sequentially; this shared task queue is the handoff point. Concurrent contributors are supported only when deliberately coordinated. **Claim an agent task before starting**:
+Different coding agents may take over sequentially; this shared task queue is the handoff point. Concurrent maintainer work must be deliberately coordinated.
+
+**External contributors:** coordinate with a maintainer before taking a tracked task. Submit the work through a pull request targeting `main`; do not push directly to `main` or edit the shared task queue without maintainer coordination. See `CONTRIBUTING.md`.
+
+**Maintainers and owner-authorized coding agents:** use the following direct-to-`main` task-claim workflow:
 
 1. Fetch the latest `main` and re-read this file before choosing work.
 2. Edit the task's `Status` to `CLAIMED by <name/session> <date>` in this file,
-   then commit and push directly to `main`. If another contributor moves `main`
+   then commit and push directly to `main`. If another maintainer moves `main`
    first, stop, fetch the new HEAD, re-read the queue, and coordinate before proceeding.
-3. Work directly on `main`; do not create branches or pull requests. Before every
-   write, fetch the latest `main` and the exact file being changed. Verify that both
-   the branch HEAD and file blob SHA still match what you inspected; if either moved,
-   abort that write, fetch again, and reapply the change to the new content. Commit
-   and push small, coherent increments. Never force-push. Keep `main` building.
-   (HANDOFF.md section 7: Gemini 4 Neon may perform ordinary local builds and
+3. Work directly on `main`. Before every write, fetch the latest `main` and the
+   exact file being changed. Verify that both the branch HEAD and file blob SHA
+   still match what you inspected; if either moved, abort that write, fetch again,
+   and reapply the change to the new content. Commit and push small, coherent
+   increments. Never force-push. Keep `main` building.
+   (AGENTS.md / HANDOFF.md: Gemini 4 Neon may perform ordinary local builds and
    relevant, bounded benchmarks/A-B; other agents need explicit authorization.
    Do not poll CI.)
 4. When done: set `Status: DONE <date> (commit <hash>)`, add the evidence and
