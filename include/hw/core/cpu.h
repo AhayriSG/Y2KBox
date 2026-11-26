@@ -305,13 +305,21 @@ typedef struct CPUTLBDesc {
     CPUTLBEntryFull vfulltlb[CPU_VTLB_SIZE];
     CPUTLBEntryFull *fulltlb;
     /*
+     * Exact 2 MiB-granularity large-page bitmap for [0, 4 GiB) (x86 PSE 4 MiB
+     * and PAE 2 MiB pages).  Prevents large_page_addr/mask from widening over
+     * the entire kernel VA space and turning 4 KiB INVLPGs into full flushes.
+     * Non-2M/4M or >= 4 GiB large pages fall back to large_page_addr/mask.
+     */
+    uint32_t large_page_2m_dirty;
+    uint64_t large_page_2m_bitmap[32];
+    /*
      * Dirty-slot tracking for fast->table so flushes on mostly-empty large
      * dynamic TLBs avoid memsetting the entire table.  Protected by tlb.c.lock.
      */
     uint64_t dirty_chunks;
     uint32_t dirty_count;
     uint8_t dirty_chunk_shift;
-    uint32_t dirty_indices[64];
+    uint32_t dirty_indices[512];
 } CPUTLBDesc;
 
 /*

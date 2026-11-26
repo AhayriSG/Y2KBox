@@ -94,6 +94,12 @@ QEMU_BUILD_BUG_ON(sizeof(vaddr) > sizeof(run_on_cpu_data));
 
 #define ALL_MMUIDX_BITS ((1 << NB_MMU_MODES) - 1)
 
+/* Exact 2 MiB-granularity large-page tracking for 32-bit guest VA [0, 4 GiB). */
+#define TLB_LP2M_SHIFT  21
+#define TLB_LP2M_SIZE   (UINT64_C(1) << TLB_LP2M_SHIFT)
+#define TLB_LP4M_SIZE   (UINT64_C(1) << (TLB_LP2M_SHIFT + 1))
+#define TLB_LP2M_LIMIT  (UINT64_C(1) << 32)
+
 static inline size_t tlb_n_entries(CPUTLBDescFast *fast)
 {
     return (fast->mask >> CPU_TLB_ENTRY_BITS) + 1;
@@ -298,10 +304,20 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
     desc->n_used_entries = 0;
     desc->large_page_addr = -1;
     desc->large_page_mask = -1;
+    if (desc->large_page_2m_dirty != 0) {
+        uint32_t dirty = desc->large_page_2m_dirty;
+
+        while (dirty != 0) {
+            unsigned word = ctz32(dirty);
+            desc->large_page_2m_bitmap[word] = 0;
+            dirty &= dirty - 1;
+        }
+        desc->large_page_2m_dirty = 0;
+    }
 
     if (desc->dirty_chunks != 0) {
         if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices) &&
-            (size_t)desc->dirty_count * 16 < n_entries) {
+            (size_t)desc->dirty_count * 8 < n_entries) {
             uint32_t i;
 
             for (i = 0; i < desc->dirty_count; i++) {
@@ -375,9 +391,19 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
     }
 
     if (desc->vindex != 0) {
-        size_t vcount = MIN(desc->vindex, (size_t)CPU_VTLB_SIZE);
+        /*
+         * Use compile-time constant sizes so the compiler inlines SIMD stores
+         * instead of emitting a runtime-sized library call to ntdll!memset.
+         */
+        if (desc->vindex >= CPU_VTLB_SIZE) {
+            memset(desc->vtable, -1, sizeof(desc->vtable));
+        } else {
+            size_t i;
 
-        memset(desc->vtable, -1, vcount * sizeof(CPUTLBEntry));
+            for (i = 0; i < desc->vindex; i++) {
+                memset(&desc->vtable[i], -1, sizeof(CPUTLBEntry));
+            }
+        }
         desc->vindex = 0;
     }
 }
@@ -390,6 +416,7 @@ static void tlb_flush_one_mmuidx_locked(CPUState *cpu, int mmu_idx,
 
     tlb_mmu_resize_locked(desc, fast, now);
     tlb_mmu_flush_locked(desc, fast);
+    cpu->neg.tlb.c.dirty &= ~(MMUIdxMap)(1u << mmu_idx);
 }
 
 static void tlb_mmu_init(CPUTLBDesc *desc, CPUTLBDescFast *fast, int64_t now)
@@ -398,6 +425,8 @@ static void tlb_mmu_init(CPUTLBDesc *desc, CPUTLBDescFast *fast, int64_t now)
 
     tlb_window_reset(desc, now, 0);
     desc->n_used_entries = 0;
+    desc->large_page_2m_dirty = 0;
+    memset(desc->large_page_2m_bitmap, 0, sizeof(desc->large_page_2m_bitmap));
     fast->mask = (n_entries - 1) << CPU_TLB_ENTRY_BITS;
     fast->table = g_new(CPUTLBEntry, n_entries);
     desc->fulltlb = g_new(CPUTLBEntryFull, n_entries);
@@ -583,10 +612,11 @@ static void tlb_flush_vtlb_page_mask_locked(CPUState *cpu, int mmu_idx,
                                             vaddr mask)
 {
     CPUTLBDesc *d = &cpu->neg.tlb.d[mmu_idx];
-    int k;
+    size_t k, n;
 
     assert_cpu_is_self(cpu);
-    for (k = 0; k < CPU_VTLB_SIZE; k++) {
+    n = MIN(d->vindex, (size_t)CPU_VTLB_SIZE);
+    for (k = 0; k < n; k++) {
         if (tlb_flush_entry_mask_locked(&d->vtable[k], page, mask)) {
             tlb_n_used_entries_dec(cpu, mmu_idx);
         }
@@ -599,16 +629,86 @@ static inline void tlb_flush_vtlb_page_locked(CPUState *cpu, int mmu_idx,
     tlb_flush_vtlb_page_mask_locked(cpu, mmu_idx, page, -1);
 }
 
+static inline bool tlb_has_large_page_at_locked(const CPUTLBDesc *desc,
+                                                vaddr page)
+{
+    if ((page & desc->large_page_mask) == desc->large_page_addr) {
+        return true;
+    }
+    if (desc->large_page_2m_dirty != 0 && (uint64_t)page < TLB_LP2M_LIMIT) {
+        uint32_t slot = (uint32_t)(page >> TLB_LP2M_SHIFT);
+        uint32_t word = slot >> 6;
+
+        if ((desc->large_page_2m_dirty & (UINT32_C(1) << word)) != 0 &&
+            (desc->large_page_2m_bitmap[word] &
+             (UINT64_C(1) << (slot & 63))) != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool tlb_has_large_page_in_range_locked(const CPUTLBDesc *desc,
+                                               vaddr addr, vaddr len,
+                                               unsigned bits)
+{
+    if (len == 0) {
+        return false;
+    }
+    if (((addr + len - 1) & desc->large_page_mask) == desc->large_page_addr) {
+        return true;
+    }
+    if (desc->large_page_2m_dirty == 0) {
+        return false;
+    }
+    if (bits < 64) {
+        return true;
+    }
+    if ((uint64_t)addr >= TLB_LP2M_LIMIT) {
+        return (uint64_t)addr + (uint64_t)len - 1 < (uint64_t)addr;
+    }
+    {
+        uint64_t end = (uint64_t)addr + (uint64_t)len - 1;
+        uint32_t first_slot, last_slot, first_word, last_word, w;
+
+        if (end < (uint64_t)addr) {
+            return true;
+        }
+        if (end >= TLB_LP2M_LIMIT) {
+            end = TLB_LP2M_LIMIT - 1;
+        }
+        first_slot = (uint32_t)(addr >> TLB_LP2M_SHIFT);
+        last_slot = (uint32_t)(end >> TLB_LP2M_SHIFT);
+        first_word = first_slot >> 6;
+        last_word = last_slot >> 6;
+
+        for (w = first_word; w <= last_word; w++) {
+            unsigned lo, hi;
+            uint64_t bitmask;
+
+            if ((desc->large_page_2m_dirty & (UINT32_C(1) << w)) == 0) {
+                continue;
+            }
+            lo = (w == first_word) ? (first_slot & 63) : 0;
+            hi = (w == last_word) ? (last_slot & 63) : 63;
+            bitmask = (~UINT64_C(0) << lo) & (~UINT64_C(0) >> (63 - hi));
+            if ((desc->large_page_2m_bitmap[w] & bitmask) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void tlb_flush_page_locked(CPUState *cpu, int midx, vaddr page)
 {
-    vaddr lp_addr = cpu->neg.tlb.d[midx].large_page_addr;
-    vaddr lp_mask = cpu->neg.tlb.d[midx].large_page_mask;
+    CPUTLBDesc *desc = &cpu->neg.tlb.d[midx];
 
     /* Check if we need to flush due to large pages.  */
-    if ((page & lp_mask) == lp_addr) {
+    if (tlb_has_large_page_at_locked(desc, page)) {
         tlb_debug("forcing full flush midx %d (%016"
                   VADDR_PRIx "/%016" VADDR_PRIx ")\n",
-                  midx, lp_addr, lp_mask);
+                  midx, desc->large_page_addr, desc->large_page_mask);
         tlb_flush_one_mmuidx_locked(cpu, midx, get_clock_realtime());
     } else {
         if (tlb_flush_entry_locked(tlb_entry(cpu, midx, page), page)) {
@@ -631,17 +731,15 @@ static void tlb_flush_page_by_mmuidx_async_0(CPUState *cpu,
                                              vaddr addr,
                                              MMUIdxMap idxmap)
 {
-    int mmu_idx;
+    MMUIdxMap work;
 
     assert_cpu_is_self(cpu);
 
     tlb_debug("page addr: %016" VADDR_PRIx " mmu_map:0x%x\n", addr, idxmap);
 
     qemu_spin_lock(&cpu->neg.tlb.c.lock);
-    for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
-        if ((idxmap >> mmu_idx) & 1) {
-            tlb_flush_page_locked(cpu, mmu_idx, addr);
-        }
+    for (work = idxmap & cpu->neg.tlb.c.dirty; work != 0; work &= work - 1) {
+        tlb_flush_page_locked(cpu, ctz32(work), addr);
     }
     qemu_spin_unlock(&cpu->neg.tlb.c.lock);
 
@@ -788,10 +886,8 @@ static void tlb_flush_range_locked(CPUState *cpu, int midx,
 
     /*
      * Check if we need to flush due to large pages.
-     * Because large_page_mask contains all 1's from the msb,
-     * we only need to test the end of the range.
      */
-    if (((addr + len - 1) & d->large_page_mask) == d->large_page_addr) {
+    if (tlb_has_large_page_in_range_locked(d, addr, len, bits)) {
         tlb_debug("forcing full flush midx %d ("
                   "%016" VADDR_PRIx "/%016" VADDR_PRIx ")\n",
                   midx, d->large_page_addr, d->large_page_mask);
@@ -820,7 +916,7 @@ typedef struct {
 static void tlb_flush_range_by_mmuidx_async_0(CPUState *cpu,
                                               TLBFlushRangeData d)
 {
-    int mmu_idx;
+    MMUIdxMap work;
 
     assert_cpu_is_self(cpu);
 
@@ -828,10 +924,8 @@ static void tlb_flush_range_by_mmuidx_async_0(CPUState *cpu,
               d.addr, d.bits, d.len, d.idxmap);
 
     qemu_spin_lock(&cpu->neg.tlb.c.lock);
-    for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
-        if ((d.idxmap >> mmu_idx) & 1) {
-            tlb_flush_range_locked(cpu, mmu_idx, d.addr, d.len, d.bits);
-        }
+    for (work = d.idxmap & cpu->neg.tlb.c.dirty; work != 0; work &= work - 1) {
+        tlb_flush_range_locked(cpu, ctz32(work), d.addr, d.len, d.bits);
     }
     qemu_spin_unlock(&cpu->neg.tlb.c.lock);
 
@@ -1079,8 +1173,30 @@ static void tlb_set_dirty(CPUState *cpu, vaddr addr)
 static void tlb_add_large_page(CPUState *cpu, int mmu_idx,
                                vaddr addr, uint64_t size)
 {
-    vaddr lp_addr = cpu->neg.tlb.d[mmu_idx].large_page_addr;
-    vaddr lp_mask = ~(size - 1);
+    CPUTLBDesc *desc = &cpu->neg.tlb.d[mmu_idx];
+    vaddr lp_addr, lp_mask;
+
+    if ((uint64_t)addr < TLB_LP2M_LIMIT) {
+        if (size == TLB_LP2M_SIZE) {
+            uint32_t slot = (uint32_t)(addr >> TLB_LP2M_SHIFT);
+            uint32_t word = slot >> 6;
+
+            desc->large_page_2m_bitmap[word] |= UINT64_C(1) << (slot & 63);
+            desc->large_page_2m_dirty |= UINT32_C(1) << word;
+            return;
+        }
+        if (size == TLB_LP4M_SIZE) {
+            uint32_t slot = (uint32_t)((addr >> TLB_LP2M_SHIFT) & ~UINT32_C(1));
+            uint32_t word = slot >> 6;
+
+            desc->large_page_2m_bitmap[word] |= UINT64_C(3) << (slot & 63);
+            desc->large_page_2m_dirty |= UINT32_C(1) << word;
+            return;
+        }
+    }
+
+    lp_addr = desc->large_page_addr;
+    lp_mask = ~(size - 1);
 
     if (lp_addr == (vaddr)-1) {
         /* No previous large page.  */
@@ -1089,13 +1205,13 @@ static void tlb_add_large_page(CPUState *cpu, int mmu_idx,
         /* Extend the existing region to include the new page.
            This is a compromise between unnecessary flushes and
            the cost of maintaining a full variable size TLB.  */
-        lp_mask &= cpu->neg.tlb.d[mmu_idx].large_page_mask;
+        lp_mask &= desc->large_page_mask;
         while (((lp_addr ^ addr) & lp_mask) != 0) {
             lp_mask <<= 1;
         }
     }
-    cpu->neg.tlb.d[mmu_idx].large_page_addr = lp_addr & lp_mask;
-    cpu->neg.tlb.d[mmu_idx].large_page_mask = lp_mask;
+    desc->large_page_addr = lp_addr & lp_mask;
+    desc->large_page_mask = lp_mask;
 }
 
 static inline void tlb_set_compare(CPUTLBEntryFull *full, CPUTLBEntry *ent,
@@ -1416,10 +1532,11 @@ static void io_failed(CPUState *cpu, CPUTLBEntryFull *full, vaddr addr,
 static bool victim_tlb_hit(CPUState *cpu, size_t mmu_idx, size_t index,
                            MMUAccessType access_type, vaddr page)
 {
-    size_t vidx;
+    size_t vidx, n;
 
     assert_cpu_is_self(cpu);
-    for (vidx = 0; vidx < CPU_VTLB_SIZE; ++vidx) {
+    n = MIN(cpu->neg.tlb.d[mmu_idx].vindex, (size_t)CPU_VTLB_SIZE);
+    for (vidx = 0; vidx < n; ++vidx) {
         CPUTLBEntry *vtlb = &cpu->neg.tlb.d[mmu_idx].vtable[vidx];
         uint64_t cmp = tlb_read_idx(vtlb, access_type);
 

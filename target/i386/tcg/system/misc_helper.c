@@ -520,7 +520,13 @@ void HELPER(rdmsr)(CPUX86State *env)
 
 void HELPER(flush_page)(CPUX86State *env, target_ulong addr)
 {
-    tlb_flush_page(env_cpu(env), addr);
+    const MMUIdxMap idxmap =
+        (1u << MMU_KSMAP64_IDX) | (1u << MMU_KSMAP32_IDX) |
+        (1u << MMU_USER64_IDX) | (1u << MMU_USER32_IDX) |
+        (1u << MMU_KNOSMAP64_IDX) | (1u << MMU_KNOSMAP32_IDX) |
+        (1u << MMU_NESTED_IDX);
+
+    tlb_flush_page_by_mmuidx(env_cpu(env), addr, idxmap);
 }
 
 G_NORETURN void HELPER(hlt)(CPUX86State *env)
