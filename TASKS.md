@@ -180,26 +180,31 @@ Repo: https://github.com/qemus/qemu-vmvga (GPL-2.0-or-later, 44-file overlay for
     vs `#GP` on `0x565A`) and Linux/Windows CI checks (`-vga help`, `-device help`, `vmport_ring3_test.asm`).
 * **Completion:** no further T09 integration work is pending. The owner-run validation checklist above is the separate place to record ongoing XP driver, display/2D, D3D API, and game-compatibility observations. Do not repeat completed integration/build checks unless the source changes.
 
-## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows — 🟡 PAUSED
-**Status:** PAUSED (integration committed; owner-run guest validation pending)
+## T10 (P2) 3D host backend: Linux (DXVK-native + Vulkan) and Windows — 🟡 IN PROGRESS
+**Status:** IN PROGRESS (integration committed and CI-verified; Windows owner gameplay validation accepted; Linux owner-run guest validation remains)
 qemu-vmvga renders SVGA3D through DXVK (README: Vulkan-capable GPU + `dxvk-native` on the host).
-* **Integration implemented and CI-verified;** live guest rendering and API compatibility require the owner-run XP guest validation note above.
+* **Integration implemented and CI-verified.**
   * **Linux:** `vmware_vga_dxvk_wsi.c` synthesizes a sealed-memfd `libSDL2-2.0.so.0` WSI shim (`"SDL2"`),
     or `libSDL3.so.0` (`"SDL3"`) implementing the 21 `wsi_platform_sdl3_funcs.h` symbols when QEMU has
     already loaded SDL2 (`--enable-sdl`). `vmware_vga_dxvk.c` searches `<exec_dir>/`, `<exec_dir>/lib/`,
     then system paths, pre-loading `libdxvk_dxgi.so.0` (`RTLD_GLOBAL`). CI installs `libvulkan1` +
     `mesa-vulkan-drivers` (lavapipe), packages `dxvk-native` 3.1.1 `.so.0` libs into `dist/`, and runs
     a headless 3D smoke check (`Y2KBOX_3D_HEADLESS=1` with `lvp_icd.x86_64.json`).
-  * **Windows (`CONFIG_WIN32`):** Uses a hidden `WS_POPUP | WS_DISABLED` `"STATIC"` `HWND` in
+  * **Windows (`CONFIG_WIN32`) — owner-validated:** Uses a hidden `WS_POPUP | WS_DISABLED` `"STATIC"` `HWND` in
     `vmware_vga_dxvk_wsi.c` (`"Win32"`) and `LoadLibraryA`/`GetProcAddress`/`FreeLibrary` on `"d3d9.dll"` /
     `"d3d11.dll"` (supporting inbox Windows Direct3D with `D3D_DRIVER_TYPE_WARP` fallback on D3D11, as
-    well as optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`).
+    well as optional DXVK Windows DLLs placed beside `qemu-system-i386.exe`). Repeated owner-run Windows XP
+    game testing and feedback provide practical validation that the Windows vGPU path renders and supports
+    real guest workloads. This accepts the Windows host portion of T10; it is not a claim of universal
+    compatibility with every game or driver.
+  * **Linux — remaining owner validation:** CI's lavapipe headless smoke check verifies the headless integration
+    path, but does not establish live Linux-host guest rendering or game compatibility. Run an owner XP guest
+    test on a Linux host before closing T10.
   * **Headless benchmark safety:** `vmsvga3d_renderer_realize()` skips DXVK/D3D init under `-display none`
     (via `display_backend_active` in `system/vl.c`) unless Y2KBox debug mode (`-y2kboxdebugmode on`) or `Y2KBOX_3D_HEADLESS` is set,
     preserving empty `stderr` and zero overhead in non-3D CI benchmarks.
-* **Resume here:** use the owner-run XP guest validation note above for live guest rendering and D3D API checks. CI's
-  headless smoke check does not prove Windows-host visual correctness or game compatibility;
-  render-thread pinning remains T14.
+* **Remaining work:** owner-run Linux-host XP guest validation. Windows owner gameplay validation is accepted;
+  render-thread pinning remains separately tracked under T14.
 
 ## T16 (P3, frozen alternative) VBoxVGA 5.2.x path — 🔴 TODO
 **Status:** TODO (not planned; kept as fallback)
