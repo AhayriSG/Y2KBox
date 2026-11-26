@@ -298,7 +298,6 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
     desc->n_used_entries = 0;
     desc->large_page_addr = -1;
     desc->large_page_mask = -1;
-    desc->vindex = 0;
 
     if (desc->dirty_chunks != 0) {
         if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices) &&
@@ -313,34 +312,74 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
             memset(fast->table, -1, sizeof_tlb(fast));
         } else {
             uint64_t chunks = desc->dirty_chunks;
-            size_t chunk_entries = (size_t)1 << desc->dirty_chunk_shift;
+            uint8_t shift = desc->dirty_chunk_shift;
+            unsigned first_bit = ctz64(chunks);
+            unsigned last_bit = 63 - clz64(chunks);
+            size_t span_start = (size_t)first_bit << shift;
+            size_t span_end = ((size_t)last_bit + 1) << shift;
 
-            while (chunks != 0) {
-                unsigned start_bit = ctz64(chunks);
-                uint64_t shifted = chunks >> start_bit;
-                unsigned run = (shifted == ~UINT64_C(0))
-                                   ? (64 - start_bit)
-                                   : ctz64(~shifted);
-                size_t start_idx = (size_t)start_bit << desc->dirty_chunk_shift;
-                size_t count = (size_t)run * chunk_entries;
+            if (span_end > n_entries) {
+                span_end = n_entries;
+            }
 
-                if (start_idx < n_entries) {
-                    if (count > n_entries - start_idx) {
-                        count = n_entries - start_idx;
+            /*
+             * On L1-resident TLBs (<= 1024 entries / 32 KiB) or densely dirty
+             * tables, issuing many runtime-sized memset() calls regresses
+             * heavily (especially on Windows ntdll!memset due to call/ERMS
+             * startup overhead). Use a single bounding-span memset() there,
+             * and only clear coalesced runs on larger tables when sparse.
+             */
+            if (n_entries <= 1024 || ctpop64(chunks) >= 40) {
+                if (span_start < span_end) {
+                    memset(&fast->table[span_start], -1,
+                           (span_end - span_start) * sizeof(CPUTLBEntry));
+                }
+            } else {
+                uint64_t coalesced = chunks | ((chunks >> 1) & (chunks << 1));
+                unsigned n_runs = ctpop64(coalesced & ~(coalesced << 1));
+
+                if (n_runs > 8 || ctpop64(coalesced) >= 44) {
+                    if (span_start < span_end) {
+                        memset(&fast->table[span_start], -1,
+                               (span_end - span_start) * sizeof(CPUTLBEntry));
                     }
-                    memset(&fast->table[start_idx], -1,
-                           count * sizeof(CPUTLBEntry));
+                } else {
+                    size_t chunk_entries = (size_t)1 << shift;
+
+                    while (coalesced != 0) {
+                        unsigned start_bit = ctz64(coalesced);
+                        uint64_t shifted = coalesced >> start_bit;
+                        unsigned run = (shifted == ~UINT64_C(0))
+                                           ? (64 - start_bit)
+                                           : ctz64(~shifted);
+                        size_t start_idx = (size_t)start_bit << shift;
+                        size_t count = (size_t)run * chunk_entries;
+
+                        if (start_idx < n_entries) {
+                            if (count > n_entries - start_idx) {
+                                count = n_entries - start_idx;
+                            }
+                            memset(&fast->table[start_idx], -1,
+                                   count * sizeof(CPUTLBEntry));
+                        }
+                        if (start_bit + run >= 64) {
+                            break;
+                        }
+                        coalesced &= ~(((UINT64_C(1) << run) - 1) << start_bit);
+                    }
                 }
-                if (start_bit + run >= 64) {
-                    break;
-                }
-                chunks &= ~(((UINT64_C(1) << run) - 1) << start_bit);
             }
         }
+        desc->dirty_count = 0;
+        desc->dirty_chunks = 0;
     }
-    desc->dirty_count = 0;
-    desc->dirty_chunks = 0;
-    memset(desc->vtable, -1, sizeof(desc->vtable));
+
+    if (desc->vindex != 0) {
+        size_t vcount = MIN(desc->vindex, (size_t)CPU_VTLB_SIZE);
+
+        memset(desc->vtable, -1, vcount * sizeof(CPUTLBEntry));
+        desc->vindex = 0;
+    }
 }
 
 static void tlb_flush_one_mmuidx_locked(CPUState *cpu, int mmu_idx,
@@ -365,6 +404,7 @@ static void tlb_mmu_init(CPUTLBDesc *desc, CPUTLBDescFast *fast, int64_t now)
     desc->dirty_chunk_shift = ctz64(n_entries) > 6 ? (uint8_t)(ctz64(n_entries) - 6) : 0;
     desc->dirty_chunks = ~UINT64_C(0);
     desc->dirty_count = ARRAY_SIZE(desc->dirty_indices);
+    desc->vindex = CPU_VTLB_SIZE;
     tlb_mmu_flush_locked(desc, fast);
 }
 
@@ -1191,8 +1231,10 @@ void tlb_set_page_full(CPUState *cpu, int mmu_idx,
      * different page; otherwise just overwrite the stale data.
      */
     if (!tlb_hit_page_anyprot(te, addr_page) && !tlb_entry_is_empty(te)) {
-        unsigned vidx = desc->vindex++ % CPU_VTLB_SIZE;
+        unsigned vidx = desc->vindex % CPU_VTLB_SIZE;
         CPUTLBEntry *tv = &desc->vtable[vidx];
+        size_t next_vindex = desc->vindex + 1;
+        desc->vindex = (next_vindex == 0) ? CPU_VTLB_SIZE : next_vindex;
 
         /* Evict the old entry into the victim tlb.  */
         copy_tlb_helper_locked(tv, te);
