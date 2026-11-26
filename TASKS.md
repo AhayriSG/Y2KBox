@@ -621,3 +621,14 @@ Investigate and add capture-gated diagnostics at the guest virtual-GPU protocol 
 * Keep high-volume records restricted to Full mode (-y2kboxdebugmode on) during an active Ctrl+Alt+L capture. Preserve off, simple, inactive/default-off behavior and rendering behavior. Reuse existing diagnostic infrastructure and avoid adding dependencies.
 * The host can observe protocol traffic and device interactions, not the guest driver's private internal decisions or source-level call paths. Do not claim direct guest-driver introspection; do not scan guest memory or require guest-side instrumentation as part of the initial scope.
 * **DoD:** an owner-run Windows XP capture demonstrates actionable guest-driver/protocol behavior that was not already available from T19/T26 records, with useful correlation to host-side handling where possible. Document remaining observability limits. Linux/Windows build and CI validation required for implementation completion.
+
+## T29 (P3) Research targeted guest-state inspection for graphics diagnostics — 🔴 TODO
+**Status:** TODO (parked; blocked until T28 is implemented and evaluated)
+
+Investigate whether narrowly scoped guest-state inspection could answer a concrete graphics-driver diagnostic question that remains unresolved after T28's protocol-level diagnostics are implemented and reviewed. This is a conditional research task, not approval to build a general-purpose guest-memory scanner.
+
+* **Dependency / start condition:** Do not start until T28 is implemented and its protocol-level capture has been evaluated. Begin only if that evaluation identifies a specific, actionable diagnostic gap that cannot reasonably be answered from the observable SVGA protocol or existing T19/T26 records.
+* Initially document the unanswered question, the exact guest state that might resolve it, and a minimal feasibility approach. If no concrete gap exists, leave T29 parked or close it as unnecessary.
+* Any proposed inspection must be targeted, read-only, bounded, and capture-gated. Do not dump arbitrary guest memory, scan broadly for signatures, or collect unrelated guest/application data. Do not attempt to recover proprietary driver source or reconstruct its private implementation.
+* Research only; no implementation is authorized by this task. Any implementation proposal requires a separate review and explicit owner approval, with scope, safeguards, compatibility impact, and validation plan stated first.
+* **DoD:** provide evidence of a specific T28 observability gap, assess whether targeted guest-state inspection can answer it safely and reliably, and recommend either a narrowly scoped follow-up or no further work. Do not proceed to implementation without approval.
