@@ -31,7 +31,7 @@ You don't need to be an emulator developer to help improve Y2KBox. If you have a
 **The basic workflow is simple:**
 
 1. Connect this repository to an AI coding agent with your GitHub account linked.
-2. Reproduce the issue in your game and capture a **3-second Full Mode log**. This also automatically generates a `.png` screenshot. Full Mode is for detailed diagnostics; **tell the AI agent to ignore its PERFSTATS when evaluating performance**.
+2. Reproduce the issue in your game and capture a **2-second Full Mode log**. This also automatically generates a `.png` screenshot. Full Mode is for detailed diagnostics; **tell the AI agent to ignore its PERFSTATS when evaluating performance**.
 3. Run the exact same scene again with **Simple Mode logging** to capture the authoritative performance statistics (PERFSTATS). Use this capture for FPS and performance comparisons.
 4. Give the AI agent both logs and the screenshot. Describe the problem clearly, including what you expected to happen and what actually happened.
 5. If you know whether the same issue occurs in VMware, mention that too. This can help identify a potential guest SVGA driver issue.
