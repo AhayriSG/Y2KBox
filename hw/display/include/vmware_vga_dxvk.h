@@ -659,6 +659,12 @@ bool vmsvga3d_dxvk_surface_buffer_fully_inflight(
     const VMSVGA3DDxvkSurface *surface);
 bool vmsvga3d_dxvk_surface_defer_buffer_range(
     VMSVGA3DDxvkSurface *surface, uint32_t offset, uint32_t size);
+bool vmsvga3d_dxvk_surface_wants_bounded_draw_flush(
+    const VMSVGA3DDxvkSurface *surface);
+bool vmsvga3d_dxvk_surface_flush_buffer_range_bounded(
+    VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
+    const void *data, uint32_t data_size, bool discard_full_range,
+    VMSVGA3DDxvkBufferFlushReason reason, uint32_t max_needed_end);
 bool vmsvga3d_dxvk_surface_flush_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
     const void *data, uint32_t data_size, bool discard_full_range,

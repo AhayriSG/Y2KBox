@@ -3777,9 +3777,9 @@ static bool vmsvga3d_dxvk_materialize_texture(struct vmsvga_state_s *s,
         s, surface, VMSVGA3D_D3D9_RESOURCE_USE_TEXTURE, true);
 }
 
-static bool vmsvga3d_dxvk_materialize_buffer(
+static bool vmsvga3d_dxvk_materialize_buffer_bounded(
     struct vmsvga_state_s *s, VMSVGA3DSurface *surface,
-    VMSVGA3DD3D9ResourceUse use, uint32_t index_width)
+    VMSVGA3DD3D9ResourceUse use, uint32_t index_width, uint32_t max_needed_end)
 {
     VMSVGA3DD3D9SurfaceInfo info = { 0 };
     VMSVGA3DD3D9ResourceCaps caps = { 0 };
@@ -3816,13 +3816,13 @@ static bool vmsvga3d_dxvk_materialize_buffer(
          * Flush the coalesced dirty span immediately before this draw binds
          * the resident D3D9 buffer; until this point the native copy is stale.
          */
-        if (!vmsvga3d_dxvk_surface_flush_buffer_range(
+        if (!vmsvga3d_dxvk_surface_flush_buffer_range_bounded(
                 s->dxvk, surface->dxvk_surface,
                 surface->mip_count == 1 && surface->mips != NULL
                     ? surface->mips[0].data : NULL,
                 surface->mip_count == 1 && surface->mips != NULL
                     ? surface->mips[0].data_size : 0, true,
-                VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW)) {
+                VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW, max_needed_end)) {
             return false;
         }
         return true;
@@ -3890,6 +3890,14 @@ static bool vmsvga3d_dxvk_materialize_buffer(
     }
 
     return true;
+}
+
+static bool vmsvga3d_dxvk_materialize_buffer(
+    struct vmsvga_state_s *s, VMSVGA3DSurface *surface,
+    VMSVGA3DD3D9ResourceUse use, uint32_t index_width)
+{
+    return vmsvga3d_dxvk_materialize_buffer_bounded(
+        s, surface, use, index_width, UINT32_MAX);
 }
 
 static bool vmsvga3d_dxvk_surface_level_index(
@@ -5463,6 +5471,7 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
 
     for (i = 0; i < stream_count; i++) {
         VMSVGA3DSurface *surface;
+        uint32_t needed_end = UINT32_MAX;
 
         if (streams[i].surface_id >= SVGA3D_MAX_SURFACE_IDS) {
             failure_stage = "stream-sid-range";
@@ -5473,11 +5482,128 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
             failure_stage = "stream-surface-missing";
             goto out;
         }
+        stream_surfaces[i] = surface;
+        stream_elem_end[i] = streams[i].stride;
+        stream_exact[i] = streams[i].frequency == 1u && streams[i].stride != 0;
+        if (stream_exact[i]) {
+            uint32_t j;
+            uint32_t decl_end = streams[i].first_decl + streams[i].decl_count;
+            for (j = streams[i].first_decl; j < decl_end; j++) {
+                uint32_t elem_size =
+                    vmsvga3d_d3d9_decl_type_size(elements[j].type);
+                uint32_t elem_end;
+                if (elem_size == 0) {
+                    stream_exact[i] = false;
+                    break;
+                }
+                elem_end = (uint32_t)elements[j].offset + elem_size;
+                if (elem_end > stream_elem_end[i]) {
+                    stream_elem_end[i] = elem_end;
+                }
+            }
+        }
+        if (stream_exact[i] &&
+            surface->storage_bytes <= UINT32_MAX &&
+            vmsvga3d_dxvk_surface_wants_bounded_draw_flush(
+                surface->dxvk_surface) &&
+            vertex_decls[0].array.surfaceId < SVGA3D_MAX_SURFACE_IDS &&
+            s->svga3d->surfaces[vertex_decls[0].array.surfaceId] != NULL &&
+            s->svga3d->surfaces[vertex_decls[0].array.surfaceId]
+                    ->storage_bytes <= UINT32_MAX) {
+            uint32_t vb0_bytes = (uint32_t)s->svga3d
+                                     ->surfaces[vertex_decls[0].array.surfaceId]
+                                     ->storage_bytes;
+            uint64_t max_needed = 0;
+            bool bounds_ok = range_count != 0;
+            uint32_t r;
+
+            for (r = 0; r < range_count && bounds_ok; r++) {
+                VMSVGA3DD3D9DrawRangePlan rplan;
+                uint32_t max_v = 0;
+                uint64_t end_bytes;
+
+                if (!vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0], &ranges[r],
+                                                   vb0_bytes, &rplan)) {
+                    bounds_ok = false;
+                    break;
+                }
+                if (rplan.action == VMSVGA3D_D3D9_DRAW_ACTION_NONINDEXED) {
+                    uint32_t vcount = vmsvga3d_d3d9_primitive_vertex_count(
+                        rplan.primitive_type, rplan.primitive_count);
+
+                    if (vcount == 0 ||
+                        rplan.start_vertex > UINT32_MAX - (vcount - 1u)) {
+                        bounds_ok = false;
+                        break;
+                    }
+                    max_v = rplan.start_vertex + vcount - 1u;
+                } else {
+                    VMSVGA3DSurface *idx_surf;
+                    uint32_t icount = vmsvga3d_d3d9_primitive_vertex_count(
+                        rplan.primitive_type, rplan.indexed.primitive_count);
+                    uint32_t min_idx = 0;
+                    uint32_t max_idx = 0;
+                    int64_t signed_max;
+
+                    if (icount == 0 || icount > 4096u ||
+                        rplan.index_surface_id >= SVGA3D_MAX_SURFACE_IDS) {
+                        bounds_ok = false;
+                        break;
+                    }
+                    idx_surf = s->svga3d->surfaces[rplan.index_surface_id];
+                    if (idx_surf == NULL || idx_surf->mip_count != 1 ||
+                        idx_surf->mips == NULL ||
+                        idx_surf->mips[0].data == NULL ||
+                        !vmsvga3d_d3d9_scan_index_bounds(
+                            idx_surf->mips[0].data, idx_surf->mips[0].data_size,
+                            ranges[r].indexWidth, rplan.indexed.start_index,
+                            icount, &min_idx, &max_idx)) {
+                        bounds_ok = false;
+                        break;
+                    }
+                    if (vmsvga3d_dxvk_d3d9_software_vp(s->dxvk)) {
+                        if (rplan.indexed.num_vertices == 0 ||
+                            rplan.indexed.min_vertex_index >
+                                UINT32_MAX - (rplan.indexed.num_vertices - 1u)) {
+                            bounds_ok = false;
+                            break;
+                        }
+                        if (rplan.indexed.min_vertex_index +
+                                rplan.indexed.num_vertices - 1u > max_idx) {
+                            max_idx = rplan.indexed.min_vertex_index +
+                                      rplan.indexed.num_vertices - 1u;
+                        }
+                    }
+                    signed_max = (int64_t)rplan.indexed.base_vertex_index +
+                                 (int64_t)max_idx;
+                    if (signed_max < 0 || signed_max > UINT32_MAX) {
+                        bounds_ok = false;
+                        break;
+                    }
+                    max_v = (uint32_t)signed_max;
+                }
+
+                end_bytes = (uint64_t)streams[i].source_offset +
+                            (uint64_t)max_v * streams[i].stride +
+                            stream_elem_end[i];
+                if (end_bytes > surface->storage_bytes) {
+                    end_bytes = surface->storage_bytes;
+                }
+                if (end_bytes > max_needed) {
+                    max_needed = end_bytes;
+                }
+            }
+            if (bounds_ok && max_needed > 0 &&
+                max_needed < surface->storage_bytes) {
+                needed_end = (uint32_t)max_needed;
+            }
+        }
         {
             uint64_t resource_start = qemu_perf_stats_begin(
                 QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE);
-            bool materialized = vmsvga3d_dxvk_materialize_buffer(
-                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_VERTEX_BUFFER, 0);
+            bool materialized = vmsvga3d_dxvk_materialize_buffer_bounded(
+                s, surface, VMSVGA3D_D3D9_RESOURCE_USE_VERTEX_BUFFER, 0,
+                needed_end);
 
             qemu_perf_stats_end(QEMU_PERF_VMVGA_D3D9_DRAW_RESOURCE,
                                 resource_start);
@@ -5505,26 +5631,6 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 s->dxvk, i, streams[i].frequency)) {
             failure_stage = "set-stream-frequency";
             goto out;
-        }
-        stream_surfaces[i] = surface;
-        stream_elem_end[i] = streams[i].stride;
-        stream_exact[i] = streams[i].frequency == 1u && streams[i].stride != 0;
-        if (stream_exact[i]) {
-            uint32_t j;
-            uint32_t decl_end = streams[i].first_decl + streams[i].decl_count;
-            for (j = streams[i].first_decl; j < decl_end; j++) {
-                uint32_t elem_size =
-                    vmsvga3d_d3d9_decl_type_size(elements[j].type);
-                uint32_t elem_end;
-                if (elem_size == 0) {
-                    stream_exact[i] = false;
-                    break;
-                }
-                elem_end = (uint32_t)elements[j].offset + elem_size;
-                if (elem_end > stream_elem_end[i]) {
-                    stream_elem_end[i] = elem_end;
-                }
-            }
         }
     }
 

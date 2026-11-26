@@ -422,6 +422,7 @@ struct vmsvga3d_dxvk_surface_s {
      * D3D9 consumer needs the updated contents.  Buffer readback is a no-op:
      * the CPU shadow is authoritative for these input-only resources. */
     bool d3d9_buffer_dirty;
+    bool d3d9_buffer_full_dirty_pending;
     uint32_t d3d9_buffer_dirty_start;
     uint32_t d3d9_buffer_dirty_end;
     uint32_t d3d9_buffer_dirty_updates;
@@ -3855,6 +3856,7 @@ static void vmsvga3d_dxvk_surface_evict_d3d9(
     surface->d3d9_resident = false;
     surface->d3d9_has_bounce = false;
     surface->d3d9_buffer_dirty = false;
+    surface->d3d9_buffer_full_dirty_pending = false;
     surface->d3d9_buffer_dirty_start = 0;
     surface->d3d9_buffer_dirty_end = 0;
     surface->d3d9_buffer_dirty_updates = 0;
@@ -16458,6 +16460,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_impl(
                 surface->d3d9_buffer_dirty_updates);
         }
         surface->d3d9_buffer_dirty = false;
+        surface->d3d9_buffer_full_dirty_pending = false;
         surface->d3d9_buffer_dirty_start = 0;
         surface->d3d9_buffer_dirty_end = 0;
         surface->d3d9_buffer_dirty_updates = 0;
@@ -16675,6 +16678,7 @@ void vmsvga3d_dxvk_surface_invalidate_buffer(VMSVGA3DDxvkSurface *surface)
      */
     surface->d3d9_buffer_discard_pending = true;
     surface->d3d9_buffer_dirty = false;
+    surface->d3d9_buffer_full_dirty_pending = false;
     surface->d3d9_buffer_dirty_start = 0;
     surface->d3d9_buffer_dirty_end = 0;
     surface->d3d9_buffer_dirty_updates = 0;
@@ -16835,7 +16839,8 @@ static bool vmsvga3d_dxvk_d3d9_vb_try_upgrade_ring(
 static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface, uint32_t offset,
     const void *shadow_data, uint32_t shadow_size, uint32_t size,
-    bool allow_async_lock, VMSVGA3DDxvkBufferFlushReason reason)
+    bool allow_async_lock, VMSVGA3DDxvkBufferFlushReason reason,
+    bool force_new_generation, bool *uploaded_full_shadow_out)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     VMSVGA3DDxvkBufferLock lock = NULL;
@@ -16885,6 +16890,9 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC) != 0 &&
         host_len >= surface->d3d9_length;
     full_range = offset == 0 && size == surface->d3d9_length;
+    if (uploaded_full_shadow_out != NULL) {
+        *uploaded_full_shadow_out = false;
+    }
     if (surface->vb_ring_profile_active && is_ring_vb) {
         surface->vb_ring_profile_eligible = true;
         surface->vb_ring_profile_capacity_bytes = MAX(surface->vb_ring_profile_capacity_bytes, host_len);
@@ -16919,6 +16927,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
         }
         lock_flags = 0;
         lock_flags_stat = QEMU_PERF_DXVK_UPLOAD_BUFFER_LOCK_FLAGS_ZERO;
+        clear_generation = true;
     } else if (surface->d3d9_buffer_discard_pending) {
         /*
          * Guest invalidated the dynamic buffer.  For vertex buffers, sub-
@@ -16971,7 +16980,7 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
             clear_generation = true;
             did_invalidate_discard = true;
         }
-    } else if (full_range) {
+    } else if (full_range || (force_new_generation && offset == 0)) {
         uint64_t aligned_high;
 
         if (is_ring_vb &&
@@ -17253,6 +17262,11 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_UNLOCK, perf_start_ns);
 
     if (vmsvga3d_dxvk_succeeded(result)) {
+        if (uploaded_full_shadow_out != NULL &&
+            copy_src == (const uint8_t *)shadow_data &&
+            copy_size == surface->d3d9_length) {
+            *uploaded_full_shadow_out = true;
+        }
         surface->d3d9_ring_base = next_ring_base;
         surface->d3d9_ring_high = next_ring_high;
         if (clear_generation) {
@@ -17309,6 +17323,9 @@ static bool vmsvga3d_dxvk_surface_upload_buffer_range(
     (void)shadow_size;
     (void)size;
     (void)allow_async_lock;
+    (void)reason;
+    (void)force_new_generation;
+    (void)uploaded_full_shadow_out;
     return false;
 #endif
 }
@@ -17328,6 +17345,7 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
 
     end = offset + size;
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED);
+    surface->d3d9_buffer_full_dirty_pending = false;
     if (surface->d3d9_buffer_dirty) {
         qemu_perf_stats_mark(QEMU_PERF_DXVK_UPLOAD_BUFFER_DEFERRED_MERGE);
         surface->d3d9_buffer_dirty_start =
@@ -17365,15 +17383,40 @@ bool vmsvga3d_dxvk_surface_defer_buffer_range(
 #endif
 }
 
-bool vmsvga3d_dxvk_surface_flush_buffer_range(
+bool vmsvga3d_dxvk_surface_wants_bounded_draw_flush(
+    const VMSVGA3DDxvkSurface *surface)
+{
+#if VMSVGA3D_DXVK_BACKEND_SUPPORTED
+    if (surface == NULL || !surface->d3d9_resident ||
+        surface->d3d9_resource == NULL ||
+        surface->d3d9_resource_type !=
+            VMSVGA3D_D3D9_HOST_RESOURCE_VERTEX_BUFFER ||
+        (surface->d3d9_usage & VMSVGA3D_DXVK_D3DUSAGE_DYNAMIC) == 0 ||
+        !surface->d3d9_buffer_dirty || surface->d3d9_length <= 4096u) {
+        return false;
+    }
+    return surface->d3d9_buffer_full_dirty_pending ||
+           (surface->d3d9_buffer_dirty_start == 0 &&
+            surface->d3d9_buffer_dirty_end == surface->d3d9_length);
+#else
+    (void)surface;
+    return false;
+#endif
+}
+
+bool vmsvga3d_dxvk_surface_flush_buffer_range_bounded(
     VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
     const void *data, uint32_t data_size, bool discard_full_range,
-    VMSVGA3DDxvkBufferFlushReason reason)
+    VMSVGA3DDxvkBufferFlushReason reason, uint32_t max_needed_end)
 {
 #if VMSVGA3D_DXVK_BACKEND_SUPPORTED
     uint64_t perf_start;
     uint32_t offset;
+    uint32_t upload_end;
     uint32_t size;
+    bool bounded_prefix = false;
+    bool force_new_gen = false;
+    bool uploaded_full_shadow = false;
     bool success;
     QemuPerfStat reason_stat;
 
@@ -17388,8 +17431,39 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     if (surface->d3d9_buffer_dirty_end < offset) {
         return false;
     }
-    size = surface->d3d9_buffer_dirty_end - offset;
-    if (data == NULL || size == 0 || surface->d3d9_buffer_dirty_end > data_size) {
+
+    /*
+     * When a guest updates an entire dynamic vertex buffer (e.g. a 96 KiB
+     * DrawPrimitiveUP scratch VB) but the consuming draw only reads a small
+     * prefix [0, max_needed_end), upload only up to max_needed_end into the
+     * host VB ring and leave [max_needed_end, d3d9_length) marked dirty in
+     * the CPU shadow.  Subsequent draws within [0, dirty_start) need no
+     * upload, draws beyond dirty_start extend contiguously, and a fresh full
+     * guest update drops the unused tail without ever copying it to the GPU.
+     */
+    if (discard_full_range &&
+        reason == VMSVGA3D_DXVK_BUFFER_FLUSH_DRAW &&
+        vmsvga3d_dxvk_surface_wants_bounded_draw_flush(surface) &&
+        max_needed_end > 0 && max_needed_end < surface->d3d9_length) {
+        if (surface->d3d9_buffer_full_dirty_pending &&
+            max_needed_end <= offset) {
+            return true;
+        }
+        if (max_needed_end <= surface->d3d9_length - (surface->d3d9_length / 4u)) {
+            bounded_prefix = true;
+            force_new_gen = !surface->d3d9_buffer_full_dirty_pending &&
+                            offset == 0 &&
+                            surface->d3d9_buffer_dirty_end ==
+                                surface->d3d9_length;
+        }
+    }
+
+    upload_end = bounded_prefix ? max_needed_end : surface->d3d9_buffer_dirty_end;
+    if (upload_end <= offset) {
+        return true;
+    }
+    size = upload_end - offset;
+    if (data == NULL || size == 0 || upload_end > data_size) {
         return false;
     }
 
@@ -17408,7 +17482,7 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     perf_start = qemu_perf_stats_begin(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH);
     success = vmsvga3d_dxvk_surface_upload_buffer_range(
         dxvk, surface, offset, data, data_size, size, discard_full_range,
-        reason);
+        reason, force_new_gen, &uploaded_full_shadow);
     qemu_perf_stats_add_work(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, size);
     qemu_perf_stats_end(QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH, perf_start);
     if (success) {
@@ -17416,10 +17490,19 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
         qemu_perf_stats_record_work(
             QEMU_PERF_DXVK_UPLOAD_BUFFER_FLUSH_UPDATES,
             surface->d3d9_buffer_dirty_updates);
-        surface->d3d9_buffer_dirty = false;
-        surface->d3d9_buffer_dirty_start = 0;
-        surface->d3d9_buffer_dirty_end = 0;
-        surface->d3d9_buffer_dirty_updates = 0;
+        if (bounded_prefix && !uploaded_full_shadow &&
+            upload_end < surface->d3d9_buffer_dirty_end) {
+            surface->d3d9_buffer_dirty = true;
+            surface->d3d9_buffer_full_dirty_pending = true;
+            surface->d3d9_buffer_dirty_start = upload_end;
+            surface->d3d9_buffer_dirty_updates = 0;
+        } else {
+            surface->d3d9_buffer_dirty = false;
+            surface->d3d9_buffer_full_dirty_pending = false;
+            surface->d3d9_buffer_dirty_start = 0;
+            surface->d3d9_buffer_dirty_end = 0;
+            surface->d3d9_buffer_dirty_updates = 0;
+        }
     }
     return success;
 #else
@@ -17429,8 +17512,18 @@ bool vmsvga3d_dxvk_surface_flush_buffer_range(
     (void)data_size;
     (void)discard_full_range;
     (void)reason;
+    (void)max_needed_end;
     return false;
 #endif
+}
+
+bool vmsvga3d_dxvk_surface_flush_buffer_range(
+    VMSVGA3DDxvk *dxvk, VMSVGA3DDxvkSurface *surface,
+    const void *data, uint32_t data_size, bool discard_full_range,
+    VMSVGA3DDxvkBufferFlushReason reason)
+{
+    return vmsvga3d_dxvk_surface_flush_buffer_range_bounded(
+        dxvk, surface, data, data_size, discard_full_range, reason, UINT32_MAX);
 }
 
 static bool vmsvga3d_dxvk_d3d9_legacy_present_ensure(
