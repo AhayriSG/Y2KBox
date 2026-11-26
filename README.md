@@ -22,19 +22,32 @@ Projects such as 86Box already serve that cycle-accurate emulation purpose
 exceptionally well for earlier PC eras, thanks to the dedication and talent of
 their contributors.
 
-**Contributors / coding agents:** start with [AGENTS.md](AGENTS.md), the shared
-repository policy for Claude, Gemini, Codex, and other agents. For a fresh session,
-read only the onboarding sections of [HANDOFF.md](HANDOFF.md), the task overview and
-relevant entry in [TASKS.md](TASKS.md), [WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md),
-and [WORKLOG_INDEX.md](WORKLOG_INDEX.md). Consult only relevant sections of the
-append-only [WORKLOG.md](WORKLOG.md); never load the full archive by default.
-[CLAUDE.md](CLAUDE.md) and [GEMINI.md](GEMINI.md) are short tool-specific entrypoints.
-At handoff, append the session to the worklog and add its concise summary to the
-rolling ten-session file. The Claude Code Stop hook enforces that summary; it does
-not apply to other agents. External contributions should follow
-[`CONTRIBUTING.md`](CONTRIBUTING.md): submit a pull request targeting `main` and
-wait for the required CI checks and maintainer review before merging. Direct pushes
-to `main` are reserved for maintainers and explicitly owner-authorized agents.
+## Contribution
+
+### Want to help your favorite game run better?
+
+You don't need to be an emulator developer to help improve Y2KBox. If you have a favorite Direct3D 8 or Direct3D 9 game, you can help us investigate graphics glitches, compatibility problems, and performance issues by capturing a few diagnostic logs and sharing them with an AI coding agent.
+
+**The basic workflow is simple:**
+
+1. Connect this repository to an AI coding agent with your GitHub account linked.
+2. Reproduce the issue in your game and capture a **3-second Full Mode log**. This also automatically generates a `.png` screenshot. Full Mode is for detailed diagnostics; **tell the AI agent to ignore its PERFSTATS when evaluating performance**.
+3. Run the exact same scene again with **Simple Mode logging** to capture the authoritative performance statistics (PERFSTATS). Use this capture for FPS and performance comparisons.
+4. Give the AI agent both logs and the screenshot. Describe the problem clearly, including what you expected to happen and what actually happened.
+5. If you know whether the same issue occurs in VMware, mention that too. This can help identify a potential guest SVGA driver issue.
+6. If the agent proposes a fix in a pull request, test that new build in the same scene and capture the logs again. The agent can compare the results and decide whether further fixes or optimizations are needed.
+
+Even a clear bug report with matching logs and a screenshot can make a real difference. You don't have to know the cause—just help us reproduce it.
+
+[Full steps are explained here](https://github.com/AhayriSG/Y2KBox#how-do-i-capture-diagnostic-logs-and-performance-information).
+
+### Contributors and coding agents
+
+Start with [AGENTS.md](AGENTS.md), the shared repository policy for Claude, Gemini, Codex, and other agents. For a fresh session, read only the onboarding sections of [HANDOFF.md](HANDOFF.md), the task overview and relevant entry in [TASKS.md](TASKS.md), [WORKLOAD_ACTIVE_SESSION.md](WORKLOAD_ACTIVE_SESSION.md), and [WORKLOG_INDEX.md](WORKLOG_INDEX.md). Consult only relevant sections of the append-only [WORKLOG.md](WORKLOG.md); never load the full archive by default. [CLAUDE.md](CLAUDE.md) and [GEMINI.md](GEMINI.md) are short tool-specific entrypoints.
+
+At handoff, append the session to the worklog and add its concise summary to the rolling ten-session file. The Claude Code Stop hook enforces that summary; it does not apply to other agents.
+
+External contributions should follow [`CONTRIBUTING.md`](CONTRIBUTING.md): submit a pull request targeting `main` and wait for the required CI checks and maintainer review before merging. Direct pushes to `main` are reserved for maintainers and explicitly owner-authorized agents.
 
 ## Fixed target
 
