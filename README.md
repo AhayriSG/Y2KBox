@@ -31,11 +31,12 @@ You don't need to be an emulator developer to help improve Y2KBox. If you have a
 **The basic workflow is simple:**
 
 1. Connect this repository to an AI coding agent with your GitHub account linked.
-2. Reproduce the issue in your game and capture a **2-second Full Mode log**. This also automatically generates a `.png` screenshot. Full Mode is for detailed diagnostics; **tell the AI agent to ignore its PERFSTATS when evaluating performance**.
-3. Run the exact same scene again with **Simple Mode logging** to capture the authoritative performance statistics (PERFSTATS). Use this capture for FPS and performance comparisons.
-4. Give the AI agent both logs and the screenshot. Describe the problem clearly, including what you expected to happen and what actually happened.
-5. If you know whether the same issue occurs in VMware, mention that too. This can help identify a potential guest SVGA driver issue.
-6. If the agent proposes a fix in a pull request, test that new build in the same scene and capture the logs again. The agent can compare the results and decide whether further fixes or optimizations are needed.
+2. Reproduce the issue in your game and capture a **2-second Full Mode log**. This also automatically generates a `.png` screenshot. Full Mode is for detailed diagnostics; **tell the AI agent to ignore its PERFSTATS when evaluating performance**. The resulting Full Mode log is compressed into a `.log.gz` file, which you can share directly without extracting it.
+3. Run the exact same scene again with **Simple Mode logging**, keeping the gameplay and on-screen activity as close as possible to the Full Mode capture. Try to capture roughly the same portion of gameplay, but it's fine if the Simple Mode capture lasts a little longer. Simple Mode captures the authoritative performance statistics (PERFSTATS) used for FPS and performance comparisons. Unlike Full Mode, it does not stop automatically, so **press `Ctrl+Alt+L` again when you have finished capturing**.
+4. Give the AI agent the **Full Mode `.log.gz` file, the Simple Mode `.log` file, and the automatically generated screenshot**. Describe the problem clearly, including what you expected to happen and what actually happened.
+5. If possible, provide a **reference screenshot** showing how the same scene is supposed to look. This helps the AI agent understand the visual difference you're reporting. You can even use a screenshot taken from a YouTube video, but mention that it comes from YouTube. Video compression, color grading, and other processing may affect the colors and image quality, so it may not be an exact visual reference.
+6. If you know whether the same issue occurs in VMware, mention that too. This can help identify a potential guest SVGA driver issue.
+7. If the agent proposes a fix in a pull request, test that new build in the same scene and capture the logs again. The agent can compare the results and decide whether further fixes or optimizations are needed.
 
 Even a clear bug report with matching logs and a screenshot can make a real difference. You don't have to know the cause—just help us reproduce it.
 
