@@ -33,6 +33,7 @@
 #include "qemu/perf-stats.h"
 #include "qapi/error.h"
 #include "system/system.h"
+#include "system/tcg.h"
 #include "qemu/cutils.h"
 #include "qemu/host-utils.h"
 #include "qemu/main-loop.h"
@@ -495,6 +496,7 @@ struct vmsvga_state_s {
     bool cb_shadow_yield_allowed;
     bool gart_txn_batch_allowed;
     bool gart_txn_active;
+    bool gart_iommu_dirty;
     uint32_t gart_txn_map_pages;
     uint32_t gart_txn_unmap_pages;
     bool cb_shadow_yield_pending;
@@ -733,12 +735,33 @@ static inline bool vmsvga_guest_backed_objects_capable(
             vmsvga_vgpu9_modern_3d_capable(s));
 }
 
+#define TYPE_VMSVGA_GART_IOMMU_MEMORY_REGION "vmsvga-gart-iommu-memory-region"
+#define VMSVGA_GART_IOMMU_UNMAPPED UINT64_MAX
+
+struct pci_vmsvga_state_s;
+
+typedef struct VMSVGAGartIOMMUMemoryRegion {
+    IOMMUMemoryRegion parent_obj;
+    struct pci_vmsvga_state_s *pci_vmsvga;
+} VMSVGAGartIOMMUMemoryRegion;
+
+DECLARE_INSTANCE_CHECKER(VMSVGAGartIOMMUMemoryRegion,
+                         VMSVGA_GART_IOMMU_MEMORY_REGION,
+                         TYPE_VMSVGA_GART_IOMMU_MEMORY_REGION)
+
 struct pci_vmsvga_state_s {
     PCIDevice parent_obj;
     struct vmsvga_state_s chip;
     MemoryRegion io_bar;
     MemoryRegion bar1;
     MemoryRegion bar1_vram;
+    VMSVGAGartIOMMUMemoryRegion bar1_gart_iommu;
+    AddressSpace bar1_vram_as;
+    QemuSpin gart_iommu_lock;
+    uint64_t *gart_iommu_gpas;
+    uint32_t gart_iommu_page_count;
+    bool bar1_gart_iommu_init;
+    bool bar1_gart_iommu_attached;
 };
 
 static inline bool vmsvga_trace_devcap_enabled(void)
@@ -12211,6 +12234,20 @@ static void pci_vmsvga_realize(PCIDevice *dev, Error **errp)
                              s->chip.vga.vram_size);
     memory_region_add_subregion(&s->bar1, 0, &s->bar1_vram);
 
+    qemu_spin_init(&s->gart_iommu_lock);
+    if (tcg_enabled()) {
+        address_space_init(&s->bar1_vram_as, &s->chip.vga.vram,
+                           "vmsvga-bar1-vram");
+        memory_region_init_iommu(&s->bar1_gart_iommu,
+                                 sizeof(s->bar1_gart_iommu),
+                                 TYPE_VMSVGA_GART_IOMMU_MEMORY_REGION,
+                                 OBJECT(dev), "vmsvga-bar1-gart",
+                                 s->chip.vga.vram_size);
+        s->bar1_gart_iommu.pci_vmsvga = s;
+        s->bar1_gart_iommu_init = true;
+        s->bar1_gart_iommu_attached = false;
+    }
+
     pci_register_bar(dev, 1, PCI_BASE_ADDRESS_MEM_PREFETCH, &s->bar1);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_MEM_PREFETCH, &s->chip.fifo_ram);
 
@@ -12245,6 +12282,26 @@ static void pci_vmsvga_uninit(PCIDevice *dev)
     }
     vmsvga3d_reset(&s->chip);
     vmsvga3d_renderer_unrealize(&s->chip);
+
+    if (s->bar1_gart_iommu_attached) {
+        memory_region_transaction_begin();
+        memory_region_del_subregion(&s->bar1,
+                                    MEMORY_REGION(&s->bar1_gart_iommu));
+        memory_region_transaction_commit();
+        s->bar1_gart_iommu_attached = false;
+    }
+    if (s->bar1_gart_iommu_init) {
+        uint64_t *old_gpas;
+
+        qemu_spin_lock(&s->gart_iommu_lock);
+        old_gpas = s->gart_iommu_gpas;
+        s->gart_iommu_gpas = NULL;
+        s->gart_iommu_page_count = 0;
+        qemu_spin_unlock(&s->gart_iommu_lock);
+        g_free(old_gpas);
+        address_space_destroy(&s->bar1_vram_as);
+        s->bar1_gart_iommu_init = false;
+    }
     vmsvga_screen_reset(&s->chip);
     vmsvga_legacy_handoff_reset_state(&s->chip);
     vmsvga_migration_buffers_clear(&s->chip);
@@ -12361,10 +12418,100 @@ static TypeInfo vmsvga_info = {
           },
 };
 
+static IOMMUTLBEntry vmsvga_gart_iommu_translate(IOMMUMemoryRegion *iommu_mr,
+                                                 hwaddr addr,
+                                                 IOMMUAccessFlags flag,
+                                                 int iommu_idx)
+{
+    VMSVGAGartIOMMUMemoryRegion *gart_mr =
+        VMSVGA_GART_IOMMU_MEMORY_REGION(iommu_mr);
+    struct pci_vmsvga_state_s *s = gart_mr->pci_vmsvga;
+    hwaddr page_iova = addr & ~(hwaddr)(VMSVGA3D_GBO_PAGE_SIZE - 1u);
+    uint64_t page_index = addr >> VMSVGA3D_GBO_PAGE_SHIFT;
+    uint64_t gpa = VMSVGA_GART_IOMMU_UNMAPPED;
+
+    (void)flag;
+    (void)iommu_idx;
+
+    if (s == NULL) {
+        return (IOMMUTLBEntry) {
+            .target_as = &address_space_memory,
+            .iova = page_iova,
+            .translated_addr = 0,
+            .addr_mask = VMSVGA3D_GBO_PAGE_SIZE - 1u,
+            .perm = IOMMU_NONE,
+        };
+    }
+
+    qemu_spin_lock(&s->gart_iommu_lock);
+    if (s->gart_iommu_gpas != NULL && page_index < s->gart_iommu_page_count) {
+        gpa = s->gart_iommu_gpas[page_index];
+    }
+    qemu_spin_unlock(&s->gart_iommu_lock);
+
+    if (gpa != VMSVGA_GART_IOMMU_UNMAPPED) {
+        return (IOMMUTLBEntry) {
+            .target_as = &address_space_memory,
+            .iova = page_iova,
+            .translated_addr = gpa,
+            .addr_mask = VMSVGA3D_GBO_PAGE_SIZE - 1u,
+            .perm = IOMMU_RW,
+        };
+    }
+
+    return (IOMMUTLBEntry) {
+        .target_as = &s->bar1_vram_as,
+        .iova = page_iova,
+        .translated_addr = page_iova,
+        .addr_mask = VMSVGA3D_GBO_PAGE_SIZE - 1u,
+        .perm = IOMMU_RW,
+    };
+}
+
+static uint64_t vmsvga_gart_iommu_get_min_page_size(IOMMUMemoryRegion *iommu)
+{
+    (void)iommu;
+    return VMSVGA3D_GBO_PAGE_SIZE;
+}
+
+static int vmsvga_gart_iommu_attrs_to_index(IOMMUMemoryRegion *iommu,
+                                            MemTxAttrs attrs)
+{
+    (void)iommu;
+    (void)attrs;
+    return 0;
+}
+
+static int vmsvga_gart_iommu_num_indexes(IOMMUMemoryRegion *iommu)
+{
+    (void)iommu;
+    return 1;
+}
+
+static void vmsvga_gart_iommu_class_init(ObjectClass *klass,
+                                          VMVGA_CLASS_INIT_DATA data)
+{
+    IOMMUMemoryRegionClass *imrc = IOMMU_MEMORY_REGION_CLASS(klass);
+
+    (void)data;
+    imrc->translate = vmsvga_gart_iommu_translate;
+    imrc->get_min_page_size = vmsvga_gart_iommu_get_min_page_size;
+    imrc->attrs_to_index = vmsvga_gart_iommu_attrs_to_index;
+    imrc->num_indexes = vmsvga_gart_iommu_num_indexes;
+}
+
+static const TypeInfo vmsvga_gart_iommu_info = {
+    .parent = TYPE_IOMMU_MEMORY_REGION,
+    .name = TYPE_VMSVGA_GART_IOMMU_MEMORY_REGION,
+    .instance_size = sizeof(VMSVGAGartIOMMUMemoryRegion),
+    .class_init = vmsvga_gart_iommu_class_init,
+};
+
 static void vmsvga_register_types(void)
 {
     VPRINT("vmsvga_register_types was just executed\n");
 
+    type_register_static(&vmsvga_gart_iommu_info);
     type_register_static(&vmsvga_info);
 }
 

@@ -1811,9 +1811,51 @@ static MemoryRegion *vmsvga3d_gart_bar1(struct vmsvga_state_s *s)
     return &pci_vmsvga->bar1;
 }
 
-static bool vmsvga3d_gart_resolve_page(uint64_t gpa,
+static inline bool vmsvga3d_gart_use_iommu(const struct vmsvga_state_s *s)
+{
+    const struct pci_vmsvga_state_s *pci_vmsvga;
+
+    if (s == NULL) {
+        return false;
+    }
+    pci_vmsvga = container_of(s, struct pci_vmsvga_state_s, chip);
+    return pci_vmsvga->bar1_gart_iommu_init;
+}
+
+static void vmsvga3d_gart_iommu_notify_unmap(struct vmsvga_state_s *s)
+{
+    struct pci_vmsvga_state_s *pci_vmsvga;
+    IOMMUTLBEvent event;
+
+    if (s == NULL) {
+        return;
+    }
+    pci_vmsvga = container_of(s, struct pci_vmsvga_state_s, chip);
+    if (!pci_vmsvga->bar1_gart_iommu_attached || s->vga.vram_size == 0) {
+        return;
+    }
+
+    /*
+     * Publish updated gart_iommu_gpas entries before notifying TCG IOMMU
+     * notifiers (paired with smp_mb() in tcg_register_iommu_notifier()).
+     */
+    smp_mb();
+    event.type = IOMMU_NOTIFIER_UNMAP;
+    event.entry.target_as = &address_space_memory;
+    event.entry.iova = 0;
+    event.entry.translated_addr = 0;
+    event.entry.addr_mask = (hwaddr)s->vga.vram_size - 1u;
+    event.entry.perm = IOMMU_NONE;
+    memory_region_notify_iommu(
+        IOMMU_MEMORY_REGION(&pci_vmsvga->bar1_gart_iommu), 0, event);
+}
+
+static bool vmsvga3d_gart_resolve_page(struct vmsvga_state_s *s, uint64_t gpa,
                                        MemoryRegionSection *section)
 {
+    struct pci_vmsvga_state_s *pci_vmsvga =
+        s != NULL ? container_of(s, struct pci_vmsvga_state_s, chip) : NULL;
+
     if (section == NULL || address_space_memory.root == NULL) {
         return false;
     }
@@ -1821,6 +1863,10 @@ static bool vmsvga3d_gart_resolve_page(uint64_t gpa,
     *section = memory_region_find(address_space_memory.root, gpa,
                                   VMSVGA3D_GBO_PAGE_SIZE);
     if (section->mr == NULL ||
+        memory_region_is_iommu(section->mr) ||
+        (pci_vmsvga != NULL &&
+         (section->mr == &pci_vmsvga->bar1 ||
+          section->mr == &pci_vmsvga->bar1_vram)) ||
         int128_get64(section->size) < VMSVGA3D_GBO_PAGE_SIZE) {
         if (section->mr != NULL) {
             memory_region_unref(section->mr);
@@ -1836,16 +1882,21 @@ static void vmsvga3d_gart_txn_flush(struct vmsvga_state_s *s)
 {
     uint32_t map_pages;
     uint32_t unmap_pages;
+    bool txn_active;
+    bool iommu_dirty;
     QemuPerfStat commit_stat;
     uint64_t perf_start_ns;
 
-    if (s == NULL || !s->gart_txn_active) {
+    if (s == NULL || (!s->gart_txn_active && !s->gart_iommu_dirty)) {
         return;
     }
 
     map_pages = s->gart_txn_map_pages;
     unmap_pages = s->gart_txn_unmap_pages;
+    txn_active = s->gart_txn_active;
+    iommu_dirty = s->gart_iommu_dirty;
     s->gart_txn_active = false;
+    s->gart_iommu_dirty = false;
     s->gart_txn_map_pages = 0;
     s->gart_txn_unmap_pages = 0;
 
@@ -1858,7 +1909,11 @@ static void vmsvga3d_gart_txn_flush(struct vmsvga_state_s *s)
     commit_stat = map_pages > 0 ? QEMU_PERF_GART_MAP_COMMIT
                                 : QEMU_PERF_GART_UNMAP_COMMIT;
     perf_start_ns = qemu_perf_stats_begin(commit_stat);
-    memory_region_transaction_commit();
+    if (txn_active) {
+        memory_region_transaction_commit();
+    } else if (iommu_dirty) {
+        vmsvga3d_gart_iommu_notify_unmap(s);
+    }
     qemu_perf_stats_end(commit_stat, perf_start_ns);
 }
 
@@ -1954,7 +2009,26 @@ static void vmsvga3d_gart_disable_live(struct vmsvga_state_s *s)
 
     vmsvga3d_gart_txn_flush(s);
 
-    if (state->gart_pages != NULL) {
+    if (vmsvga3d_gart_use_iommu(s)) {
+        struct pci_vmsvga_state_s *pci_vmsvga =
+            container_of(s, struct pci_vmsvga_state_s, chip);
+        uint64_t *old_gpas;
+
+        qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+        old_gpas = pci_vmsvga->gart_iommu_gpas;
+        pci_vmsvga->gart_iommu_gpas = NULL;
+        pci_vmsvga->gart_iommu_page_count = 0;
+        qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+        g_free(old_gpas);
+
+        if (pci_vmsvga->bar1_gart_iommu_attached) {
+            memory_region_transaction_begin();
+            memory_region_del_subregion(
+                &pci_vmsvga->bar1, MEMORY_REGION(&pci_vmsvga->bar1_gart_iommu));
+            memory_region_transaction_commit();
+            pci_vmsvga->bar1_gart_iommu_attached = false;
+        }
+    } else if (state->gart_pages != NULL) {
         memory_region_transaction_begin();
         for (page = 0; page < state->gart_page_count; page++) {
             vmsvga3d_gart_page_remove_alias(s, &state->gart_pages[page], page);
@@ -2016,6 +2090,37 @@ static bool vmsvga3d_gart_enable_live(struct vmsvga_state_s *s,
         pages = g_try_new0(VMSVGA3DGARTPage, page_count);
         if (pages == NULL) {
             return false;
+        }
+
+        if (vmsvga3d_gart_use_iommu(s)) {
+            struct pci_vmsvga_state_s *pci_vmsvga =
+                container_of(s, struct pci_vmsvga_state_s, chip);
+            uint64_t *iommu_gpas = g_try_new(uint64_t, page_count);
+            uint64_t *old_gpas;
+            uint32_t i;
+
+            if (iommu_gpas == NULL) {
+                g_free(pages);
+                return false;
+            }
+            for (i = 0; i < page_count; i++) {
+                iommu_gpas[i] = VMSVGA_GART_IOMMU_UNMAPPED;
+            }
+            qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+            old_gpas = pci_vmsvga->gart_iommu_gpas;
+            pci_vmsvga->gart_iommu_gpas = iommu_gpas;
+            pci_vmsvga->gart_iommu_page_count = page_count;
+            qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+            g_free(old_gpas);
+
+            if (!pci_vmsvga->bar1_gart_iommu_attached) {
+                memory_region_transaction_begin();
+                memory_region_add_subregion_overlap(
+                    &pci_vmsvga->bar1, 0,
+                    MEMORY_REGION(&pci_vmsvga->bar1_gart_iommu), 1);
+                memory_region_transaction_commit();
+                pci_vmsvga->bar1_gart_iommu_attached = true;
+            }
         }
 
         state->gart_pages = pages;
@@ -2103,7 +2208,7 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
                            (uint64_t)run_page * VMSVGA3D_GBO_PAGE_SIZE;
 
             if (mob_page >= mob->gbo.page_count ||
-                !vmsvga3d_gart_resolve_page(gpa, &sections[mob_page])) {
+                !vmsvga3d_gart_resolve_page(s, gpa, &sections[mob_page])) {
                 qemu_perf_stats_end(QEMU_PERF_GART_MAP_RESOLVE, perf_start_ns);
                 goto out;
             }
@@ -2119,33 +2224,66 @@ static bool vmsvga3d_gart_map_mob_live(struct vmsvga_state_s *s,
     qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_ALIAS,
                              mob->gbo.page_count);
     perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_ALIAS);
-    if (s->gart_txn_batch_allowed) {
-        if (!s->gart_txn_active) {
-            memory_region_transaction_begin();
-            s->gart_txn_active = true;
+    if (vmsvga3d_gart_use_iommu(s)) {
+        struct pci_vmsvga_state_s *pci_vmsvga =
+            container_of(s, struct pci_vmsvga_state_s, chip);
+
+        qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+        for (page = 0; page < mob->gbo.page_count; page++) {
+            uint32_t gart_page = first_page + page;
+            VMSVGA3DGARTPage *entry = &state->gart_pages[gart_page];
+
+            entry->gpa = gpas[page];
+            entry->mobid = mobid;
+            entry->mob_page = page;
+            entry->alias_active = true;
+            if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                gart_page < pci_vmsvga->gart_iommu_page_count) {
+                pci_vmsvga->gart_iommu_gpas[gart_page] = gpas[page];
+            }
+        }
+        qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+        qemu_perf_stats_end(QEMU_PERF_GART_MAP_ALIAS, perf_start_ns);
+
+        if (s->gart_txn_batch_allowed) {
+            s->gart_iommu_dirty = true;
+            s->gart_txn_map_pages += mob->gbo.page_count;
+        } else {
+            qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
+                                     mob->gbo.page_count);
+            perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
+            vmsvga3d_gart_iommu_notify_unmap(s);
+            qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
         }
     } else {
-        memory_region_transaction_begin();
-    }
-    for (page = 0; page < mob->gbo.page_count; page++) {
-        VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
+        if (s->gart_txn_batch_allowed) {
+            if (!s->gart_txn_active) {
+                memory_region_transaction_begin();
+                s->gart_txn_active = true;
+            }
+        } else {
+            memory_region_transaction_begin();
+        }
+        for (page = 0; page < mob->gbo.page_count; page++) {
+            VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
 
-        vmsvga3d_gart_page_remove_alias(s, entry, first_page + page);
-        vmsvga3d_gart_page_install_alias(s, entry, first_page + page,
-                                         &sections[page]);
-        entry->gpa = gpas[page];
-        entry->mobid = mobid;
-        entry->mob_page = page;
-    }
-    qemu_perf_stats_end(QEMU_PERF_GART_MAP_ALIAS, perf_start_ns);
-    if (s->gart_txn_batch_allowed) {
-        s->gart_txn_map_pages += mob->gbo.page_count;
-    } else {
-        qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
-                                 mob->gbo.page_count);
-        perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
-        memory_region_transaction_commit();
-        qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
+            vmsvga3d_gart_page_remove_alias(s, entry, first_page + page);
+            vmsvga3d_gart_page_install_alias(s, entry, first_page + page,
+                                             &sections[page]);
+            entry->gpa = gpas[page];
+            entry->mobid = mobid;
+            entry->mob_page = page;
+        }
+        qemu_perf_stats_end(QEMU_PERF_GART_MAP_ALIAS, perf_start_ns);
+        if (s->gart_txn_batch_allowed) {
+            s->gart_txn_map_pages += mob->gbo.page_count;
+        } else {
+            qemu_perf_stats_add_work(QEMU_PERF_GART_MAP_COMMIT,
+                                     mob->gbo.page_count);
+            perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_MAP_COMMIT);
+            memory_region_transaction_commit();
+            qemu_perf_stats_end(QEMU_PERF_GART_MAP_COMMIT, perf_start_ns);
+        }
     }
     ok = true;
 
@@ -2194,36 +2332,80 @@ static bool vmsvga3d_gart_unmap_live(struct vmsvga_state_s *s,
 
         qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_ALIAS, num_pages);
         perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_ALIAS);
-        for (page = 0; page < num_pages; page++) {
-            VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
+        if (vmsvga3d_gart_use_iommu(s)) {
+            struct pci_vmsvga_state_s *pci_vmsvga =
+                container_of(s, struct pci_vmsvga_state_s, chip);
 
-            if (entry->alias_active) {
-                if (s->gart_txn_batch_allowed) {
-                    if (!s->gart_txn_active) {
-                        memory_region_transaction_begin();
-                        s->gart_txn_active = true;
-                    }
-                } else if (!txn_opened) {
-                    memory_region_transaction_begin();
-                    txn_opened = true;
+            qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+            for (page = 0; page < num_pages; page++) {
+                uint32_t gart_page = first_page + page;
+                VMSVGA3DGARTPage *entry = &state->gart_pages[gart_page];
+
+                if (entry->alias_active) {
+                    entry->alias_active = false;
+                    removed_pages++;
                 }
-                vmsvga3d_gart_page_remove_alias(s, entry, first_page + page);
-                removed_pages++;
+                if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                    gart_page < pci_vmsvga->gart_iommu_page_count) {
+                    pci_vmsvga->gart_iommu_gpas[gart_page] =
+                        VMSVGA_GART_IOMMU_UNMAPPED;
+                }
+                entry->gpa = 0;
+                entry->mobid = SVGA3D_INVALID_ID;
+                entry->mob_page = 0;
             }
-            entry->gpa = 0;
-            entry->mobid = SVGA3D_INVALID_ID;
-            entry->mob_page = 0;
-        }
-        qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
-        if (s->gart_txn_batch_allowed) {
+            qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+            qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
             if (removed_pages > 0) {
-                s->gart_txn_unmap_pages += num_pages;
+                if (s->gart_txn_batch_allowed) {
+                    s->gart_iommu_dirty = true;
+                    s->gart_txn_unmap_pages += num_pages;
+                } else {
+                    qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT,
+                                             num_pages);
+                    perf_start_ns =
+                        qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
+                    vmsvga3d_gart_iommu_notify_unmap(s);
+                    qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT,
+                                        perf_start_ns);
+                }
             }
-        } else if (txn_opened) {
-            qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT, num_pages);
-            perf_start_ns = qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
-            memory_region_transaction_commit();
-            qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT, perf_start_ns);
+        } else {
+            for (page = 0; page < num_pages; page++) {
+                VMSVGA3DGARTPage *entry = &state->gart_pages[first_page + page];
+
+                if (entry->alias_active) {
+                    if (s->gart_txn_batch_allowed) {
+                        if (!s->gart_txn_active) {
+                            memory_region_transaction_begin();
+                            s->gart_txn_active = true;
+                        }
+                    } else if (!txn_opened) {
+                        memory_region_transaction_begin();
+                        txn_opened = true;
+                    }
+                    vmsvga3d_gart_page_remove_alias(s, entry,
+                                                    first_page + page);
+                    removed_pages++;
+                }
+                entry->gpa = 0;
+                entry->mobid = SVGA3D_INVALID_ID;
+                entry->mob_page = 0;
+            }
+            qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_ALIAS, perf_start_ns);
+            if (s->gart_txn_batch_allowed) {
+                if (removed_pages > 0) {
+                    s->gart_txn_unmap_pages += num_pages;
+                }
+            } else if (txn_opened) {
+                qemu_perf_stats_add_work(QEMU_PERF_GART_UNMAP_COMMIT,
+                                         num_pages);
+                perf_start_ns =
+                    qemu_perf_stats_begin(QEMU_PERF_GART_UNMAP_COMMIT);
+                memory_region_transaction_commit();
+                qemu_perf_stats_end(QEMU_PERF_GART_UNMAP_COMMIT,
+                                    perf_start_ns);
+            }
         }
     }
 
@@ -2352,34 +2534,73 @@ static bool vmsvga3d_mob_redefine(struct vmsvga_state_s *s,
 
             if (vmsvga3d_gbo_page_gpa(&mob->gbo, gart_page->mob_page,
                                        &gpa) &&
-                vmsvga3d_gart_resolve_page(gpa, &sections[page])) {
+                vmsvga3d_gart_resolve_page(s, gpa, &sections[page])) {
                 gpas[page] = gpa;
                 resolved[page] = true;
             }
         }
 
-        memory_region_transaction_begin();
-        for (page = 0; page < state->gart_page_count; page++) {
-            VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
+        if (vmsvga3d_gart_use_iommu(s)) {
+            struct pci_vmsvga_state_s *pci_vmsvga =
+                container_of(s, struct pci_vmsvga_state_s, chip);
 
-            if (gart_page->mobid != mobid) {
-                continue;
-            }
+            qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+            for (page = 0; page < state->gart_page_count; page++) {
+                VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
 
-            vmsvga3d_gart_page_remove_alias(s, gart_page, page);
-            if (resolved[page]) {
-                vmsvga3d_gart_page_install_alias(s, gart_page, page,
-                                                 &sections[page]);
-                gart_page->gpa = gpas[page];
-                refreshed++;
-            } else {
-                gart_page->gpa = 0;
-                gart_page->mobid = SVGA3D_INVALID_ID;
-                gart_page->mob_page = 0;
-                invalidated++;
+                if (gart_page->mobid != mobid) {
+                    continue;
+                }
+
+                if (resolved[page]) {
+                    gart_page->gpa = gpas[page];
+                    gart_page->alias_active = true;
+                    if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                        page < pci_vmsvga->gart_iommu_page_count) {
+                        pci_vmsvga->gart_iommu_gpas[page] = gpas[page];
+                    }
+                    refreshed++;
+                } else {
+                    gart_page->gpa = 0;
+                    gart_page->mobid = SVGA3D_INVALID_ID;
+                    gart_page->mob_page = 0;
+                    gart_page->alias_active = false;
+                    if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                        page < pci_vmsvga->gart_iommu_page_count) {
+                        pci_vmsvga->gart_iommu_gpas[page] =
+                            VMSVGA_GART_IOMMU_UNMAPPED;
+                    }
+                    invalidated++;
+                }
             }
+            qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+            if (refreshed > 0 || invalidated > 0) {
+                vmsvga3d_gart_iommu_notify_unmap(s);
+            }
+        } else {
+            memory_region_transaction_begin();
+            for (page = 0; page < state->gart_page_count; page++) {
+                VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
+
+                if (gart_page->mobid != mobid) {
+                    continue;
+                }
+
+                vmsvga3d_gart_page_remove_alias(s, gart_page, page);
+                if (resolved[page]) {
+                    vmsvga3d_gart_page_install_alias(s, gart_page, page,
+                                                     &sections[page]);
+                    gart_page->gpa = gpas[page];
+                    refreshed++;
+                } else {
+                    gart_page->gpa = 0;
+                    gart_page->mobid = SVGA3D_INVALID_ID;
+                    gart_page->mob_page = 0;
+                    invalidated++;
+                }
+            }
+            memory_region_transaction_commit();
         }
-        memory_region_transaction_commit();
 
         for (page = 0; page < state->gart_page_count; page++) {
             if (sections[page].mr != NULL) {
@@ -2479,34 +2700,73 @@ static bool vmsvga2d_mob_update_mapping_live(struct vmsvga_state_s *s,
 
             if (vmsvga3d_gbo_page_gpa(&mob->gbo, gart_page->mob_page,
                                        &gpa) &&
-                vmsvga3d_gart_resolve_page(gpa, &sections[page])) {
+                vmsvga3d_gart_resolve_page(s, gpa, &sections[page])) {
                 gpas[page] = gpa;
                 resolved[page] = true;
             }
         }
 
-        memory_region_transaction_begin();
-        for (page = 0; page < state->gart_page_count; page++) {
-            VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
+        if (vmsvga3d_gart_use_iommu(s)) {
+            struct pci_vmsvga_state_s *pci_vmsvga =
+                container_of(s, struct pci_vmsvga_state_s, chip);
 
-            if (gart_page->mobid != mobid) {
-                continue;
-            }
+            qemu_spin_lock(&pci_vmsvga->gart_iommu_lock);
+            for (page = 0; page < state->gart_page_count; page++) {
+                VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
 
-            vmsvga3d_gart_page_remove_alias(s, gart_page, page);
-            if (resolved[page]) {
-                vmsvga3d_gart_page_install_alias(s, gart_page, page,
-                                                 &sections[page]);
-                gart_page->gpa = gpas[page];
-                refreshed++;
-            } else {
-                gart_page->gpa = 0;
-                gart_page->mobid = SVGA3D_INVALID_ID;
-                gart_page->mob_page = 0;
-                invalidated++;
+                if (gart_page->mobid != mobid) {
+                    continue;
+                }
+
+                if (resolved[page]) {
+                    gart_page->gpa = gpas[page];
+                    gart_page->alias_active = true;
+                    if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                        page < pci_vmsvga->gart_iommu_page_count) {
+                        pci_vmsvga->gart_iommu_gpas[page] = gpas[page];
+                    }
+                    refreshed++;
+                } else {
+                    gart_page->gpa = 0;
+                    gart_page->mobid = SVGA3D_INVALID_ID;
+                    gart_page->mob_page = 0;
+                    gart_page->alias_active = false;
+                    if (pci_vmsvga->gart_iommu_gpas != NULL &&
+                        page < pci_vmsvga->gart_iommu_page_count) {
+                        pci_vmsvga->gart_iommu_gpas[page] =
+                            VMSVGA_GART_IOMMU_UNMAPPED;
+                    }
+                    invalidated++;
+                }
             }
+            qemu_spin_unlock(&pci_vmsvga->gart_iommu_lock);
+            if (refreshed > 0 || invalidated > 0) {
+                vmsvga3d_gart_iommu_notify_unmap(s);
+            }
+        } else {
+            memory_region_transaction_begin();
+            for (page = 0; page < state->gart_page_count; page++) {
+                VMSVGA3DGARTPage *gart_page = &state->gart_pages[page];
+
+                if (gart_page->mobid != mobid) {
+                    continue;
+                }
+
+                vmsvga3d_gart_page_remove_alias(s, gart_page, page);
+                if (resolved[page]) {
+                    vmsvga3d_gart_page_install_alias(s, gart_page, page,
+                                                     &sections[page]);
+                    gart_page->gpa = gpas[page];
+                    refreshed++;
+                } else {
+                    gart_page->gpa = 0;
+                    gart_page->mobid = SVGA3D_INVALID_ID;
+                    gart_page->mob_page = 0;
+                    invalidated++;
+                }
+            }
+            memory_region_transaction_commit();
         }
-        memory_region_transaction_commit();
 
         for (page = 0; page < state->gart_page_count; page++) {
             if (sections[page].mr != NULL) {
