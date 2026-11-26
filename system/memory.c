@@ -2132,6 +2132,7 @@ void memory_region_init_iommu(void *_iommu_mr,
     memory_region_do_init(mr, owner, name, size);
     iommu_mr = IOMMU_MEMORY_REGION(mr);
     mr->terminates = true;  /* then re-forwards */
+    qemu_spin_init(&iommu_mr->iommu_notify_lock);
     QLIST_INIT(&iommu_mr->iommu_notify);
     iommu_mr->iommu_notify_flags = IOMMU_NOTIFIER_NONE;
 }
@@ -2287,8 +2288,10 @@ static int memory_region_update_iommu_notify_flags(IOMMUMemoryRegion *iommu_mr,
     IOMMUMemoryRegionClass *imrc = IOMMU_MEMORY_REGION_GET_CLASS(iommu_mr);
     int ret = 0;
 
-    IOMMU_NOTIFIER_FOREACH(iommu_notifier, iommu_mr) {
-        flags |= iommu_notifier->notifier_flags;
+    WITH_RCU_READ_LOCK_GUARD() {
+        IOMMU_NOTIFIER_FOREACH(iommu_notifier, iommu_mr) {
+            flags |= iommu_notifier->notifier_flags;
+        }
     }
 
     if (flags != iommu_mr->iommu_notify_flags && imrc->notify_flag_changed) {
@@ -2320,10 +2323,14 @@ int memory_region_register_iommu_notifier(MemoryRegion *mr,
     assert(n->iommu_idx >= 0 &&
            n->iommu_idx < memory_region_iommu_num_indexes(iommu_mr));
 
-    QLIST_INSERT_HEAD(&iommu_mr->iommu_notify, n, node);
+    qemu_spin_lock(&iommu_mr->iommu_notify_lock);
+    QLIST_INSERT_HEAD_RCU(&iommu_mr->iommu_notify, n, node);
+    qemu_spin_unlock(&iommu_mr->iommu_notify_lock);
     ret = memory_region_update_iommu_notify_flags(iommu_mr, errp);
     if (ret) {
-        QLIST_REMOVE(n, node);
+        qemu_spin_lock(&iommu_mr->iommu_notify_lock);
+        QLIST_REMOVE_RCU(n, node);
+        qemu_spin_unlock(&iommu_mr->iommu_notify_lock);
     }
     return ret;
 }
@@ -2376,8 +2383,10 @@ void memory_region_unregister_iommu_notifier(MemoryRegion *mr,
         memory_region_unregister_iommu_notifier(mr->alias, n);
         return;
     }
-    QLIST_REMOVE(n, node);
     iommu_mr = IOMMU_MEMORY_REGION(mr);
+    qemu_spin_lock(&iommu_mr->iommu_notify_lock);
+    QLIST_REMOVE_RCU(n, node);
+    qemu_spin_unlock(&iommu_mr->iommu_notify_lock);
     memory_region_update_iommu_notify_flags(iommu_mr, NULL);
 }
 
@@ -2430,9 +2439,11 @@ void memory_region_notify_iommu(IOMMUMemoryRegion *iommu_mr,
 
     assert(memory_region_is_iommu(MEMORY_REGION(iommu_mr)));
 
-    IOMMU_NOTIFIER_FOREACH(iommu_notifier, iommu_mr) {
-        if (iommu_notifier->iommu_idx == iommu_idx) {
-            memory_region_notify_iommu_one(iommu_notifier, &event);
+    WITH_RCU_READ_LOCK_GUARD() {
+        IOMMU_NOTIFIER_FOREACH(iommu_notifier, iommu_mr) {
+            if (iommu_notifier->iommu_idx == iommu_idx) {
+                memory_region_notify_iommu_one(iommu_notifier, &event);
+            }
         }
     }
 }

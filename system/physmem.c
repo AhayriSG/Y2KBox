@@ -589,15 +589,25 @@ typedef struct TCGIOMMUNotifier {
     bool active;
 } TCGIOMMUNotifier;
 
+static void tcg_commit_cpu(CPUState *cpu, run_on_cpu_data data);
+
 static void tcg_iommu_unmap_notify(IOMMUNotifier *n, IOMMUTLBEntry *iotlb)
 {
     TCGIOMMUNotifier *notifier = container_of(n, TCGIOMMUNotifier, n);
 
-    if (!notifier->active) {
+    /*
+     * Pair with tcg_register_iommu_notifier() using atomic exchange so
+     * cross-thread IOMMU unmaps safely queue an async TLB flush on the
+     * target vCPU instead of calling tlb_flush() from the wrong thread.
+     */
+    if (!qatomic_xchg(&notifier->active, false)) {
         return;
     }
-    tlb_flush(notifier->cpu);
-    notifier->active = false;
+    if (qemu_cpu_is_self(notifier->cpu) || !notifier->cpu->halt_cond) {
+        tlb_flush(notifier->cpu);
+    } else {
+        async_run_on_cpu(notifier->cpu, tcg_commit_cpu, RUN_ON_CPU_NULL);
+    }
     /* We leave the notifier struct on the list to avoid reallocating it later.
      * Generally the number of IOMMUs a CPU deals with will be small.
      * In any case we can't unregister the iommu notifier from a notify
@@ -648,8 +658,9 @@ static void tcg_register_iommu_notifier(CPUState *cpu,
                                               &error_fatal);
     }
 
-    if (!notifier->active) {
-        notifier->active = true;
+    if (!qatomic_read(&notifier->active)) {
+        qatomic_set(&notifier->active, true);
+        smp_mb();
     }
 }
 
@@ -696,7 +707,9 @@ address_space_translate_for_iotlb(CPUState *cpu, int asidx, hwaddr orig_addr,
 
         imrc = memory_region_get_iommu_class_nocheck(iommu_mr);
 
-        iommu_idx = imrc->attrs_to_index(iommu_mr, attrs);
+        iommu_idx = imrc->attrs_to_index
+                        ? imrc->attrs_to_index(iommu_mr, attrs)
+                        : 0;
         tcg_register_iommu_notifier(cpu, iommu_mr, iommu_idx);
         /* We need all the permissions, so pass IOMMU_NONE so the IOMMU
          * doesn't short-cut its translation table walk.

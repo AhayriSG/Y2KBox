@@ -26,6 +26,8 @@
 #include "qemu/notify.h"
 #include "qom/object.h"
 #include "qemu/rcu.h"
+#include "qemu/rcu_queue.h"
+#include "qemu/thread.h"
 
 enum device_endian {
 #ifndef TARGET_NOT_USING_LEGACY_NATIVE_ENDIAN_API
@@ -611,12 +613,13 @@ struct MemoryRegion {
 struct IOMMUMemoryRegion {
     MemoryRegion parent_obj;
 
+    QemuSpin iommu_notify_lock;
     QLIST_HEAD(, IOMMUNotifier) iommu_notify;
     IOMMUNotifierFlag iommu_notify_flags;
 };
 
 #define IOMMU_NOTIFIER_FOREACH(n, mr) \
-    QLIST_FOREACH((n), &(mr)->iommu_notify, node)
+    QLIST_FOREACH_RCU((n), &(mr)->iommu_notify, node)
 
 #define MEMORY_LISTENER_PRIORITY_MIN            0
 #define MEMORY_LISTENER_PRIORITY_ACCEL          10
