@@ -799,6 +799,10 @@ Guest-side 3D stacks for old Windows (alternatives / building blocks)
 CD-ROM, BIN/CUE parsing, and disc-drive behavior
 * libcdio C library: https://github.com/libcdio/libcdio-C - reference implementation/library for optical-disc and CUE/BIN handling.
 * 86Box CD-ROM implementation: https://github.com/86Box/86Box/tree/master/src/cdrom - reference for CD-ROM device and media behavior.
+* libaaruformat: https://github.com/aaru-dps/libaaruformat - C library for reading and writing AaruFormat images; useful for archival disc-image metadata and sector data.
+* 86Box AaruFormat implementation: https://github.com/86Box/86Box/pull/7424 - emulator integration reference for AaruFormat image support.
+* 86Box CloneCD and TOC handling (PR #7800): https://github.com/86Box/86Box/pull/7800 - reference for CloneCD image and TOC-format handling.
+* 86Box SBI sidecar support (PR #7462): https://github.com/86Box/86Box/pull/7462 - reference for .SBI subchannel patch files and CD subchannel handling.
 * DuckStation CUE parser: https://github.com/stenzek/duckstation/blob/master/src/util/cd_image_cue.cpp - a mature emulator CUE-sheet parser.
 * Cue sheet (.cue) format overview: https://emulation.gametechwiki.com/index.php/Cue_sheet_(.cue)
 * GNU ccd2cue CUE-sheet format documentation: https://www.gnu.org/software/ccd2cue/manual/html_node/CUE-sheet-format.html#CUE-sheet-format
