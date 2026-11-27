@@ -2375,11 +2375,23 @@ static void *atomic_mmu_lookup(CPUState *cpu, vaddr addr, MemOpIdx oi,
  * @size: number of bytes
  * @mmu_idx: virtual address context
  * @ra: return address into tcg generated code, or 0
- * Context: BQL held
+ * Context: BQL held unless mr->lockless_io
  *
  * Load @size bytes from @addr, which is memory-mapped i/o.
  * The bytes are concatenated in big-endian order with @ret_be.
  */
+static inline bool cputlb_mmio_bql_lock(MemoryRegion *mr)
+{
+    if (!bql_locked() && !mr->lockless_io) {
+        uint64_t perf_bql_ns =
+            qemu_perf_stats_begin(QEMU_PERF_TCG_MMIO_BQL_WAIT);
+        bql_lock();
+        qemu_perf_stats_end(QEMU_PERF_TCG_MMIO_BQL_WAIT, perf_bql_ns);
+        return true;
+    }
+    return false;
+}
+
 static uint64_t int_ld_mmio_beN(CPUState *cpu, CPUTLBEntryFull *full,
                                 uint64_t ret_be, vaddr addr, int size,
                                 int mmu_idx, MMUAccessType type, uintptr_t ra,
@@ -2421,15 +2433,21 @@ static uint64_t do_ld_mmio_beN(CPUState *cpu, CPUTLBEntryFull *full,
     MemoryRegionSection *section;
     MemoryRegion *mr;
     hwaddr mr_offset;
+    bool release_lock;
+    uint64_t ret;
 
     tcg_debug_assert(size > 0 && size <= 8);
 
     section = io_prepare(&mr_offset, cpu, full, addr, ra);
     mr = section->mr;
 
-    BQL_LOCK_GUARD();
-    return int_ld_mmio_beN(cpu, full, ret_be, addr, size, mmu_idx,
-                           type, ra, mr, mr_offset);
+    release_lock = cputlb_mmio_bql_lock(mr);
+    ret = int_ld_mmio_beN(cpu, full, ret_be, addr, size, mmu_idx,
+                          type, ra, mr, mr_offset);
+    if (release_lock) {
+        bql_unlock();
+    }
+    return ret;
 }
 
 static Int128 do_ld16_mmio_beN(CPUState *cpu, CPUTLBEntryFull *full,
@@ -2439,6 +2457,7 @@ static Int128 do_ld16_mmio_beN(CPUState *cpu, CPUTLBEntryFull *full,
     MemoryRegionSection *section;
     MemoryRegion *mr;
     hwaddr mr_offset;
+    bool release_lock;
     uint64_t a, b;
 
     tcg_debug_assert(size > 8 && size <= 16);
@@ -2446,11 +2465,14 @@ static Int128 do_ld16_mmio_beN(CPUState *cpu, CPUTLBEntryFull *full,
     section = io_prepare(&mr_offset, cpu, full, addr, ra);
     mr = section->mr;
 
-    BQL_LOCK_GUARD();
+    release_lock = cputlb_mmio_bql_lock(mr);
     a = int_ld_mmio_beN(cpu, full, ret_be, addr, size - 8, mmu_idx,
                         MMU_DATA_LOAD, ra, mr, mr_offset);
     b = int_ld_mmio_beN(cpu, full, ret_be, addr + size - 8, 8, mmu_idx,
                         MMU_DATA_LOAD, ra, mr, mr_offset + size - 8);
+    if (release_lock) {
+        bql_unlock();
+    }
     return int128_make128(b, a);
 }
 
@@ -2888,7 +2910,7 @@ static Int128 do_ld16_mmu(CPUState *cpu, vaddr addr,
  * @size: number of bytes
  * @mmu_idx: virtual address context
  * @ra: return address into tcg generated code, or 0
- * Context: BQL held
+ * Context: BQL held unless mr->lockless_io
  *
  * Store @size bytes at @addr, which is memory-mapped i/o.
  * The bytes to store are extracted in little-endian order from @val_le;
@@ -2935,15 +2957,21 @@ static uint64_t do_st_mmio_leN(CPUState *cpu, CPUTLBEntryFull *full,
     MemoryRegionSection *section;
     hwaddr mr_offset;
     MemoryRegion *mr;
+    bool release_lock;
+    uint64_t ret;
 
     tcg_debug_assert(size > 0 && size <= 8);
 
     section = io_prepare(&mr_offset, cpu, full, addr, ra);
     mr = section->mr;
 
-    BQL_LOCK_GUARD();
-    return int_st_mmio_leN(cpu, full, val_le, addr, size, mmu_idx,
-                           ra, mr, mr_offset);
+    release_lock = cputlb_mmio_bql_lock(mr);
+    ret = int_st_mmio_leN(cpu, full, val_le, addr, size, mmu_idx,
+                          ra, mr, mr_offset);
+    if (release_lock) {
+        bql_unlock();
+    }
+    return ret;
 }
 
 static uint64_t do_st16_mmio_leN(CPUState *cpu, CPUTLBEntryFull *full,
@@ -2953,17 +2981,23 @@ static uint64_t do_st16_mmio_leN(CPUState *cpu, CPUTLBEntryFull *full,
     MemoryRegionSection *section;
     MemoryRegion *mr;
     hwaddr mr_offset;
+    bool release_lock;
+    uint64_t ret;
 
     tcg_debug_assert(size > 8 && size <= 16);
 
     section = io_prepare(&mr_offset, cpu, full, addr, ra);
     mr = section->mr;
 
-    BQL_LOCK_GUARD();
+    release_lock = cputlb_mmio_bql_lock(mr);
     int_st_mmio_leN(cpu, full, int128_getlo(val_le), addr, 8,
                     mmu_idx, ra, mr, mr_offset);
-    return int_st_mmio_leN(cpu, full, int128_gethi(val_le), addr + 8,
-                           size - 8, mmu_idx, ra, mr, mr_offset + 8);
+    ret = int_st_mmio_leN(cpu, full, int128_gethi(val_le), addr + 8,
+                          size - 8, mmu_idx, ra, mr, mr_offset + 8);
+    if (release_lock) {
+        bql_unlock();
+    }
+    return ret;
 }
 
 /*

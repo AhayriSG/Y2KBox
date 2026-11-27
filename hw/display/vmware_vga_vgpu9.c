@@ -5264,6 +5264,16 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     uint32_t stream_elem_end[SVGA3D_MAX_VERTEX_ARRAYS];
     bool stream_exact[SVGA3D_MAX_VERTEX_ARRAYS];
     VMSVGA3DD3D9DrawBatchPlan batch;
+    VMSVGA3DD3D9DrawRangePlan range_plans[SVGA3D_MAX_DRAW_PRIMITIVE_RANGES];
+    struct {
+        bool scanned;
+        bool ok;
+        uint32_t min_idx;
+        uint32_t max_idx;
+    } range_idx_bounds[SVGA3D_MAX_DRAW_PRIMITIVE_RANGES];
+    bool range_plans_cached = false;
+    bool range_plans_valid = false;
+    uint32_t cached_vb0_bytes = 0;
     void *declaration = NULL;
     uint32_t stream_count = 0;
     uint32_t vertex_buffer_bytes;
@@ -5469,6 +5479,32 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                         perf_state_start);
     perf_state_start = 0;
 
+    if (range_count <= SVGA3D_MAX_DRAW_PRIMITIVE_RANGES &&
+        vertex_decls[0].array.surfaceId < SVGA3D_MAX_SURFACE_IDS &&
+        s->svga3d->surfaces[vertex_decls[0].array.surfaceId] != NULL &&
+        s->svga3d->surfaces[vertex_decls[0].array.surfaceId]->storage_bytes <=
+            UINT32_MAX) {
+        uint32_t r;
+
+        cached_vb0_bytes =
+            (uint32_t)s->svga3d->surfaces[vertex_decls[0].array.surfaceId]
+                ->storage_bytes;
+        range_plans_cached = true;
+        range_plans_valid = true;
+        for (r = 0; r < range_count; r++) {
+            range_idx_bounds[r].scanned = false;
+            range_idx_bounds[r].ok = false;
+            range_idx_bounds[r].min_idx = 0;
+            range_idx_bounds[r].max_idx = 0;
+            if (range_plans_valid &&
+                !vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0], &ranges[r],
+                                               cached_vb0_bytes,
+                                               &range_plans[r])) {
+                range_plans_valid = false;
+            }
+        }
+    }
+
     for (i = 0; i < stream_count; i++) {
         VMSVGA3DSurface *surface;
         uint32_t needed_end = UINT32_MAX;
@@ -5514,67 +5550,99 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                                      ->surfaces[vertex_decls[0].array.surfaceId]
                                      ->storage_bytes;
             uint64_t max_needed = 0;
-            bool bounds_ok = range_count != 0;
+            bool bounds_ok = range_count != 0 &&
+                             (!range_plans_cached || range_plans_valid);
             uint32_t r;
 
             for (r = 0; r < range_count && bounds_ok; r++) {
-                VMSVGA3DD3D9DrawRangePlan rplan;
+                VMSVGA3DD3D9DrawRangePlan rplan_local;
+                const VMSVGA3DD3D9DrawRangePlan *rplan;
                 uint32_t max_v = 0;
                 uint64_t end_bytes;
 
-                if (!vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0], &ranges[r],
-                                                   vb0_bytes, &rplan)) {
-                    bounds_ok = false;
-                    break;
-                }
-                if (rplan.action == VMSVGA3D_D3D9_DRAW_ACTION_NONINDEXED) {
-                    uint32_t vcount = vmsvga3d_d3d9_primitive_vertex_count(
-                        rplan.primitive_type, rplan.primitive_count);
-
-                    if (vcount == 0 ||
-                        rplan.start_vertex > UINT32_MAX - (vcount - 1u)) {
+                if (range_plans_cached) {
+                    rplan = &range_plans[r];
+                } else {
+                    if (!vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0],
+                                                       &ranges[r], vb0_bytes,
+                                                       &rplan_local)) {
                         bounds_ok = false;
                         break;
                     }
-                    max_v = rplan.start_vertex + vcount - 1u;
+                    rplan = &rplan_local;
+                }
+                if (rplan->action == VMSVGA3D_D3D9_DRAW_ACTION_NONINDEXED) {
+                    uint32_t vcount = vmsvga3d_d3d9_primitive_vertex_count(
+                        rplan->primitive_type, rplan->primitive_count);
+
+                    if (vcount == 0 ||
+                        rplan->start_vertex > UINT32_MAX - (vcount - 1u)) {
+                        bounds_ok = false;
+                        break;
+                    }
+                    max_v = rplan->start_vertex + vcount - 1u;
                 } else {
-                    VMSVGA3DSurface *idx_surf;
                     uint32_t icount = vmsvga3d_d3d9_primitive_vertex_count(
-                        rplan.primitive_type, rplan.indexed.primitive_count);
+                        rplan->primitive_type, rplan->indexed.primitive_count);
                     uint32_t min_idx = 0;
                     uint32_t max_idx = 0;
                     int64_t signed_max;
 
                     if (icount == 0 || icount > 4096u ||
-                        rplan.index_surface_id >= SVGA3D_MAX_SURFACE_IDS) {
+                        rplan->index_surface_id >= SVGA3D_MAX_SURFACE_IDS) {
                         bounds_ok = false;
                         break;
                     }
-                    idx_surf = s->svga3d->surfaces[rplan.index_surface_id];
-                    if (idx_surf == NULL || idx_surf->mip_count != 1 ||
-                        idx_surf->mips == NULL ||
-                        idx_surf->mips[0].data == NULL ||
-                        !vmsvga3d_d3d9_scan_index_bounds(
-                            idx_surf->mips[0].data, idx_surf->mips[0].data_size,
-                            ranges[r].indexWidth, rplan.indexed.start_index,
-                            icount, &min_idx, &max_idx)) {
-                        bounds_ok = false;
-                        break;
-                    }
-                    if (vmsvga3d_dxvk_d3d9_software_vp(s->dxvk)) {
-                        if (rplan.indexed.num_vertices == 0 ||
-                            rplan.indexed.min_vertex_index >
-                                UINT32_MAX - (rplan.indexed.num_vertices - 1u)) {
+                    if (range_plans_cached && range_idx_bounds[r].scanned) {
+                        if (!range_idx_bounds[r].ok) {
                             bounds_ok = false;
                             break;
                         }
-                        if (rplan.indexed.min_vertex_index +
-                                rplan.indexed.num_vertices - 1u > max_idx) {
-                            max_idx = rplan.indexed.min_vertex_index +
-                                      rplan.indexed.num_vertices - 1u;
+                        min_idx = range_idx_bounds[r].min_idx;
+                        max_idx = range_idx_bounds[r].max_idx;
+                    } else {
+                        VMSVGA3DSurface *idx_surf =
+                            s->svga3d->surfaces[rplan->index_surface_id];
+                        bool scan_ok =
+                            idx_surf != NULL && idx_surf->mip_count == 1 &&
+                            idx_surf->mips != NULL &&
+                            idx_surf->mips[0].data != NULL &&
+                            vmsvga3d_d3d9_scan_index_bounds(
+                                idx_surf->mips[0].data,
+                                idx_surf->mips[0].data_size,
+                                ranges[r].indexWidth,
+                                rplan->indexed.start_index, icount, &min_idx,
+                                &max_idx);
+
+                        if (range_plans_cached &&
+                            !(idx_surf != NULL &&
+                              idx_surf->dxvk_surface != NULL &&
+                              vmsvga3d_dxvk_d3d11_surface_resident(
+                                  idx_surf->dxvk_surface))) {
+                            range_idx_bounds[r].scanned = true;
+                            range_idx_bounds[r].ok = scan_ok;
+                            range_idx_bounds[r].min_idx = min_idx;
+                            range_idx_bounds[r].max_idx = max_idx;
+                        }
+                        if (!scan_ok) {
+                            bounds_ok = false;
+                            break;
                         }
                     }
-                    signed_max = (int64_t)rplan.indexed.base_vertex_index +
+                    if (vmsvga3d_dxvk_d3d9_software_vp(s->dxvk)) {
+                        if (rplan->indexed.num_vertices == 0 ||
+                            rplan->indexed.min_vertex_index >
+                                UINT32_MAX - (rplan->indexed.num_vertices - 1u)) {
+                            bounds_ok = false;
+                            break;
+                        }
+                        if (rplan->indexed.min_vertex_index +
+                                rplan->indexed.num_vertices - 1u > max_idx) {
+                            max_idx = rplan->indexed.min_vertex_index +
+                                      rplan->indexed.num_vertices - 1u;
+                        }
+                    }
+                    signed_max = (int64_t)rplan->indexed.base_vertex_index +
                                  (int64_t)max_idx;
                     if (signed_max < 0 || signed_max > UINT32_MAX) {
                         bounds_ok = false;
@@ -5667,8 +5735,11 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
     for (i = 0; i < range_count; i++) {
         VMSVGA3DD3D9DrawRangePlan plan;
 
-        if (!vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0], &ranges[i],
-                                            vertex_buffer_bytes, &plan)) {
+        if (range_plans_cached && range_plans_valid &&
+            cached_vb0_bytes == vertex_buffer_bytes) {
+            plan = range_plans[i];
+        } else if (!vmsvga3d_d3d9_draw_range_plan(&vertex_decls[0], &ranges[i],
+                                                  vertex_buffer_bytes, &plan)) {
             failure_range = i;
             failure_stage = "range-plan";
             goto out;
@@ -5875,14 +5946,24 @@ VMSVGA3DD3D9AccelResult vmsvga3d_d3d9_runtime_draw_primitives(
                 if (any_vb_needs_exact) {
                     uint32_t min_idx = 0;
                     uint32_t max_idx = 0;
-                    bool scan_ok =
-                        index_surface->mip_count == 1 &&
-                        index_surface->mips != NULL &&
-                        vmsvga3d_d3d9_scan_index_bounds(
-                            index_surface->mips[0].data,
-                            index_surface->mips[0].data_size,
-                            ranges[i].indexWidth, plan.indexed.start_index,
-                            index_count, &min_idx, &max_idx);
+                    bool scan_ok;
+
+                    if (range_plans_cached && range_plans_valid &&
+                        cached_vb0_bytes == vertex_buffer_bytes &&
+                        range_idx_bounds[i].scanned) {
+                        scan_ok = range_idx_bounds[i].ok;
+                        min_idx = range_idx_bounds[i].min_idx;
+                        max_idx = range_idx_bounds[i].max_idx;
+                    } else {
+                        scan_ok =
+                            index_surface->mip_count == 1 &&
+                            index_surface->mips != NULL &&
+                            vmsvga3d_d3d9_scan_index_bounds(
+                                index_surface->mips[0].data,
+                                index_surface->mips[0].data_size,
+                                ranges[i].indexWidth, plan.indexed.start_index,
+                                index_count, &min_idx, &max_idx);
+                    }
                     bool range_exact = false;
                     uint32_t min_v = 0;
                     uint32_t max_v = 0;

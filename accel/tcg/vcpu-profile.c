@@ -39,6 +39,8 @@ void vcpu_profile_symbol_anchor(void)
 #define VCPU_PROF_SYM_NAME_LEN 96U
 #define VCPU_PROF_MOD_NAME_LEN 48U
 #define VCPU_PROF_MAX_FUNC_SPAN (64ULL * 1024ULL)
+#define VCPU_PROF_DBGHELP_MAX_EXACT_DISP UINT64_C(0x200)
+#define VCPU_PROF_DBGHELP_DISP_BUCKET UINT64_C(0x100)
 #define VCPU_PROF_MAX_EXEC_SECS 16U
 #define VCPU_PROF_TCG_STAT_COUNT 8U
 
@@ -666,9 +668,25 @@ static void resolve_host_rip(const PeSymTable *pe, const VcpuDbgHelp *dh,
         if (dh->from_addr(GetCurrentProcess(), (DWORD64)rip, &disp,
                           &buf.info) &&
             buf.info.Name[0] != '\0') {
-            snprintf(out->sym, sizeof(out->sym), "%s", buf.info.Name);
-            if (out->rva >= disp) {
-                out->rva -= disp;
+            uint64_t sym_rva = (out->rva >= disp) ? (out->rva - disp) : out->rva;
+
+            if (disp >= VCPU_PROF_DBGHELP_MAX_EXACT_DISP) {
+                /*
+                 * Without PDBs for OS DLLs (e.g. ntdll.dll), SymFromAddr maps
+                 * unexported internal routines to the nearest preceding PE
+                 * export with a large displacement. Preserve a bucketed offset
+                 * so distinct internal routines are not collapsed onto the
+                 * preceding export (such as memset or RtlQueryFeatureConfiguration).
+                 */
+                uint64_t disp_bucket =
+                    disp & ~(VCPU_PROF_DBGHELP_DISP_BUCKET - 1);
+
+                snprintf(out->sym, sizeof(out->sym), "%.72s+0x%" PRIx64,
+                         buf.info.Name, disp_bucket);
+                out->rva = sym_rva + disp_bucket;
+            } else {
+                snprintf(out->sym, sizeof(out->sym), "%s", buf.info.Name);
+                out->rva = sym_rva;
             }
             out->resolution_kind = 2;
             return;
