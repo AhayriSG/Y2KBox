@@ -253,6 +253,9 @@ struct CPUTLBEntryFull {
     /* Additional tlb flags requested by tlb_fill. */
     uint8_t tlb_fill_flags;
 
+    /* True if this translation is global (preserved across non-global flushes). */
+    bool global;
+
     /*
      * Additional tlb flags for use by the slow path. If non-zero,
      * the corresponding CPUTLBEntry comparator must have TLB_FORCE_SLOW.
@@ -314,13 +317,19 @@ typedef struct CPUTLBDesc {
     uint32_t large_page_2m_dirty;
     uint64_t large_page_2m_bitmap[32];
     /*
-     * Dirty-slot tracking for fast->table so flushes on mostly-empty large
-     * dynamic TLBs avoid memsetting the entire table.  Protected by tlb.c.lock.
+     * Dirty-slot and global/non-global tracking for fast->table so flushes on
+     * mostly-empty large dynamic TLBs avoid memsetting the entire table and
+     * non-global CR3 flushes preserve global mappings.  Protected by tlb.c.lock.
      */
     uint64_t dirty_chunks;
+    uint32_t *dirty_indices;
+    uint32_t *nonglobal_indices;
+    uint32_t dirty_cap;
     uint32_t dirty_count;
+    uint32_t nonglobal_cap;
+    uint32_t nonglobal_count;
+    uint32_t global_count;
     uint8_t dirty_chunk_shift;
-    uint32_t dirty_indices[512];
 } CPUTLBDesc;
 
 /*

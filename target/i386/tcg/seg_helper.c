@@ -112,6 +112,9 @@ int get_pg_mode(CPUX86State *env)
     if (env->cr[4] & CR4_PSE_MASK) {
         pg_mode |= PG_MODE_PSE;
     }
+    if (env->cr[4] & CR4_PGE_MASK) {
+        pg_mode |= PG_MODE_PGE;
+    }
     if (env->cr[4] & CR4_SMEP_MASK) {
         pg_mode |= PG_MODE_SMEP;
     }
@@ -515,7 +518,7 @@ static void switch_tss_ra(CPUX86State *env, int tss_selector,
     env->tr.flags = e2 & ~DESC_TSS_BUSY_MASK;
 
     if ((type & 8) && (env->cr[0] & CR0_PG_MASK)) {
-        cpu_x86_update_cr3(env, new_cr3);
+        cpu_x86_update_cr3_nonglobal(env, new_cr3);
     }
 
     /* load all registers without an exception, then reload them with

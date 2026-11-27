@@ -185,7 +185,8 @@ void cpu_x86_update_cr0(CPUX86State *env, uint32_t new_cr0)
 
 /* XXX: in legacy PAE mode, generate a GPF if reserved bits are set in
    the PDPT */
-void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3)
+static void cpu_x86_update_cr3_common(CPUX86State *env, target_ulong new_cr3,
+                                      bool preserve_global)
 {
     env->cr[3] = new_cr3;
     if (env->cr[0] & CR0_PG_MASK) {
@@ -196,9 +197,25 @@ void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3)
             (1u << MMU_NESTED_IDX);
 
         qemu_log_mask(CPU_LOG_MMU,
-                        "CR3 update: CR3=" TARGET_FMT_lx "\n", new_cr3);
-        tlb_flush_by_mmuidx(env_cpu(env), idxmap);
+                      "CR3 update: CR3=" TARGET_FMT_lx "\n", new_cr3);
+        if (preserve_global &&
+            (env->cr[4] & CR4_PGE_MASK) &&
+            !(env->hflags & (HF_SMM_MASK | HF_GUEST_MASK))) {
+            tlb_flush_by_mmuidx_nonglobal(env_cpu(env), idxmap);
+        } else {
+            tlb_flush_by_mmuidx(env_cpu(env), idxmap);
+        }
     }
+}
+
+void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3)
+{
+    cpu_x86_update_cr3_common(env, new_cr3, false);
+}
+
+void cpu_x86_update_cr3_nonglobal(CPUX86State *env, target_ulong new_cr3)
+{
+    cpu_x86_update_cr3_common(env, new_cr3, true);
 }
 
 void cpu_x86_update_cr4(CPUX86State *env, uint32_t new_cr4)

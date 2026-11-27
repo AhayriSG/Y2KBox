@@ -278,12 +278,18 @@ static void tlb_mmu_resize_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast,
 
     g_free(fast->table);
     g_free(desc->fulltlb);
+    g_free(desc->dirty_indices);
+    g_free(desc->nonglobal_indices);
 
     tlb_window_reset(desc, now, 0);
     /* desc->n_used_entries is cleared by the caller */
+    uint32_t dirty_cap = (uint32_t)MAX(new_size / 8, (size_t)64);
+    uint32_t nonglobal_cap = (uint32_t)MAX(new_size / 4, (size_t)64);
     fast->mask = (new_size - 1) << CPU_TLB_ENTRY_BITS;
     fast->table = g_try_new(CPUTLBEntry, new_size);
     desc->fulltlb = g_try_new(CPUTLBEntryFull, new_size);
+    desc->dirty_indices = g_try_new(uint32_t, dirty_cap);
+    desc->nonglobal_indices = g_try_new(uint32_t, nonglobal_cap);
 
     /*
      * If the allocations fail, try smaller sizes. We just freed some
@@ -292,32 +298,51 @@ static void tlb_mmu_resize_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast,
      * allocations to fail though, so we progressively reduce the allocation
      * size, aborting if we cannot even allocate the smallest TLB we support.
      */
-    while (fast->table == NULL || desc->fulltlb == NULL) {
+    while (fast->table == NULL || desc->fulltlb == NULL ||
+           desc->dirty_indices == NULL || desc->nonglobal_indices == NULL) {
         if (new_size == (1 << CPU_TLB_DYN_MIN_BITS)) {
             error_report("%s: %s", __func__, strerror(errno));
             abort();
         }
         new_size = MAX(new_size >> 1, 1 << CPU_TLB_DYN_MIN_BITS);
+        dirty_cap = (uint32_t)MAX(new_size / 8, (size_t)64);
+        nonglobal_cap = (uint32_t)MAX(new_size / 4, (size_t)64);
         fast->mask = (new_size - 1) << CPU_TLB_ENTRY_BITS;
 
         g_free(fast->table);
         g_free(desc->fulltlb);
+        g_free(desc->dirty_indices);
+        g_free(desc->nonglobal_indices);
         fast->table = g_try_new(CPUTLBEntry, new_size);
         desc->fulltlb = g_try_new(CPUTLBEntryFull, new_size);
+        desc->dirty_indices = g_try_new(uint32_t, dirty_cap);
+        desc->nonglobal_indices = g_try_new(uint32_t, nonglobal_cap);
     }
 
     /* Fresh uninitialized fast->table requires a full memset on next flush. */
+    desc->dirty_cap = dirty_cap;
+    desc->nonglobal_cap = nonglobal_cap;
     desc->dirty_chunk_shift = ctz64(new_size) > 6 ? (uint8_t)(ctz64(new_size) - 6) : 0;
     desc->dirty_chunks = ~UINT64_C(0);
-    desc->dirty_count = ARRAY_SIZE(desc->dirty_indices);
+    desc->dirty_count = dirty_cap;
+    desc->nonglobal_count = 0;
+    desc->global_count = 0;
 }
 
 static inline void tlb_mark_index_dirty_locked(CPUTLBDesc *desc, size_t index)
 {
-    if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices)) {
+    if (desc->dirty_count < desc->dirty_cap) {
         desc->dirty_indices[desc->dirty_count++] = (uint32_t)index;
     }
     desc->dirty_chunks |= UINT64_C(1) << (index >> desc->dirty_chunk_shift);
+}
+
+static inline void tlb_mark_index_nonglobal_locked(CPUTLBDesc *desc,
+                                                   size_t index)
+{
+    if (desc->nonglobal_count < desc->nonglobal_cap) {
+        desc->nonglobal_indices[desc->nonglobal_count++] = (uint32_t)index;
+    }
 }
 
 static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
@@ -325,6 +350,8 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
     size_t n_entries = tlb_n_entries(fast);
 
     desc->n_used_entries = 0;
+    desc->global_count = 0;
+    desc->nonglobal_count = 0;
     desc->large_page_addr = -1;
     desc->large_page_mask = -1;
     if (desc->large_page_2m_dirty != 0) {
@@ -339,7 +366,7 @@ static void tlb_mmu_flush_locked(CPUTLBDesc *desc, CPUTLBDescFast *fast)
     }
 
     if (desc->dirty_chunks != 0) {
-        if (desc->dirty_count < ARRAY_SIZE(desc->dirty_indices) &&
+        if (desc->dirty_count < desc->dirty_cap &&
             (size_t)desc->dirty_count * 8 < n_entries) {
             uint32_t i;
 
@@ -445,17 +472,25 @@ static void tlb_flush_one_mmuidx_locked(CPUState *cpu, int mmu_idx,
 static void tlb_mmu_init(CPUTLBDesc *desc, CPUTLBDescFast *fast, int64_t now)
 {
     size_t n_entries = 1 << CPU_TLB_DYN_DEFAULT_BITS;
+    uint32_t dirty_cap = (uint32_t)MAX(n_entries / 8, (size_t)64);
+    uint32_t nonglobal_cap = (uint32_t)MAX(n_entries / 4, (size_t)64);
 
     tlb_window_reset(desc, now, 0);
     desc->n_used_entries = 0;
+    desc->global_count = 0;
+    desc->nonglobal_count = 0;
     desc->large_page_2m_dirty = 0;
     memset(desc->large_page_2m_bitmap, 0, sizeof(desc->large_page_2m_bitmap));
     fast->mask = (n_entries - 1) << CPU_TLB_ENTRY_BITS;
     fast->table = g_new(CPUTLBEntry, n_entries);
     desc->fulltlb = g_new(CPUTLBEntryFull, n_entries);
+    desc->dirty_indices = g_new(uint32_t, dirty_cap);
+    desc->nonglobal_indices = g_new(uint32_t, nonglobal_cap);
+    desc->dirty_cap = dirty_cap;
+    desc->nonglobal_cap = nonglobal_cap;
     desc->dirty_chunk_shift = ctz64(n_entries) > 6 ? (uint8_t)(ctz64(n_entries) - 6) : 0;
     desc->dirty_chunks = ~UINT64_C(0);
-    desc->dirty_count = ARRAY_SIZE(desc->dirty_indices);
+    desc->dirty_count = dirty_cap;
     desc->vindex = CPU_VTLB_SIZE;
     tlb_mmu_flush_locked(desc, fast);
 }
@@ -467,7 +502,76 @@ static inline void tlb_n_used_entries_inc(CPUState *cpu, uintptr_t mmu_idx)
 
 static inline void tlb_n_used_entries_dec(CPUState *cpu, uintptr_t mmu_idx)
 {
-    cpu->neg.tlb.d[mmu_idx].n_used_entries--;
+    if (cpu->neg.tlb.d[mmu_idx].n_used_entries > 0) {
+        cpu->neg.tlb.d[mmu_idx].n_used_entries--;
+    }
+}
+
+static void tlb_flush_one_mmuidx_nonglobal_locked(CPUState *cpu, int mmu_idx,
+                                                  int64_t now)
+{
+    CPUTLBDesc *desc = &cpu->neg.tlb.d[mmu_idx];
+    CPUTLBDescFast *fast = cpu_tlb_fast(cpu, mmu_idx);
+    size_t n_entries = tlb_n_entries(fast);
+    size_t rate;
+    bool window_expired;
+    uint32_t i;
+
+    if (desc->global_count == 0 ||
+        desc->nonglobal_count >= desc->nonglobal_cap) {
+        tlb_flush_one_mmuidx_locked(cpu, mmu_idx, now);
+        return;
+    }
+
+    if (desc->n_used_entries > desc->window_max_entries) {
+        desc->window_max_entries = desc->n_used_entries;
+    }
+    rate = desc->window_max_entries * 100 / n_entries;
+    window_expired = now > desc->window_begin_ns + 100 * 1000 * 1000LL;
+
+    if (rate > 70 && n_entries < (1 << CPU_TLB_DYN_MAX_BITS)) {
+        tlb_flush_one_mmuidx_locked(cpu, mmu_idx, now);
+        return;
+    }
+    if (rate < 30 && window_expired &&
+        n_entries > (1 << CPU_TLB_DYN_MIN_BITS)) {
+        size_t ceil = pow2ceil(desc->window_max_entries);
+        if (desc->window_max_entries * 100 / ceil > 70) {
+            ceil *= 2;
+        }
+        if (MAX(ceil, (size_t)(1 << CPU_TLB_DYN_MIN_BITS)) < n_entries) {
+            tlb_flush_one_mmuidx_locked(cpu, mmu_idx, now);
+            return;
+        }
+    }
+
+    for (i = 0; i < desc->nonglobal_count; i++) {
+        uint32_t idx = desc->nonglobal_indices[i];
+        CPUTLBEntry *te = &fast->table[idx];
+
+        if (!tlb_entry_is_empty(te) && !desc->fulltlb[idx].global) {
+            memset(te, -1, sizeof(CPUTLBEntry));
+            tlb_n_used_entries_dec(cpu, mmu_idx);
+        }
+    }
+    desc->nonglobal_count = 0;
+
+    if (desc->vindex != 0) {
+        if (desc->vindex >= CPU_VTLB_SIZE) {
+            memset(desc->vtable, -1, sizeof(desc->vtable));
+        } else {
+            size_t j;
+
+            for (j = 0; j < desc->vindex; j++) {
+                memset(&desc->vtable[j], -1, sizeof(CPUTLBEntry));
+            }
+        }
+        desc->vindex = 0;
+    }
+
+    if (window_expired) {
+        tlb_window_reset(desc, now, desc->n_used_entries);
+    }
 }
 
 void tlb_init(CPUState *cpu)
@@ -496,6 +600,8 @@ void tlb_destroy(CPUState *cpu)
 
         g_free(fast->table);
         g_free(desc->fulltlb);
+        g_free(desc->dirty_indices);
+        g_free(desc->nonglobal_indices);
     }
 }
 
@@ -565,6 +671,43 @@ void tlb_flush_by_mmuidx(CPUState *cpu, MMUIdxMap idxmap)
     assert_cpu_is_self(cpu);
 
     tlb_flush_by_mmuidx_async_work(cpu, RUN_ON_CPU_HOST_INT(idxmap));
+}
+
+void tlb_flush_by_mmuidx_nonglobal(CPUState *cpu, MMUIdxMap idxmap)
+{
+    MMUIdxMap all_dirty, work, to_clean;
+    int64_t now = get_clock_realtime();
+
+    tlb_debug("nonglobal mmu_idx: 0x%" PRIx16 "\n", idxmap);
+
+    assert_cpu_is_self(cpu);
+
+    qemu_spin_lock(&cpu->neg.tlb.c.lock);
+
+    all_dirty = cpu->neg.tlb.c.dirty;
+    to_clean = idxmap & all_dirty;
+
+    for (work = to_clean; work != 0; work &= work - 1) {
+        int mmu_idx = ctz32(work);
+        tlb_flush_one_mmuidx_nonglobal_locked(cpu, mmu_idx, now);
+    }
+
+    qemu_spin_unlock(&cpu->neg.tlb.c.lock);
+
+    tcg_flush_jmp_cache(cpu);
+
+    if (to_clean == ALL_MMUIDX_BITS) {
+        qatomic_set(&cpu->neg.tlb.c.full_flush_count,
+                    cpu->neg.tlb.c.full_flush_count + 1);
+    } else {
+        qatomic_set(&cpu->neg.tlb.c.part_flush_count,
+                    cpu->neg.tlb.c.part_flush_count + ctpop16(to_clean));
+        if (to_clean != idxmap) {
+            qatomic_set(&cpu->neg.tlb.c.elide_flush_count,
+                        cpu->neg.tlb.c.elide_flush_count +
+                        ctpop16(idxmap & ~to_clean));
+        }
+    }
 }
 
 void tlb_flush(CPUState *cpu)
@@ -640,9 +783,7 @@ static void tlb_flush_vtlb_page_mask_locked(CPUState *cpu, int mmu_idx,
     assert_cpu_is_self(cpu);
     n = MIN(d->vindex, (size_t)CPU_VTLB_SIZE);
     for (k = 0; k < n; k++) {
-        if (tlb_flush_entry_mask_locked(&d->vtable[k], page, mask)) {
-            tlb_n_used_entries_dec(cpu, mmu_idx);
-        }
+        tlb_flush_entry_mask_locked(&d->vtable[k], page, mask);
     }
 }
 
@@ -734,7 +875,14 @@ static void tlb_flush_page_locked(CPUState *cpu, int midx, vaddr page)
                   midx, desc->large_page_addr, desc->large_page_mask);
         tlb_flush_one_mmuidx_locked(cpu, midx, get_clock_realtime());
     } else {
-        if (tlb_flush_entry_locked(tlb_entry(cpu, midx, page), page)) {
+        size_t idx = tlb_index(cpu, midx, page);
+        CPUTLBEntry *entry = &cpu_tlb_fast(cpu, midx)->table[idx];
+
+        if (tlb_flush_entry_locked(entry, page)) {
+            if (desc->fulltlb[idx].global) {
+                desc->fulltlb[idx].global = false;
+                desc->global_count--;
+            }
             tlb_n_used_entries_dec(cpu, midx);
         }
         tlb_flush_vtlb_page_locked(cpu, midx, page);
@@ -920,9 +1068,14 @@ static void tlb_flush_range_locked(CPUState *cpu, int midx,
 
     for (vaddr i = 0; i < len; i += TARGET_PAGE_SIZE) {
         vaddr page = addr + i;
-        CPUTLBEntry *entry = tlb_entry(cpu, midx, page);
+        size_t idx = tlb_index(cpu, midx, page);
+        CPUTLBEntry *entry = &f->table[idx];
 
         if (tlb_flush_entry_mask_locked(entry, page, mask)) {
+            if (d->fulltlb[idx].global) {
+                d->fulltlb[idx].global = false;
+                d->global_count--;
+            }
             tlb_n_used_entries_dec(cpu, midx);
         }
         tlb_flush_vtlb_page_mask_locked(cpu, midx, page, mask);
@@ -1365,11 +1518,14 @@ void tlb_set_page_full(CPUState *cpu, int mmu_idx,
     /* Make sure there's no cached translation for the new page.  */
     tlb_flush_vtlb_page_locked(cpu, mmu_idx, addr_page);
 
+    bool was_empty = tlb_entry_is_empty(te);
+    bool was_global = !was_empty && desc->fulltlb[index].global;
+
     /*
      * Only evict the old entry to the victim tlb if it's for a
      * different page; otherwise just overwrite the stale data.
      */
-    if (!tlb_hit_page_anyprot(te, addr_page) && !tlb_entry_is_empty(te)) {
+    if (!was_empty && !tlb_hit_page_anyprot(te, addr_page)) {
         unsigned vidx = desc->vindex % CPU_VTLB_SIZE;
         CPUTLBEntry *tv = &desc->vtable[vidx];
         size_t next_vindex = desc->vindex + 1;
@@ -1378,7 +1534,6 @@ void tlb_set_page_full(CPUState *cpu, int mmu_idx,
         /* Evict the old entry into the victim tlb.  */
         copy_tlb_helper_locked(tv, te);
         desc->vfulltlb[vidx] = desc->fulltlb[index];
-        tlb_n_used_entries_dec(cpu, mmu_idx);
     }
 
     /* refill the tlb */
@@ -1423,8 +1578,30 @@ void tlb_set_page_full(CPUState *cpu, int mmu_idx,
                     MMU_DATA_STORE, prot & PAGE_WRITE);
 
     copy_tlb_helper_locked(te, &tn);
-    tlb_mark_index_dirty_locked(desc, index);
-    tlb_n_used_entries_inc(cpu, mmu_idx);
+    {
+        bool is_empty = tlb_entry_is_empty(&tn);
+        bool is_global = !is_empty && full->global;
+
+        if (is_empty) {
+            full->global = false;
+            if (!was_empty) {
+                tlb_n_used_entries_dec(cpu, mmu_idx);
+            }
+        } else if (was_empty) {
+            tlb_mark_index_dirty_locked(desc, index);
+            tlb_n_used_entries_inc(cpu, mmu_idx);
+        }
+        if (was_global != is_global) {
+            if (is_global) {
+                desc->global_count++;
+            } else {
+                desc->global_count--;
+            }
+        }
+        if (!is_empty && !is_global && (was_empty || was_global)) {
+            tlb_mark_index_nonglobal_locked(desc, index);
+        }
+    }
     qemu_spin_unlock(&tlb->c.lock);
 }
 
@@ -1565,19 +1742,40 @@ static bool victim_tlb_hit(CPUState *cpu, size_t mmu_idx, size_t index,
 
         if (cmp == page) {
             /* Found entry in victim tlb, swap tlb and iotlb.  */
+            CPUTLBDesc *desc = &cpu->neg.tlb.d[mmu_idx];
             CPUTLBEntry tmptlb, *tlb = &cpu_tlb_fast(cpu, mmu_idx)->table[index];
+            CPUTLBEntryFull *f1 = &desc->fulltlb[index];
+            CPUTLBEntryFull *f2 = &desc->vfulltlb[vidx];
+            CPUTLBEntryFull tmpf;
+            bool main_empty, main_global, victim_global;
 
             qemu_spin_lock(&cpu->neg.tlb.c.lock);
+            main_empty = tlb_entry_is_empty(tlb);
+            main_global = !main_empty && f1->global;
+            victim_global = f2->global;
+
             copy_tlb_helper_locked(&tmptlb, tlb);
             copy_tlb_helper_locked(tlb, vtlb);
             copy_tlb_helper_locked(vtlb, &tmptlb);
-            tlb_mark_index_dirty_locked(&cpu->neg.tlb.d[mmu_idx], index);
-            qemu_spin_unlock(&cpu->neg.tlb.c.lock);
+            tmpf = *f1;
+            *f1 = *f2;
+            *f2 = tmpf;
 
-            CPUTLBEntryFull *f1 = &cpu->neg.tlb.d[mmu_idx].fulltlb[index];
-            CPUTLBEntryFull *f2 = &cpu->neg.tlb.d[mmu_idx].vfulltlb[vidx];
-            CPUTLBEntryFull tmpf;
-            tmpf = *f1; *f1 = *f2; *f2 = tmpf;
+            if (main_empty) {
+                tlb_mark_index_dirty_locked(desc, index);
+                tlb_n_used_entries_inc(cpu, mmu_idx);
+            }
+            if (main_global != victim_global) {
+                if (victim_global) {
+                    desc->global_count++;
+                } else {
+                    desc->global_count--;
+                }
+            }
+            if (!victim_global && (main_empty || main_global)) {
+                tlb_mark_index_nonglobal_locked(desc, index);
+            }
+            qemu_spin_unlock(&cpu->neg.tlb.c.lock);
             return true;
         }
     }

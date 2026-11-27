@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/host-utils.h"
 #include "cpu.h"
 #include "accel/tcg/cpu-ldst.h"
 #include "accel/tcg/probe.h"
@@ -40,6 +41,7 @@ typedef struct TranslateResult {
     hwaddr paddr;
     int prot;
     int page_size;
+    bool global;
 } TranslateResult;
 
 typedef enum TranslateFaultStage2 {
@@ -158,8 +160,10 @@ static bool mmu_translate(CPUX86State *env, const TranslateParams *in,
     int page_size;
     int error_code;
     int prot;
+    bool is_global;
 
  restart_all:
+    is_global = false;
     rsvd_mask = ~MAKE_64BIT_MASK(0, env_archcpu(env)->phys_bits);
     rsvd_mask &= PG_ADDRESS_MASK;
     if (!(pg_mode & PG_MODE_NXE)) {
@@ -437,6 +441,7 @@ do_check_protect_pse36:
 
     /* merge offset within page */
     paddr = (pte & PG_ADDRESS_MASK & ~(page_size - 1)) | (addr & (page_size - 1));
+    is_global = (pg_mode & PG_MODE_PGE) && (pte & PG_GLOBAL_MASK);
  stage2:
 
     /*
@@ -478,11 +483,13 @@ do_check_protect_pse36:
         if (nested_page_size > page_size) {
             page_size = nested_page_size;
         }
+        is_global = false;
     }
 
     out->paddr = paddr & x86_get_a20_mask(env);
     out->prot = prot;
     out->page_size = page_size;
+    out->global = is_global;
     return true;
 
  do_fault_rsvd:
@@ -607,6 +614,7 @@ static bool get_physical_address(CPUX86State *env, vaddr addr,
     out->paddr = addr & x86_get_a20_mask(env);
     out->prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
     out->page_size = TARGET_PAGE_SIZE;
+    out->global = false;
     return true;
 }
 
@@ -624,11 +632,16 @@ bool x86_cpu_tlb_fill(CPUState *cs, vaddr addr, int size,
          * Even if 4MB pages, we map only one 4KB page in the cache to
          * avoid filling it too fast.
          */
+        CPUTLBEntryFull full = {
+            .phys_addr = out.paddr & TARGET_PAGE_MASK,
+            .attrs = cpu_get_mem_attrs(env),
+            .prot = out.prot,
+            .lg_page_size = ctz64(out.page_size),
+            .global = out.global,
+        };
         assert(out.prot & (1 << access_type));
-        tlb_set_page_with_attrs(cs, addr & TARGET_PAGE_MASK,
-                                out.paddr & TARGET_PAGE_MASK,
-                                cpu_get_mem_attrs(env),
-                                out.prot, mmu_idx, out.page_size);
+        assert(is_power_of_2(out.page_size));
+        tlb_set_page_full(cs, mmu_idx, addr & TARGET_PAGE_MASK, &full);
         return true;
     }
 

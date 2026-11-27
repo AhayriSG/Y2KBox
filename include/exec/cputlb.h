@@ -176,6 +176,16 @@ void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *cpu, vaddr addr,
 void tlb_flush_by_mmuidx(CPUState *cpu, MMUIdxMap idxmap);
 
 /**
+ * tlb_flush_by_mmuidx_nonglobal:
+ * @cpu: CPU whose TLB should be flushed
+ * @idxmap: bitmap of MMU indexes to flush
+ *
+ * Flush all non-global entries from the TLB of the specified CPU for the
+ * specified MMU indexes, preserving entries marked @full->global.
+ */
+void tlb_flush_by_mmuidx_nonglobal(CPUState *cpu, MMUIdxMap idxmap);
+
+/**
  * tlb_flush_by_mmuidx_all_cpus_synced:
  * @cpu: Originating CPU of the flush
  * @idxmap: bitmap of MMU indexes to flush
@@ -245,6 +255,10 @@ static inline void tlb_flush_page_by_mmuidx(CPUState *cpu,
 }
 
 static inline void tlb_flush_by_mmuidx(CPUState *cpu, MMUIdxMap idxmap)
+{
+}
+static inline void tlb_flush_by_mmuidx_nonglobal(CPUState *cpu,
+                                                 MMUIdxMap idxmap)
 {
 }
 static inline void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *cpu,
