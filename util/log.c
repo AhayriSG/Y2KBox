@@ -26,6 +26,7 @@
 #include "trace/control.h"
 #include "qemu/thread.h"
 #include "qemu/lockable.h"
+#include "qemu/atomic.h"
 #include "qemu/rcu.h"
 #ifdef CONFIG_LINUX
 #include <sys/syscall.h>
@@ -46,6 +47,12 @@ static __thread Notifier qemu_log_thread_cleanup_notifier;
 
 unsigned qemu_loglevel;
 static bool log_per_thread;
+static QEMULogChangeCB log_change_cb;
+
+void qemu_log_register_change_cb(QEMULogChangeCB cb)
+{
+    qatomic_set(&log_change_cb, cb);
+}
 static GArray *debug_regions;
 
 /* Returns true if qemu_log() will really write somewhere. */
@@ -299,7 +306,14 @@ static bool qemu_set_log_internal(const char *filename, bool changed_name,
 #ifdef CONFIG_TRACE_LOG
     log_flags |= LOG_TRACE;
 #endif
-    qemu_loglevel = log_flags;
+    qatomic_set(&qemu_loglevel, log_flags);
+    {
+        QEMULogChangeCB cb = qatomic_read(&log_change_cb);
+        if (cb) {
+            smp_mb();
+            cb();
+        }
+    }
 
     daemonized = is_daemonized();
     need_to_open_file = false;

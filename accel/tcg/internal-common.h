@@ -76,7 +76,7 @@ void tcg_exec_unrealizefn(CPUState *cpu);
  */
 static inline uint32_t curr_cflags(CPUState *cpu)
 {
-    return cpu->tcg_cflags;
+    return cpu->neg.tcg_cflags;
 }
 
 void tb_check_watchpoint(CPUState *cpu, uintptr_t retaddr);

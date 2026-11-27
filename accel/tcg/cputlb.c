@@ -165,7 +165,7 @@ static void tb_jmp_cache_clear_page(CPUState *cpu, vaddr page_addr)
 
     i0 = tb_jmp_cache_hash_page(page_addr);
     for (i = 0; i < TB_JMP_PAGE_SIZE; i++) {
-        qatomic_set(&jc->array[i0 + i].tb, NULL);
+        qatomic_set(&jc->array[i0 + i].tc_ptr, NULL);
     }
 }
 
@@ -933,7 +933,7 @@ static void tlb_flush_range_by_mmuidx_async_0(CPUState *cpu,
      * If the length is larger than the jump cache size, then it will take
      * longer to clear each entry individually than it will to clear it all.
      */
-    if (d.len >= (TARGET_PAGE_SIZE * TB_JMP_CACHE_SIZE)) {
+    if (d.len >= (TARGET_PAGE_SIZE * (1u << TB_JMP_PAGE_BITS))) {
         tcg_flush_jmp_cache(cpu);
         return;
     }

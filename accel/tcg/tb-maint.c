@@ -952,12 +952,13 @@ static void tb_jmp_cache_inval_tb(TranslationBlock *tb)
         }
     } else {
         uint32_t h = tb_jmp_cache_hash_func(tb->pc);
+        const void *tc_ptr = tb->tc.ptr;
 
         CPU_FOREACH(cpu) {
             CPUJumpCache *jc = cpu->tb_jmp_cache;
 
-            if (qatomic_read(&jc->array[h].tb) == tb) {
-                qatomic_set(&jc->array[h].tb, NULL);
+            if (jc && qatomic_read(&jc->array[h].tc_ptr) == tc_ptr) {
+                qatomic_set(&jc->array[h].tc_ptr, NULL);
             }
         }
     }

@@ -425,6 +425,8 @@ int cpu_breakpoint_insert(CPUState *cpu, vaddr pc, int flags,
         QTAILQ_INSERT_TAIL(&cpu->breakpoints, bp, entry);
     }
 
+    cpu_tcg_invalidate_jmp_cache_fast(cpu);
+
     if (breakpoint) {
         *breakpoint = bp;
     }
@@ -455,6 +457,7 @@ int cpu_breakpoint_remove(CPUState *cpu, vaddr pc, int flags)
 void cpu_breakpoint_remove_by_ref(CPUState *cpu, CPUBreakpoint *bp)
 {
     QTAILQ_REMOVE(&cpu->breakpoints, bp, entry);
+    cpu_tcg_invalidate_jmp_cache_fast(cpu);
 
     trace_breakpoint_remove(cpu->cpu_index, bp->pc, bp->flags);
     g_free(bp);

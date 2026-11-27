@@ -89,8 +89,9 @@ typedef struct CPUWatchpoint CPUWatchpoint;
 /* see physmem.c */
 struct CPUAddressSpace;
 
-/* see accel/tcg/tb-jmp-cache.h */
+/* see include/exec/tb-jmp-cache.h */
 struct CPUJumpCache;
+struct CPUJumpCacheEntry;
 
 /* see accel-cpu.h */
 struct AccelCPUClass;
@@ -399,6 +400,11 @@ typedef struct CPUNegativeOffsetState {
 #endif
     IcountDecr icount_decr;
     bool can_do_io;
+#ifdef CONFIG_TCG
+    struct CPUJumpCacheEntry *tb_jmp_cache_array;
+    uint32_t tb_jmp_cache_fast_gen;
+    uint32_t tcg_cflags;
+#endif
 } CPUNegativeOffsetState;
 
 struct KVMState;
@@ -583,7 +589,6 @@ struct CPUState {
     /* TODO Move common fields from CPUArchState here. */
     int cpu_index;
     int cluster_index;
-    uint32_t tcg_cflags;
     uint32_t halted;
     int32_t exception_index;
 
@@ -632,6 +637,20 @@ QEMU_BUILD_BUG_ON(offsetof(CPUState, neg) !=
         (CPUArchState *)((cpu) + 1), \
     const CPUState *: \
         (const CPUArchState *)((cpu) + 1))
+
+/*
+ * Disable the inline TCG jump-cache fast path on @cpu so the next indirect
+ * branch falls back to lookup_tb_ptr_slow() (e.g. after breakpoint or
+ * logging state changes).  The slow path re-arms tb_jmp_cache_fast_gen once
+ * fast dispatch is eligible again.
+ */
+static inline void cpu_tcg_invalidate_jmp_cache_fast(CPUState *cpu)
+{
+#ifdef CONFIG_TCG
+    smp_mb();
+    qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
+#endif
+}
 
 #ifdef CONFIG_TCG
 /*

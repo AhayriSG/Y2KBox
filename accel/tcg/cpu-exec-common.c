@@ -37,18 +37,18 @@ bool tcg_allowed;
 
 bool tcg_cflags_has(CPUState *cpu, uint32_t flags)
 {
-    return cpu->tcg_cflags & flags;
+    return cpu->neg.tcg_cflags & flags;
 }
 
 void tcg_cflags_set(CPUState *cpu, uint32_t flags)
 {
     assert((flags & CF_DERIVED) == 0);
-    cpu->tcg_cflags |= flags;
+    cpu->neg.tcg_cflags |= flags;
 }
 
 void tcg_update_cflags(CPUState *cpu)
 {
-    uint32_t cflags = cpu->tcg_cflags & ~CF_DERIVED;
+    uint32_t cflags = cpu->neg.tcg_cflags & ~CF_DERIVED;
 
     /*
      * Record gdb single-step.  We should be exiting the TB by raising
@@ -65,7 +65,7 @@ void tcg_update_cflags(CPUState *cpu)
         cflags |= CF_NO_GOTO_TB;
     }
 
-    cpu->tcg_cflags = cflags;
+    cpu->neg.tcg_cflags = cflags;
 }
 
 static void tcg_update_cflags_work(CPUState *cpu, run_on_cpu_data data)

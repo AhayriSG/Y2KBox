@@ -635,6 +635,30 @@ void tcg_flush_jmp_cache(CPUState *cpu)
      * Bump the generation counter instead of scanning all TB_JMP_CACHE_SIZE
      * slots.  CF_PCREL invalidations call tcg_flush_jmp_cache frequently, and
      * O(1) generation bumping avoids evicting L1/L2 cache lines.
+     *
+     * Generation 0 is reserved to disable the inline TCG jump-cache fast path
+     * (fast_gen == 0); valid entries always have gen >= 1.  On the rare
+     * 32-bit wrap from UINT32_MAX to 1, clear all tc_ptr sentinels so no
+     * ancient gen==1 slot can alias.
      */
-    qatomic_inc_fetch(&jc->gen);
+    for (;;) {
+        uint32_t old = qatomic_read(&jc->gen);
+        uint32_t next = old + 1;
+
+        if (unlikely(next == 0)) {
+            /*
+             * Clear all tc_ptr sentinels before publishing gen == 1 so no
+             * ancient gen == 1 entry can alias after the 32-bit wrap.
+             */
+            qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
+            for (size_t i = 0; i < TB_JMP_CACHE_SIZE; i++) {
+                qatomic_set(&jc->array[i].tc_ptr, NULL);
+            }
+            next = 1;
+        }
+        if (likely(qatomic_cmpxchg(&jc->gen, old, next) == old)) {
+            break;
+        }
+    }
+    qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
 }

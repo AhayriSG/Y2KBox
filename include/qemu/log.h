@@ -125,6 +125,9 @@ extern const QEMULogItem qemu_log_items[];
 
 ssize_t rust_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
 
+typedef void (*QEMULogChangeCB)(void);
+void qemu_log_register_change_cb(QEMULogChangeCB cb);
+
 bool qemu_set_log(int log_flags, Error **errp);
 bool qemu_set_log_filename(const char *filename, Error **errp);
 bool qemu_set_log_filename_flags(const char *name, int flags, Error **errp);

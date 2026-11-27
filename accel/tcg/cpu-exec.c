@@ -34,6 +34,7 @@
 #include "exec/translation-block.h"
 #include "tcg/tcg.h"
 #include "qemu/atomic.h"
+#include "qemu/memalign.h"
 #include "qemu/rcu.h"
 #include "exec/log.h"
 #include "qemu/main-loop.h"
@@ -228,20 +229,75 @@ static TranslationBlock *tb_htable_lookup(CPUState *cpu, TCGTBCPUState s)
  *
  * Returns: an existing translation block or NULL.
  */
-static inline void tb_jmp_cache_store(CPUJumpCache *jc, uint32_t hash,
-                                      TranslationBlock *tb, vaddr pc,
-                                      uint64_t gen)
+static void tb_jmp_cache_free_rcu(CPUJumpCache *jc)
+{
+    qemu_vfree(jc);
+}
+
+static inline bool tcg_jmp_cache_fast_eligible(CPUState *cpu)
+{
+    return QTAILQ_EMPTY(&cpu->breakpoints) &&
+        !qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC);
+}
+
+/*
+ * Re-arm CPUState::neg.tb_jmp_cache_fast_gen for inline TCG jump-cache
+ * probes using a Dekker handshake against concurrent invalidators
+ * (tcg_flush_jmp_cache, breakpoint insertion, and qemu_set_log).
+ */
+static __attribute__((noinline, cold)) void
+tcg_sync_jmp_cache_fast(CPUState *cpu)
+{
+    CPUJumpCache *jc = cpu->tb_jmp_cache;
+    uint32_t gen;
+
+    if (unlikely(!jc || !tcg_jmp_cache_fast_eligible(cpu))) {
+        qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
+        return;
+    }
+
+    gen = qatomic_read(&jc->gen);
+    qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, gen);
+    smp_mb();
+    if (unlikely(qatomic_read(&jc->gen) != gen ||
+                 !tcg_jmp_cache_fast_eligible(cpu))) {
+        qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
+    }
+}
+
+static void tcg_log_change_cb(void)
+{
+    CPUState *cpu;
+
+    RCU_READ_LOCK_GUARD();
+    CPU_FOREACH(cpu) {
+        qatomic_set(&cpu->neg.tb_jmp_cache_fast_gen, 0);
+    }
+}
+
+static inline void tb_jmp_cache_store(CPUState *cpu, CPUJumpCache *jc,
+                                      uint32_t hash, TranslationBlock *tb,
+                                      vaddr pc, uint32_t gen)
 {
     CPUJumpCacheEntry *e = &jc->array[hash];
 
-    qatomic_set(&e->tb, NULL);
-    e->gen = gen;
-    e->tc_ptr = tb->tc.ptr;
+    if (unlikely(tb->cs_base > UINT32_MAX)) {
+        return;
+    }
+
+    qatomic_set(&e->tc_ptr, NULL);
     e->pc = pc;
-    e->cs_base = tb->cs_base;
+    e->gen = gen;
+    e->cs_base = (uint32_t)tb->cs_base;
     e->flags = tb->flags;
     e->cflags = tb_cflags(tb);
-    qatomic_set(&e->tb, tb);
+    jc->tb[hash] = tb;
+    qatomic_set(&e->tc_ptr, tb->tc.ptr);
+
+    if (unlikely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) != gen) &&
+        likely(tcg_jmp_cache_fast_eligible(cpu))) {
+        tcg_sync_jmp_cache_fast(cpu);
+    }
 }
 
 static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
@@ -249,7 +305,8 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
     TranslationBlock *tb;
     CPUJumpCache *jc;
     CPUJumpCacheEntry *e;
-    uint64_t gen;
+    const void *tc_ptr;
+    uint32_t gen;
     uint32_t hash;
 
     /* we should never be trying to look up an INVALID tb */
@@ -260,13 +317,14 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
     gen = qatomic_read(&jc->gen);
     e = &jc->array[hash];
 
-    tb = qatomic_read(&e->tb);
-    if (likely(tb &&
-               e->gen == gen &&
+    tc_ptr = qatomic_read(&e->tc_ptr);
+    if (likely(tc_ptr != NULL &&
                e->pc == s.pc &&
+               e->gen == gen &&
                e->cs_base == s.cs_base &&
                e->flags == s.flags &&
                e->cflags == s.cflags)) {
+        tb = jc->tb[hash];
         goto hit;
     }
 
@@ -275,11 +333,11 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
         return NULL;
     }
 
-    tb_jmp_cache_store(jc, hash, tb, s.pc, gen);
+    tb_jmp_cache_store(cpu, jc, hash, tb, s.pc, gen);
 
 hit:
     /*
-     * As long as tb is not NULL, the contents are consistent.  Therefore,
+     * As long as tc_ptr is not NULL, the contents are consistent.  Therefore,
      * the virtual PC has to match for non-CF_PCREL translations.
      */
     assert((tb_cflags(tb) & CF_PCREL) || tb->pc == s.pc);
@@ -416,6 +474,9 @@ lookup_tb_ptr_slow(CPUState *cpu, vaddr pc, uint64_t cs_base, uint32_t flags)
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
         log_cpu_exec(s.pc, cpu, tb);
+    } else if (unlikely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == 0) &&
+               likely(QTAILQ_EMPTY(&cpu->breakpoints))) {
+        tcg_sync_jmp_cache_fast(cpu);
     }
 
     return tb->tc.ptr;
@@ -453,15 +514,18 @@ lookup_tb_ptr_fast(CPUState *cpu, vaddr pc, uint64_t cs_base, uint32_t flags)
      */
     if (likely(QTAILQ_EMPTY(&cpu->breakpoints))) {
         CPUJumpCacheEntry *e = &jc->array[tb_jmp_cache_hash_func(pc)];
+        const void *tc_ptr = qatomic_read(&e->tc_ptr);
+        uint32_t gen;
 
-        if (likely(qatomic_read(&e->tb) != NULL &&
+        if (likely(tc_ptr != NULL &&
                    e->pc == pc &&
                    e->cs_base == cs_base &&
                    e->flags == flags &&
                    e->cflags == curr_cflags(cpu) &&
-                   e->gen == qatomic_read(&jc->gen))) {
+                   e->gen == (gen = qatomic_read(&jc->gen)) &&
+                   qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == gen)) {
             if (likely(!qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
-                return e->tc_ptr;
+                return tc_ptr;
             }
         }
     }
@@ -1061,7 +1125,7 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
             tb = tb_lookup(cpu, s);
             if (tb == NULL) {
                 CPUJumpCache *jc = cpu->tb_jmp_cache;
-                uint64_t gen = qatomic_read(&jc->gen);
+                uint32_t gen = qatomic_read(&jc->gen);
                 uint32_t h;
                 uint64_t perf_gen_ns =
                     qemu_perf_stats_begin(QEMU_PERF_TCG_TB_GEN_CODE);
@@ -1076,7 +1140,7 @@ cpu_exec_loop(CPUState *cpu, SyncClocks *sc)
                  * for the fast lookup
                  */
                 h = tb_jmp_cache_hash_func(s.pc);
-                tb_jmp_cache_store(jc, h, tb, s.pc, gen);
+                tb_jmp_cache_store(cpu, jc, h, tb, s.pc, gen);
             }
 
 #ifndef CONFIG_USER_ONLY
@@ -1171,14 +1235,18 @@ bool tcg_exec_realizefn(CPUState *cpu, Error **errp)
         assert(tcg_ops->get_tb_cpu_state);
         assert(tcg_ops->mmu_index);
         tcg_ops->initialize();
+        qemu_log_register_change_cb(tcg_log_change_cb);
         tcg_target_initialized = true;
     }
 
     /* Pick up one-insn-per-tb and -d nochain from the command line. */
     tcg_update_cflags(cpu);
 
-    cpu->tb_jmp_cache = g_new0(CPUJumpCache, 1);
+    cpu->tb_jmp_cache = qemu_memalign(64, sizeof(CPUJumpCache));
+    memset(cpu->tb_jmp_cache, 0, sizeof(CPUJumpCache));
     cpu->tb_jmp_cache->gen = 1;
+    cpu->neg.tb_jmp_cache_array = cpu->tb_jmp_cache->array;
+    tcg_sync_jmp_cache_fast(cpu);
     tlb_init(cpu);
 #ifndef CONFIG_USER_ONLY
     tcg_iommu_init_notifier_list(cpu);
@@ -1196,5 +1264,7 @@ void tcg_exec_unrealizefn(CPUState *cpu)
 #endif /* !CONFIG_USER_ONLY */
 
     tlb_destroy(cpu);
-    g_free_rcu(cpu->tb_jmp_cache, rcu);
+    cpu->neg.tb_jmp_cache_fast_gen = 0;
+    cpu->neg.tb_jmp_cache_array = NULL;
+    call_rcu(cpu->tb_jmp_cache, tb_jmp_cache_free_rcu, rcu);
 }
