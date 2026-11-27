@@ -210,6 +210,14 @@ uint64_t qemu_perf_stats_get_count(QemuPerfStat stat)
     return qatomic_read(&perf_stats[stat].count);
 }
 
+uint64_t qemu_perf_stats_get_work_units(QemuPerfStat stat)
+{
+    if (stat >= QEMU_PERF_STAT__MAX) {
+        return 0;
+    }
+    return qatomic_read(&perf_stats[stat].work_units);
+}
+
 void qemu_perf_stats_start(void)
 {
     int i;
