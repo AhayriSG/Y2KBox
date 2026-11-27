@@ -840,8 +840,7 @@ static void *vcpu_profile_thread_fn(void *arg)
         }
     }
 
-    while (qatomic_read(&st->running) &&
-           st->sample_count < VCPU_PROF_MAX_SAMPLES) {
+    while (qatomic_read(&st->running)) {
         CONTEXT ctx __attribute__((aligned(16)));
         DWORD susp;
         BOOL ok = FALSE;
@@ -867,6 +866,9 @@ static void *vcpu_profile_thread_fn(void *arg)
             sec = VCPU_PROF_MAX_SECS - 1;
         }
         vcpu_profile_tcg_snapshot(st, sec, false);
+        if (st->sample_count >= VCPU_PROF_MAX_SAMPLES) {
+            continue;
+        }
         frame = (uint32_t)qemu_perf_stats_get_count(
             QEMU_PERF_VMVGA_SCREEN_TARGET_PRESENT);
         halted = qatomic_read(&st->cpu->halted) ? 1 : 0;
@@ -1237,21 +1239,33 @@ static void vcpu_profile_start(void)
     DWORD tid;
     HANDLE h;
 
-    if (vcpu_prof.active || !tcg_enabled()) {
+    if (vcpu_prof.active) {
+        return;
+    }
+    if (!tcg_enabled()) {
+        fprintf(stderr,
+                "Y2KBOX-PROF-STATUS available=0 reason=not_tcg\\n");
         return;
     }
     cpu = first_cpu;
     if (!cpu || !cpu->thread) {
+        fprintf(stderr,
+                "Y2KBOX-PROF-STATUS available=0 reason=no_vcpu_thread\\n");
         return;
     }
     tid = cpu->thread->tid ? (DWORD)cpu->thread->tid : (DWORD)cpu->thread_id;
     if (tid == 0) {
+        fprintf(stderr,
+                "Y2KBOX-PROF-STATUS available=0 reason=no_thread_id\\n");
         return;
     }
 
     h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT |
                    THREAD_QUERY_INFORMATION, FALSE, tid);
     if (!h) {
+        fprintf(stderr,
+                "Y2KBOX-PROF-STATUS available=0 reason=open_thread_failed"
+                " winerr=%lu\\n", (unsigned long)GetLastError());
         return;
     }
 
@@ -1267,6 +1281,8 @@ static void vcpu_profile_start(void)
     qemu_thread_create(&vcpu_prof.sampler_thread, "vcpu-prof",
                        vcpu_profile_thread_fn, &vcpu_prof,
                        QEMU_THREAD_JOINABLE);
+    fprintf(stderr,
+            "Y2KBOX-PROF-STATUS available=1 sampler=windows_x64_tcg\\n");
 }
 
 static void vcpu_profile_stop(void)
