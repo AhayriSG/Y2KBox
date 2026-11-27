@@ -507,6 +507,10 @@ static inline void tlb_n_used_entries_dec(CPUState *cpu, uintptr_t mmu_idx)
     }
 }
 
+/**
+ * tlb_entry_is_empty - return true if the entry is not in use
+ * @te: pointer to CPUTLBEntry
+ */
 static inline bool tlb_entry_is_empty(const CPUTLBEntry *te)
 {
     return te->addr_read == -1 && te->addr_write == -1 && te->addr_code == -1;
@@ -751,10 +755,7 @@ static inline bool tlb_hit_page_anyprot(CPUTLBEntry *tlb_entry, vaddr page)
     return tlb_hit_page_mask_anyprot(tlb_entry, page, -1);
 }
 
-/**
- * tlb_entry_is_empty - return true if the entry is not in use
- * @te: pointer to CPUTLBEntry
- */
+
 
 /* Called with tlb_c.lock held */
 static bool tlb_flush_entry_mask_locked(CPUTLBEntry *tlb_entry,
