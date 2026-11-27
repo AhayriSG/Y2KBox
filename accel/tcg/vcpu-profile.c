@@ -1244,19 +1244,19 @@ static void vcpu_profile_start(void)
     }
     if (!tcg_enabled()) {
         fprintf(stderr,
-                "Y2KBOX-PROF-STATUS available=0 reason=not_tcg\\n");
+                "Y2KBOX-PROF-STATUS available=0 reason=not_tcg\n");
         return;
     }
     cpu = first_cpu;
     if (!cpu || !cpu->thread) {
         fprintf(stderr,
-                "Y2KBOX-PROF-STATUS available=0 reason=no_vcpu_thread\\n");
+                "Y2KBOX-PROF-STATUS available=0 reason=no_vcpu_thread\n");
         return;
     }
     tid = cpu->thread->tid ? (DWORD)cpu->thread->tid : (DWORD)cpu->thread_id;
     if (tid == 0) {
         fprintf(stderr,
-                "Y2KBOX-PROF-STATUS available=0 reason=no_thread_id\\n");
+                "Y2KBOX-PROF-STATUS available=0 reason=no_thread_id\n");
         return;
     }
 
@@ -1265,7 +1265,7 @@ static void vcpu_profile_start(void)
     if (!h) {
         fprintf(stderr,
                 "Y2KBOX-PROF-STATUS available=0 reason=open_thread_failed"
-                " winerr=%lu\\n", (unsigned long)GetLastError());
+                " winerr=%lu\n", (unsigned long)GetLastError());
         return;
     }
 
@@ -1282,7 +1282,7 @@ static void vcpu_profile_start(void)
                        vcpu_profile_thread_fn, &vcpu_prof,
                        QEMU_THREAD_JOINABLE);
     fprintf(stderr,
-            "Y2KBOX-PROF-STATUS available=1 sampler=windows_x64_tcg\\n");
+            "Y2KBOX-PROF-STATUS available=1 sampler=windows_x64_tcg\n");
 }
 
 static void vcpu_profile_stop(void)
