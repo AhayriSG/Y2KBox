@@ -275,23 +275,77 @@ static void tcg_log_change_cb(void)
     }
 }
 
+static inline const void *
+tb_jmp_cache_entry_hit(const CPUJumpCacheEntry *e, vaddr pc,
+                       uint64_t cs_base, uint32_t flags,
+                       uint32_t cflags, uint32_t gen)
+{
+    const void *tc_ptr = qatomic_read(&e->tc_ptr);
+
+    if (tc_ptr != NULL &&
+        e->pc == pc &&
+        e->gen == gen &&
+        e->cflags == cflags &&
+        e->cs_base == cs_base &&
+        e->flags == flags) {
+        return tc_ptr;
+    }
+    return NULL;
+}
+
+static inline TranslationBlock *
+tb_lookup_cache(CPUJumpCache *jc, uint32_t hash, TCGTBCPUState s, uint32_t gen)
+{
+    const CPUJumpCacheSet *set = &jc->sets[hash];
+
+    if (likely(tb_jmp_cache_entry_hit(&set->way[0], s.pc, s.cs_base,
+                                      s.flags, s.cflags, gen) != NULL)) {
+        return jc->tb[hash][0];
+    }
+    if (tb_jmp_cache_entry_hit(&set->way[1], s.pc, s.cs_base,
+                               s.flags, s.cflags, gen) != NULL) {
+        return jc->tb[hash][1];
+    }
+    return NULL;
+}
+
 static inline void tb_jmp_cache_store(CPUState *cpu, CPUJumpCache *jc,
                                       uint32_t hash, TranslationBlock *tb,
                                       vaddr pc, uint32_t gen)
 {
-    CPUJumpCacheEntry *e = &jc->array[hash];
+    CPUJumpCacheSet *set = &jc->sets[hash];
+    CPUJumpCacheEntry *e;
+    unsigned way;
 
     if (unlikely(tb->cs_base > UINT32_MAX)) {
         return;
     }
 
+    /*
+     * Prefer an empty or stale-generation slot and never move live entries
+     * between ways (moving a live entry could race with a concurrent
+     * tb_jmp_cache_inval_tb()).
+     */
+    if (qatomic_read(&set->way[0].tc_ptr) == NULL || set->way[0].gen != gen) {
+        way = 0;
+    } else if (qatomic_read(&set->way[1].tc_ptr) == NULL ||
+               set->way[1].gen != gen) {
+        way = 1;
+    } else {
+        uint8_t mask = (uint8_t)(1u << (hash & 7));
+        uint8_t byte = jc->victim_bits[hash >> 3];
+        way = (byte & mask) != 0;
+        jc->victim_bits[hash >> 3] = byte ^ mask;
+    }
+
+    e = &set->way[way];
     qatomic_set(&e->tc_ptr, NULL);
     e->pc = pc;
     e->gen = gen;
+    e->cflags = tb_cflags(tb);
     e->cs_base = (uint32_t)tb->cs_base;
     e->flags = tb->flags;
-    e->cflags = tb_cflags(tb);
-    jc->tb[hash] = tb;
+    jc->tb[hash][way] = tb;
     qatomic_set(&e->tc_ptr, tb->tc.ptr);
 
     if (unlikely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) != gen) &&
@@ -304,8 +358,6 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
 {
     TranslationBlock *tb;
     CPUJumpCache *jc;
-    CPUJumpCacheEntry *e;
-    const void *tc_ptr;
     uint32_t gen;
     uint32_t hash;
 
@@ -315,16 +367,9 @@ static inline TranslationBlock *tb_lookup(CPUState *cpu, TCGTBCPUState s)
     hash = tb_jmp_cache_hash_func(s.pc);
     jc = cpu->tb_jmp_cache;
     gen = qatomic_read(&jc->gen);
-    e = &jc->array[hash];
 
-    tc_ptr = qatomic_read(&e->tc_ptr);
-    if (likely(tc_ptr != NULL &&
-               e->pc == s.pc &&
-               e->gen == gen &&
-               e->cs_base == s.cs_base &&
-               e->flags == s.flags &&
-               e->cflags == s.cflags)) {
-        tb = jc->tb[hash];
+    tb = tb_lookup_cache(jc, hash, s, gen);
+    if (likely(tb != NULL)) {
         goto hit;
     }
 
@@ -513,19 +558,24 @@ lookup_tb_ptr_fast(CPUState *cpu, vaddr pc, uint64_t cs_base, uint32_t flags)
      * caller-saved registers with zero stack frame and a tail-call miss path.
      */
     if (likely(QTAILQ_EMPTY(&cpu->breakpoints))) {
-        CPUJumpCacheEntry *e = &jc->array[tb_jmp_cache_hash_func(pc)];
-        const void *tc_ptr = qatomic_read(&e->tc_ptr);
-        uint32_t gen;
+        const CPUJumpCacheSet *set = &jc->sets[tb_jmp_cache_hash_func(pc)];
+        uint32_t gen = qatomic_read(&jc->gen);
 
-        if (likely(tc_ptr != NULL &&
-                   e->pc == pc &&
-                   e->cs_base == cs_base &&
-                   e->flags == flags &&
-                   e->cflags == curr_cflags(cpu) &&
-                   e->gen == (gen = qatomic_read(&jc->gen)) &&
-                   qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == gen)) {
-            if (likely(!qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
-                return tc_ptr;
+        if (likely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == gen)) {
+            uint32_t cflags = curr_cflags(cpu);
+            const void *tc_ptr = tb_jmp_cache_entry_hit(&set->way[0], pc,
+                                                        cs_base, flags,
+                                                        cflags, gen);
+            if (tc_ptr == NULL) {
+                tc_ptr = tb_jmp_cache_entry_hit(&set->way[1], pc,
+                                                cs_base, flags,
+                                                cflags, gen);
+            }
+            if (likely(tc_ptr != NULL)) {
+                if (likely(!qemu_loglevel_mask(CPU_LOG_TB_CPU |
+                                               CPU_LOG_EXEC))) {
+                    return tc_ptr;
+                }
             }
         }
     }
@@ -539,6 +589,64 @@ const void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     TCGTBCPUState s = cpu->cc->tcg_ops->get_tb_cpu_state(cpu);
 
     return lookup_tb_ptr_fast(cpu, s.pc, s.cs_base, s.flags);
+}
+
+/*
+ * Direct miss handler for the inline 2-way TCG jump-cache probe.
+ * Avoids re-entering lookup_tb_ptr_fast() and skips the redundant jump-cache
+ * probe in tb_lookup() whenever the inline probe already ran with the current
+ * generation (fast_gen == gen && gen != 0).
+ */
+const void *HELPER(lookup_tb_ptr_miss)(CPUArchState *env)
+{
+    CPUState *cpu = env_cpu(env);
+    TCGTBCPUState s = cpu->cc->tcg_ops->get_tb_cpu_state(cpu);
+    CPUJumpCache *jc = cpu->tb_jmp_cache;
+    uint32_t cflags = curr_cflags(cpu);
+    uint32_t gen;
+    uint32_t hash;
+    TranslationBlock *tb;
+
+    cpu->neg.can_do_io = true;
+    s.cflags = cflags;
+    tcg_debug_assert(!(s.cflags & CF_INVALID));
+
+    if (unlikely(check_for_breakpoints(cpu, s.pc, &s.cflags))) {
+        cpu_loop_exit(cpu);
+    }
+
+    hash = tb_jmp_cache_hash_func(s.pc);
+    gen = qatomic_read(&jc->gen);
+
+    if (likely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == gen &&
+               s.cflags == cflags &&
+               s.cs_base <= UINT32_MAX)) {
+        tb = tb_htable_lookup(cpu, s);
+        if (tb == NULL) {
+            return tcg_code_gen_epilogue;
+        }
+        tb_jmp_cache_store(cpu, jc, hash, tb, s.pc, gen);
+    } else {
+        tb = tb_lookup_cache(jc, hash, s, gen);
+        if (tb == NULL) {
+            tb = tb_htable_lookup(cpu, s);
+            if (tb == NULL) {
+                return tcg_code_gen_epilogue;
+            }
+            tb_jmp_cache_store(cpu, jc, hash, tb, s.pc, gen);
+        }
+    }
+
+    assert((tb_cflags(tb) & CF_PCREL) || tb->pc == s.pc);
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_CPU | CPU_LOG_EXEC))) {
+        log_cpu_exec(s.pc, cpu, tb);
+    } else if (unlikely(qatomic_read(&cpu->neg.tb_jmp_cache_fast_gen) == 0) &&
+               likely(QTAILQ_EMPTY(&cpu->breakpoints))) {
+        tcg_sync_jmp_cache_fast(cpu);
+    }
+
+    return tb->tc.ptr;
 }
 
 const void *HELPER(lookup_tb_ptr_state)(CPUArchState *env, uint64_t pc,
@@ -1245,7 +1353,7 @@ bool tcg_exec_realizefn(CPUState *cpu, Error **errp)
     cpu->tb_jmp_cache = qemu_memalign(64, sizeof(CPUJumpCache));
     memset(cpu->tb_jmp_cache, 0, sizeof(CPUJumpCache));
     cpu->tb_jmp_cache->gen = 1;
-    cpu->neg.tb_jmp_cache_array = cpu->tb_jmp_cache->array;
+    cpu->neg.tb_jmp_cache_sets = cpu->tb_jmp_cache->sets;
     tcg_sync_jmp_cache_fast(cpu);
     tlb_init(cpu);
 #ifndef CONFIG_USER_ONLY
@@ -1265,6 +1373,6 @@ void tcg_exec_unrealizefn(CPUState *cpu)
 
     tlb_destroy(cpu);
     cpu->neg.tb_jmp_cache_fast_gen = 0;
-    cpu->neg.tb_jmp_cache_array = NULL;
+    cpu->neg.tb_jmp_cache_sets = NULL;
     call_rcu(cpu->tb_jmp_cache, tb_jmp_cache_free_rcu, rcu);
 }

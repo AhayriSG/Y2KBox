@@ -91,7 +91,7 @@ struct CPUAddressSpace;
 
 /* see include/exec/tb-jmp-cache.h */
 struct CPUJumpCache;
-struct CPUJumpCacheEntry;
+struct CPUJumpCacheSet;
 
 /* see accel-cpu.h */
 struct AccelCPUClass;
@@ -401,9 +401,14 @@ typedef struct CPUNegativeOffsetState {
     IcountDecr icount_decr;
     bool can_do_io;
 #ifdef CONFIG_TCG
-    struct CPUJumpCacheEntry *tb_jmp_cache_array;
-    uint32_t tb_jmp_cache_fast_gen;
-    uint32_t tcg_cflags;
+    struct CPUJumpCacheSet *tb_jmp_cache_sets;
+    union {
+        struct {
+            uint32_t tb_jmp_cache_fast_gen;
+            uint32_t tcg_cflags;
+        };
+        uint64_t tb_jmp_cache_gen_cflags;
+    };
 #endif
 } CPUNegativeOffsetState;
 

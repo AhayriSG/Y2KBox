@@ -1875,23 +1875,44 @@ void tcg_gen_lookup_and_goto_ptr_state(TCGv_i64 pc, TCGv_i64 cs_base,
         if (likely(page_bits > TB_JMP_ADDR_BITS)) {
             int shift = page_bits - TB_JMP_ADDR_BITS;
             TCGLabel *miss = gen_new_label();
+            TCGv_i64 zero = tcg_constant_i64(0);
             TCGv_i64 t1 = tcg_temp_ebb_new_i64();
             TCGv_i64 t2 = tcg_temp_ebb_new_i64();
-            TCGv_i32 v1 = tcg_temp_ebb_new_i32();
-            TCGv_i32 v2 = tcg_temp_ebb_new_i32();
-            TCGv_i32 v3 = tcg_temp_ebb_new_i32();
+            TCGv_i64 gen_cflags = tcg_temp_ebb_new_i64();
+            TCGv_i64 cs_flags = tcg_temp_ebb_new_i64();
+            TCGv_i64 cs_hi = tcg_temp_ebb_new_i64();
+            TCGv_i64 tc = tcg_temp_ebb_new_i64();
+            TCGv_i64 cand0 = tcg_temp_ebb_new_i64();
             TCGv_ptr arr = tcg_temp_ebb_new_ptr();
             TCGv_ptr off = tcg_temp_ebb_new_ptr();
-            TCGv_ptr entry = tcg_temp_ebb_new_ptr();
+            TCGv_ptr set = tcg_temp_ebb_new_ptr();
             TCGv_ptr tc_ptr = tcg_temp_ebb_new_ptr();
 
-            QEMU_BUILD_BUG_ON(sizeof(CPUJumpCacheEntry) != (1u << 5));
+            QEMU_BUILD_BUG_ON(sizeof(void *) != sizeof(uint64_t));
+            QEMU_BUILD_BUG_ON(sizeof(vaddr) != sizeof(uint64_t));
+            QEMU_BUILD_BUG_ON(sizeof(CPUJumpCacheEntry) != 32);
+            QEMU_BUILD_BUG_ON(sizeof(CPUJumpCacheSet) != (1u << 6));
+            QEMU_BUILD_BUG_ON(TB_JMP_CACHE_WAYS != 2);
+            QEMU_BUILD_BUG_ON(offsetof(CPUJumpCacheEntry, gen) != 16);
+            QEMU_BUILD_BUG_ON(offsetof(CPUJumpCacheEntry, cflags) != 20);
+            QEMU_BUILD_BUG_ON(offsetof(CPUJumpCacheEntry, cs_base) != 24);
+            QEMU_BUILD_BUG_ON(offsetof(CPUJumpCacheEntry, flags) != 28);
+            QEMU_BUILD_BUG_ON(
+                offsetof(CPUState, neg.tb_jmp_cache_fast_gen) !=
+                offsetof(CPUState, neg.tb_jmp_cache_gen_cflags));
+            QEMU_BUILD_BUG_ON(
+                offsetof(CPUState, neg.tcg_cflags) !=
+                offsetof(CPUState, neg.tb_jmp_cache_gen_cflags) + 4);
+            QEMU_BUILD_BUG_ON(
+                offsetof(CPUState, neg.tb_jmp_cache_gen_cflags) % 8 != 0);
 
             /*
-             * Inline softmmu jump-cache probe (matches tb_jmp_cache_hash_func):
+             * Inline 2-way softmmu jump-cache probe (matches
+             * tb_jmp_cache_hash_func):
              *   tmp = pc ^ (pc >> shift)
-             *   h = ((tmp >> shift) & TB_JMP_PAGE_MASK) | (tmp & TB_JMP_ADDR_MASK)
-             *   entry = env->neg.tb_jmp_cache_array + (h << 5)
+             *   h = ((tmp >> shift) & TB_JMP_PAGE_MASK) |
+             *       (tmp & TB_JMP_ADDR_MASK)
+             *   set = env->neg.tb_jmp_cache_sets + (h << 6)
              */
             tcg_gen_shri_i64(t1, pc, shift);
             tcg_gen_xor_i64(t1, t1, pc);
@@ -1899,75 +1920,94 @@ void tcg_gen_lookup_and_goto_ptr_state(TCGv_i64 pc, TCGv_i64 cs_base,
             tcg_gen_andi_i64(t2, t2, TB_JMP_PAGE_MASK);
             tcg_gen_andi_i64(t1, t1, TB_JMP_ADDR_MASK);
             tcg_gen_or_i64(t1, t1, t2);
-            tcg_gen_shli_i64(t1, t1, 5);
+            tcg_gen_shli_i64(t1, t1, 6);
 
             tcg_gen_ld_ptr(arr, tcg_env,
-                           offsetof(CPUState, neg.tb_jmp_cache_array) -
+                           offsetof(CPUState, neg.tb_jmp_cache_sets) -
                            sizeof(CPUState));
             tcg_gen_trunc_i64_ptr(off, t1);
-            tcg_gen_add_ptr(entry, arr, off);
+            tcg_gen_add_ptr(set, arr, off);
 
             /*
-             * Load tc_ptr first; NULL means empty/invalidated slot and pulls
-             * the single 32-byte aligned entry into L1D.
+             * Pack (fast_gen, tcg_cflags) and (cs_base, flags) into two
+             * 64-bit comparison keys matching CPUJumpCacheEntry's layout.
+             * fast_gen == 0 disables the fast path (valid entries have
+             * gen >= 1), and cs_hi forces a miss if cs_base > UINT32_MAX
+             * (folded away by TCG on 32-bit targets where cs_base is
+             * zero-extended).
              */
-            tcg_gen_ld_ptr(tc_ptr, entry, offsetof(CPUJumpCacheEntry, tc_ptr));
-            tcg_gen_brcondi_ptr(TCG_COND_EQ, tc_ptr, 0, miss);
+            tcg_gen_ld_i64(gen_cflags, tcg_env,
+                           offsetof(CPUState, neg.tb_jmp_cache_gen_cflags) -
+                           sizeof(CPUState));
+            tcg_gen_shri_i64(cs_hi, cs_base, 32);
+            tcg_gen_extu_i32_i64(t1, flags);
+            if (HOST_BIG_ENDIAN) {
+                tcg_gen_shli_i64(t2, cs_base, 32);
+                tcg_gen_or_i64(cs_flags, t2, t1);
+            } else {
+                tcg_gen_shli_i64(t1, t1, 32);
+                tcg_gen_or_i64(cs_flags, t1, cs_base);
+            }
 
             /*
-             * Verify pc, cs_base, gen (fast_gen == 0 disables the fast path
-             * for breakpoints/exec-log while valid entries have gen >= 1),
-             * flags, and cflags with a single combined branch.
+             * Probe way[0] (bytes 0..31 of the 64-byte cache line):
+             * cand0 = (mismatch == 0) ? way[0].tc_ptr : 0.
              */
-            tcg_gen_ld_i64(t1, entry, offsetof(CPUJumpCacheEntry, pc));
+            tcg_gen_ld_i64(tc, set, offsetof(CPUJumpCacheSet, way[0].tc_ptr));
+            tcg_gen_ld_i64(t1, set, offsetof(CPUJumpCacheSet, way[0].pc));
             tcg_gen_xor_i64(t1, t1, pc);
-
-            tcg_gen_ld32u_i64(t2, entry, offsetof(CPUJumpCacheEntry, cs_base));
-            tcg_gen_xor_i64(t2, t2, cs_base);
+            tcg_gen_ld_i64(t2, set, offsetof(CPUJumpCacheSet, way[0].gen));
+            tcg_gen_xor_i64(t2, t2, gen_cflags);
             tcg_gen_or_i64(t1, t1, t2);
-
-            tcg_gen_ld_i32(v1, entry, offsetof(CPUJumpCacheEntry, gen));
-            tcg_gen_ld_i32(v2, tcg_env,
-                           offsetof(CPUState, neg.tb_jmp_cache_fast_gen) -
-                           sizeof(CPUState));
-            tcg_gen_xor_i32(v1, v1, v2);
-
-            tcg_gen_ld_i32(v2, entry, offsetof(CPUJumpCacheEntry, flags));
-            tcg_gen_xor_i32(v2, v2, flags);
-            tcg_gen_or_i32(v1, v1, v2);
-
-            tcg_gen_ld_i32(v2, entry, offsetof(CPUJumpCacheEntry, cflags));
-            tcg_gen_ld_i32(v3, tcg_env,
-                           offsetof(CPUState, neg.tcg_cflags) -
-                           sizeof(CPUState));
-            tcg_gen_xor_i32(v2, v2, v3);
-            tcg_gen_or_i32(v1, v1, v2);
-
-            tcg_gen_extu_i32_i64(t2, v1);
+            tcg_gen_ld_i64(t2, set, offsetof(CPUJumpCacheSet, way[0].cs_base));
+            tcg_gen_xor_i64(t2, t2, cs_flags);
             tcg_gen_or_i64(t1, t1, t2);
-            tcg_gen_brcondi_i64(TCG_COND_NE, t1, 0, miss);
+            tcg_gen_or_i64(t1, t1, cs_hi);
+            tcg_gen_movcond_i64(TCG_COND_EQ, cand0, t1, zero, tc, zero);
 
+            /*
+             * Probe way[1] (bytes 32..63 of the same 64-byte cache line)
+             * branchlessly so way[0]/way[1] alternation never mispredicts.
+             */
+            tcg_gen_ld_i64(tc, set, offsetof(CPUJumpCacheSet, way[1].tc_ptr));
+            tcg_gen_ld_i64(t1, set, offsetof(CPUJumpCacheSet, way[1].pc));
+            tcg_gen_xor_i64(t1, t1, pc);
+            tcg_gen_ld_i64(t2, set, offsetof(CPUJumpCacheSet, way[1].gen));
+            tcg_gen_xor_i64(t2, t2, gen_cflags);
+            tcg_gen_or_i64(t1, t1, t2);
+            tcg_gen_ld_i64(t2, set, offsetof(CPUJumpCacheSet, way[1].cs_base));
+            tcg_gen_xor_i64(t2, t2, cs_flags);
+            tcg_gen_or_i64(t1, t1, t2);
+            tcg_gen_or_i64(t1, t1, cs_hi);
+            tcg_gen_movcond_i64(TCG_COND_EQ, t1, t1, zero, tc, zero);
+
+            /* Prefer way[0] if non-NULL, else way[1]; single branch on miss. */
+            tcg_gen_movcond_i64(TCG_COND_EQ, cand0, cand0, zero, t1, cand0);
+            tcg_gen_brcondi_i64(TCG_COND_EQ, cand0, 0, miss);
+            tcg_gen_trunc_i64_ptr(tc_ptr, cand0);
             tcg_gen_op1i(INDEX_op_goto_ptr, TCG_TYPE_PTR,
                          tcgv_ptr_arg(tc_ptr));
 
             tcg_temp_free_ptr(tc_ptr);
-            tcg_temp_free_ptr(entry);
+            tcg_temp_free_ptr(set);
             tcg_temp_free_ptr(off);
             tcg_temp_free_ptr(arr);
-            tcg_temp_free_i32(v3);
-            tcg_temp_free_i32(v2);
-            tcg_temp_free_i32(v1);
+            tcg_temp_free_i64(cand0);
+            tcg_temp_free_i64(tc);
+            tcg_temp_free_i64(cs_hi);
+            tcg_temp_free_i64(cs_flags);
+            tcg_temp_free_i64(gen_cflags);
             tcg_temp_free_i64(t2);
             tcg_temp_free_i64(t1);
 
             /*
-             * Slow fallback: nothing is live across miss:, so all fast-path
-             * temps stay in registers without spilling.  Globals (including
-             * guest EIP) were synced before the conditional branches.
+             * Direct miss fallback: nothing is live across miss:, so all
+             * fast-path temps stay in registers without spilling.  Globals
+             * (including guest EIP) were synced before the conditional branch.
              */
             gen_set_label(miss);
             ptr = tcg_temp_ebb_new_ptr();
-            gen_helper_lookup_tb_ptr(ptr, tcg_env);
+            gen_helper_lookup_tb_ptr_miss(ptr, tcg_env);
             tcg_gen_op1i(INDEX_op_goto_ptr, TCG_TYPE_PTR, tcgv_ptr_arg(ptr));
             tcg_temp_free_ptr(ptr);
             return;

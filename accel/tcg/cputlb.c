@@ -157,15 +157,38 @@ static void tlb_window_reset(CPUTLBDesc *desc, int64_t ns,
 static void tb_jmp_cache_clear_page(CPUState *cpu, vaddr page_addr)
 {
     CPUJumpCache *jc = cpu->tb_jmp_cache;
+    vaddr page = page_addr & TARGET_PAGE_MASK;
     int i, i0;
 
     if (unlikely(!jc)) {
         return;
     }
 
-    i0 = tb_jmp_cache_hash_page(page_addr);
+    /*
+     * Only invalidate entries whose virtual PC actually belongs to @page so
+     * data-page INVLPGs never evict unrelated code pages sharing the same
+     * page bucket or dirty their cache lines.
+     *
+     * Callers pass (addr - TARGET_PAGE_SIZE) as vaddr, which wraps to
+     * (vaddr)TARGET_PAGE_MASK when addr == 0 even on 32-bit targets whose
+     * guest PCs are zero-extended (e.g. 0xfffff000); match both in that
+     * wraparound case.
+     */
+    vaddr page32 = (uint32_t)page;
+    bool check_wrap32 = unlikely(page == (vaddr)TARGET_PAGE_MASK);
+
+    i0 = tb_jmp_cache_hash_page(page);
     for (i = 0; i < TB_JMP_PAGE_SIZE; i++) {
-        qatomic_set(&jc->array[i0 + i].tc_ptr, NULL);
+        CPUJumpCacheSet *set = &jc->sets[i0 + i];
+        for (int w = 0; w < TB_JMP_CACHE_WAYS; w++) {
+            CPUJumpCacheEntry *e = &set->way[w];
+            if (qatomic_read(&e->tc_ptr) != NULL) {
+                vaddr ep = e->pc & TARGET_PAGE_MASK;
+                if (ep == page || (check_wrap32 && ep == page32)) {
+                    qatomic_set(&e->tc_ptr, NULL);
+                }
+            }
+        }
     }
 }
 
