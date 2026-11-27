@@ -2368,3 +2368,13 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Added `qemu_perf_stats_get_work_units()` to expose the existing atomic work-unit counter for interval snapshots.
 - Full Mode's existing detailed logging was not filtered, disabled, or replaced. Simple Mode remains the authoritative source for performance PERFSTATS; Full Mode PERFSTATS remain diagnostic only.
 - Commits: `477697f` (header accessor), `2264f0b` (accessor implementation), `3acda0d` (profiler output). GitHub Actions CI run `45928806347` started on the profiler commit; result was pending when this entry was written. No owner capture has yet validated the new records or their usefulness to a performance investigation. This is tooling implementation, not evidence of a runtime speedup.
+
+
+### Session 146, 2026-11-27 - T13 profiler coverage-limit metadata
+- Added explicit profiler completeness metadata to the Windows x64 TCG sampler:
+  - `sample_cap=131072` and `sample_cap_hit=1` only when the sampler reaches the cap and subsequently has to skip host RIP samples.
+  - `timeline_cap_secs=600` and `timeline_cap_hit=1` when elapsed capture time reaches the 600-second profiler timeline limit (also checked at stop, so a boundary-crossing capture is not missed).
+  - `sampled_sec_max` reports the highest second represented by collected host RIP samples; it is `none` when no host samples were collected.
+  - The same fields are present in the zero-sample metadata record, making unavailable/empty captures explicit without requiring log interpretation.
+- These are report-time/status fields plus sampler-thread booleans; no guest execution hot-path instrumentation, allocation, or additional periodic work was introduced. Existing TCG interval behavior and Full Mode detailed logging are unchanged.
+- Verification at commit time: source-level change only; no local full build, Linux/Windows CI result, or owner capture yet. Confirm format/type correctness in CI and verify ordinary captures report both cap-hit flags as zero. This is profiler completeness metadata, not a performance optimization.
