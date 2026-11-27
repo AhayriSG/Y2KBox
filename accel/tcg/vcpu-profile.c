@@ -40,6 +40,18 @@ void vcpu_profile_symbol_anchor(void)
 #define VCPU_PROF_MOD_NAME_LEN 48U
 #define VCPU_PROF_MAX_FUNC_SPAN (64ULL * 1024ULL)
 #define VCPU_PROF_MAX_EXEC_SECS 16U
+#define VCPU_PROF_TCG_STAT_COUNT 8U
+
+static const QemuPerfStat vcpu_prof_tcg_stats[VCPU_PROF_TCG_STAT_COUNT] = {
+    QEMU_PERF_TCG_TB_GEN_CODE,
+    QEMU_PERF_TCG_TB_EXEC_LOOPS,
+    QEMU_PERF_TCG_CPU_EXCEPTION,
+    QEMU_PERF_TCG_CPU_INTERRUPT,
+    QEMU_PERF_TCG_TLB_FILL,
+    QEMU_PERF_TCG_MMIO_BQL_WAIT,
+    QEMU_PERF_TCG_PIO_IN,
+    QEMU_PERF_TCG_PIO_OUT,
+};
 
 typedef struct VcpuProfSample {
     uint64_t rip;
@@ -61,9 +73,76 @@ typedef struct VcpuProfState {
     int64_t stop_us;
     int running;
     bool active;
+    uint64_t tcg_sec_delta[VCPU_PROF_MAX_SECS][VCPU_PROF_TCG_STAT_COUNT];
+    uint64_t tcg_sec_exec_work[VCPU_PROF_MAX_SECS];
+    uint64_t tcg_last_count[VCPU_PROF_TCG_STAT_COUNT];
+    uint64_t tcg_last_exec_work;
+    uint32_t tcg_last_sec;
+    bool tcg_snapshot_started;
 } VcpuProfState;
 
 static VcpuProfState vcpu_prof;
+
+static void vcpu_profile_tcg_snapshot(VcpuProfState *st, uint32_t sec,
+                                      bool force)
+{
+    uint64_t current[VCPU_PROF_TCG_STAT_COUNT];
+    uint64_t exec_work;
+    size_t i;
+
+    if (sec >= VCPU_PROF_MAX_SECS) {
+        sec = VCPU_PROF_MAX_SECS - 1;
+    }
+    if (!st->tcg_snapshot_started) {
+        memset(st->tcg_last_count, 0, sizeof(st->tcg_last_count));
+        st->tcg_last_exec_work = 0;
+        st->tcg_last_sec = 0;
+        st->tcg_snapshot_started = true;
+    }
+    if (!force && sec <= st->tcg_last_sec) {
+        return;
+    }
+
+    for (i = 0; i < VCPU_PROF_TCG_STAT_COUNT; i++) {
+        current[i] = qemu_perf_stats_get_count(vcpu_prof_tcg_stats[i]);
+    }
+    exec_work = qemu_perf_stats_get_work_units(QEMU_PERF_TCG_TB_EXEC_LOOPS);
+
+    /* Attribute the accumulated delta to the interval that just ended. */
+    for (i = 0; i < VCPU_PROF_TCG_STAT_COUNT; i++) {
+        st->tcg_sec_delta[st->tcg_last_sec][i] =
+            current[i] - st->tcg_last_count[i];
+    }
+    st->tcg_sec_exec_work[st->tcg_last_sec] =
+        exec_work - st->tcg_last_exec_work;
+
+    memcpy(st->tcg_last_count, current, sizeof(current));
+    st->tcg_last_exec_work = exec_work;
+    st->tcg_last_sec = sec;
+}
+
+static void vcpu_profile_print_tcg_sec(const VcpuProfState *st)
+{
+    uint32_t sec, last = MIN(st->tcg_last_sec, VCPU_PROF_MAX_SECS - 1);
+
+    for (sec = 0; sec <= last; sec++) {
+        const uint64_t *d = st->tcg_sec_delta[sec];
+        if (st->tcg_sec_exec_work[sec] == 0 &&
+            d[0] == 0 && d[1] == 0 && d[2] == 0 && d[3] == 0 &&
+            d[4] == 0 && d[5] == 0 && d[6] == 0 && d[7] == 0) {
+            continue;
+        }
+        fprintf(stderr,
+                "Y2KBOX-PROF-TCG-SEC sec=%" PRIu32
+                " tb_gen=%" PRIu64 " tb_exec_loops=%" PRIu64
+                " tb_exec_work=%" PRIu64 " cpu_exception=%" PRIu64
+                " cpu_interrupt=%" PRIu64 " tlb_fill=%" PRIu64
+                " mmio_bql_wait=%" PRIu64 " pio_in=%" PRIu64
+                " pio_out=%" PRIu64 "\n",
+                sec, d[0], d[1], st->tcg_sec_exec_work[sec],
+                d[2], d[3], d[4], d[5], d[6], d[7]);
+    }
+}
 
 /* ---- Minimal dynamic winmm.dll timer resolution helpers ---- */
 
@@ -519,6 +598,7 @@ typedef struct ResolvedSym {
     uint64_t rva;
     uint8_t is_exe;
     uint8_t is_os;
+    uint8_t resolution_kind; /* 1=PE, 2=DbgHelp, 3=unresolved RVA */
 } ResolvedSym;
 
 static void resolve_module_name(uint64_t rip, char *mod_out, size_t mod_sz,
@@ -567,6 +647,7 @@ static void resolve_host_rip(const PeSymTable *pe, const VcpuDbgHelp *dh,
     if (out->is_exe && pe_sym_table_lookup(pe, rip, &pe_name, &pe_rva)) {
         snprintf(out->sym, sizeof(out->sym), "%s", pe_name);
         out->rva = pe_rva;
+        out->resolution_kind = 1;
         return;
     }
 
@@ -587,11 +668,13 @@ static void resolve_host_rip(const PeSymTable *pe, const VcpuDbgHelp *dh,
             if (out->rva >= disp) {
                 out->rva -= disp;
             }
+            out->resolution_kind = 2;
             return;
         }
     }
 
     /* Quantize unresolved addresses to 64-byte buckets for aggregation. */
+    out->resolution_kind = 3;
     out->rva &= ~63ULL;
     snprintf(out->sym, sizeof(out->sym), "%s+0x%" PRIx64, out->mod, out->rva);
 }
@@ -783,6 +866,7 @@ static void *vcpu_profile_thread_fn(void *arg)
         if (sec >= VCPU_PROF_MAX_SECS) {
             sec = VCPU_PROF_MAX_SECS - 1;
         }
+        vcpu_profile_tcg_snapshot(st, sec, false);
         frame = (uint32_t)qemu_perf_stats_get_count(
             QEMU_PERF_VMVGA_SCREEN_TARGET_PRESENT);
         halted = qatomic_read(&st->cpu->halted) ? 1 : 0;
@@ -858,6 +942,8 @@ static void vcpu_profile_report(VcpuProfState *st)
     uint32_t i, n = st->sample_count;
     uint32_t total_jit = 0, total_jit_cpl0 = 0, total_jit_cpl3 = 0;
     uint32_t total_qemu_c = 0, total_os = 0, total_halted = 0;
+    uint32_t host_pe_symbols = 0, host_dbghelp_symbols = 0;
+    uint32_t host_unresolved = 0, jit_guest_pc_zero = 0;
     uint32_t max_sec = 0;
     int64_t dur_ms = (st->stop_us > st->start_us)
                          ? (st->stop_us - st->start_us) / 1000LL
@@ -877,6 +963,8 @@ static void vcpu_profile_report(VcpuProfState *st)
 
     pe_sym_table_load(&pe, (uintptr_t)&vcpu_profile_symbol_anchor);
     vcpu_dbghelp_init(&dh);
+
+    vcpu_profile_print_tcg_sec(st);
 
     if (n == 0) {
         fprintf(stderr,
@@ -956,6 +1044,9 @@ static void vcpu_profile_report(VcpuProfState *st)
                                                 : "[TCG_JIT_CPL3]";
             total_jit++;
             ss->jit++;
+            if (s->guest_pc == 0) {
+                jit_guest_pc_zero++;
+            }
             if (s->cpl == 0) {
                 total_jit_cpl0++;
                 ss->jit_cpl0++;
@@ -987,6 +1078,13 @@ static void vcpu_profile_report(VcpuProfState *st)
                 rs = g_new0(ResolvedSym, 1);
                 resolve_host_rip(&pe, &dh, key_rip, rs);
                 g_hash_table_insert(rip_cache, k, rs);
+            }
+            if (rs->resolution_kind == 1) {
+                host_pe_symbols++;
+            } else if (rs->resolution_kind == 2) {
+                host_dbghelp_symbols++;
+            } else {
+                host_unresolved++;
             }
             if (rs->is_exe) {
                 total_qemu_c++;
@@ -1033,6 +1131,8 @@ static void vcpu_profile_report(VcpuProfState *st)
             " jit=%" PRIu32 "(%.1f%%) jit_cpl0=%" PRIu32 "(%.1f%%)"
             " jit_cpl3=%" PRIu32 "(%.1f%%) qemu_c=%" PRIu32 "(%.1f%%)"
             " os_dll=%" PRIu32 "(%.1f%%) halted=%" PRIu32 "(%.1f%%)"
+            " host_pe=%" PRIu32 " host_dbghelp=%" PRIu32
+            " host_unresolved=%" PRIu32 " jit_guest_pc_zero=%" PRIu32
             " pe_syms=%zu self_check=%s dbghelp=%d\n",
             n, dur_ms,
             total_jit, 100.0 * total_jit / n,
@@ -1041,6 +1141,8 @@ static void vcpu_profile_report(VcpuProfState *st)
             total_qemu_c, 100.0 * total_qemu_c / n,
             total_os, 100.0 * total_os / n,
             total_halted, 100.0 * total_halted / n,
+            host_pe_symbols, host_dbghelp_symbols, host_unresolved,
+            jit_guest_pc_zero,
             pe.count, pe.self_check, dh.ready ? 1 : 0);
 
     /* Per-second timeline */
@@ -1175,6 +1277,13 @@ static void vcpu_profile_stop(void)
     vcpu_prof.stop_us = g_get_monotonic_time();
     qatomic_set(&vcpu_prof.running, 0);
     qemu_thread_join(&vcpu_prof.sampler_thread);
+    {
+        uint32_t sec = (vcpu_prof.stop_us > vcpu_prof.start_us)
+                           ? (uint32_t)((vcpu_prof.stop_us -
+                                         vcpu_prof.start_us) / 1000000LL)
+                           : 0;
+        vcpu_profile_tcg_snapshot(&vcpu_prof, sec, true);
+    }
     if (vcpu_prof.vcpu_handle) {
         CloseHandle(vcpu_prof.vcpu_handle);
         vcpu_prof.vcpu_handle = NULL;
