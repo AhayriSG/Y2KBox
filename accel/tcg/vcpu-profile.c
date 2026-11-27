@@ -79,6 +79,8 @@ typedef struct VcpuProfState {
     uint64_t tcg_last_exec_work;
     uint32_t tcg_last_sec;
     bool tcg_snapshot_started;
+    bool sample_cap_hit;
+    bool timeline_cap_hit;
 } VcpuProfState;
 
 static VcpuProfState vcpu_prof;
@@ -863,10 +865,12 @@ static void *vcpu_profile_thread_fn(void *arg)
                   ? (uint32_t)((now_us - st->start_us) / 1000000LL)
                   : 0;
         if (sec >= VCPU_PROF_MAX_SECS) {
+            st->timeline_cap_hit = true;
             sec = VCPU_PROF_MAX_SECS - 1;
         }
         vcpu_profile_tcg_snapshot(st, sec, false);
         if (st->sample_count >= VCPU_PROF_MAX_SAMPLES) {
+            st->sample_cap_hit = true;
             continue;
         }
         frame = (uint32_t)qemu_perf_stats_get_count(
@@ -971,8 +975,12 @@ static void vcpu_profile_report(VcpuProfState *st)
     if (n == 0) {
         fprintf(stderr,
                 "Y2KBOX-PROF-META samples=0 duration_ms=%" PRId64
+                " sample_cap=%u sample_cap_hit=%u timeline_cap_secs=%u"
+                " timeline_cap_hit=%u sampled_sec_max=none"
                 " pe_syms=%zu self_check=%s dbghelp=%d\n",
-                dur_ms, pe.count, pe.self_check, dh.ready ? 1 : 0);
+                dur_ms, VCPU_PROF_MAX_SAMPLES, st->sample_cap_hit ? 1 : 0,
+                VCPU_PROF_MAX_SECS, st->timeline_cap_hit ? 1 : 0,
+                pe.count, pe.self_check, dh.ready ? 1 : 0);
         vcpu_dbghelp_fini(&dh);
         pe_sym_table_free(&pe);
         return;
@@ -1135,6 +1143,8 @@ static void vcpu_profile_report(VcpuProfState *st)
             " os_dll=%" PRIu32 "(%.1f%%) halted=%" PRIu32 "(%.1f%%)"
             " host_pe=%" PRIu32 " host_dbghelp=%" PRIu32
             " host_unresolved=%" PRIu32 " jit_guest_pc_zero=%" PRIu32
+            " sample_cap=%u sample_cap_hit=%u timeline_cap_secs=%u"
+            " timeline_cap_hit=%u sampled_sec_max=%" PRIu32
             " pe_syms=%zu self_check=%s dbghelp=%d\n",
             n, dur_ms,
             total_jit, 100.0 * total_jit / n,
@@ -1145,6 +1155,8 @@ static void vcpu_profile_report(VcpuProfState *st)
             total_halted, 100.0 * total_halted / n,
             host_pe_symbols, host_dbghelp_symbols, host_unresolved,
             jit_guest_pc_zero,
+            VCPU_PROF_MAX_SAMPLES, st->sample_cap_hit ? 1 : 0,
+            VCPU_PROF_MAX_SECS, st->timeline_cap_hit ? 1 : 0, max_sec,
             pe.count, pe.self_check, dh.ready ? 1 : 0);
 
     /* Per-second timeline */
@@ -1293,6 +1305,10 @@ static void vcpu_profile_stop(void)
     vcpu_prof.stop_us = g_get_monotonic_time();
     qatomic_set(&vcpu_prof.running, 0);
     qemu_thread_join(&vcpu_prof.sampler_thread);
+    if (vcpu_prof.stop_us - vcpu_prof.start_us >=
+        (int64_t)VCPU_PROF_MAX_SECS * 1000000LL) {
+        vcpu_prof.timeline_cap_hit = true;
+    }
     {
         uint32_t sec = (vcpu_prof.stop_us > vcpu_prof.start_us)
                            ? (uint32_t)((vcpu_prof.stop_us -
