@@ -809,6 +809,11 @@ CD-ROM, BIN/CUE parsing, and disc-drive behavior
 * Copy protection overview: https://emulation.gametechwiki.com/index.php/Copy_protection
 * Disc-drive emulation overview: https://emulation.gametechwiki.com/index.php/Disc_Drive_emulation
 
+Copy-protection compatibility references
+* DiscCheckEmu: https://github.com/Luca1991/DiscCheckEmu - reference for emulating standard/passive disc checks through API interception; it does not directly handle active SafeDisc or SecuROM protections.
+* SafeDiscLoader2: https://github.com/nckstwrt/SafeDiscLoader2 - reference for SafeDisc compatibility and additional disc-check handling in legacy Windows games.
+
+
 Shader and post-processing integration
 * librashader: https://github.com/SnowflakePowered/librashader - Rust library for integrating libretro-style shader pipelines into standalone applications.
 * ares librashader integration: https://github.com/ares-emulator/ares/pull/1397
