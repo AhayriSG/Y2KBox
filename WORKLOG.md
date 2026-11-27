@@ -2357,3 +2357,14 @@ checks. No source changes, builds, guest tests, or CI polling were performed.
 - Reported ratio: **2.88x** throughput (+188.4% relative to 122.2 MTri/s).
 - Interpretation: useful historical old-build-to-current-build Analyze comparison, showing substantial reported improvement across the optimization work since Session 69. This was **not a matched in-game race benchmark**; conditions were not fully recorded, and the result does not establish a 2.88x FPS or gameplay improvement. Treat it as an owner-reported Analyze metric, not a controlled performance claim.
 - Current documented optimization evidence includes the T13 work across TCG/TLB, VMVGA/D3D9, GART mapping, and dynamic vertex-buffer uploads; Sessions 141-143 recorded matched NFSU2 Simple-mode captures and Linux/Windows CI validation. Keep those runtime measurements separate from this F1 Analyze result.
+
+
+### Session 145, 2026-11-27 - T13 profiling P1 instrumentation
+- Implemented additive per-second TCG counter deltas in the existing Windows x64 TCG vCPU profiler:
+  - The existing 1 kHz sampler snapshots the existing atomic TCG counters once per elapsed second and emits `Y2KBOX-PROF-TCG-SEC` lines for TB generation, TB execution-loop events and work units, CPU exceptions/interrupts, TLB fills, MMIO BQL waits, and PIO in/out.
+  - Snapshots are outside TCG execution hot paths; no per-event counter or timer work was added to guest instruction execution.
+  - The final partial interval is flushed after the sampler joins. The same additive records are emitted for both Simple and Full Mode because both use the shared capture lifecycle.
+- Improved attribution coverage in `Y2KBOX-PROF-META`: counts host samples resolved by the PE symbol table, DbgHelp, or unresolved module+RVA fallback, plus JIT samples whose guest PC was zero. Existing top-symbol, per-second phase, and guest-PC reports remain intact.
+- Added `qemu_perf_stats_get_work_units()` to expose the existing atomic work-unit counter for interval snapshots.
+- Full Mode's existing detailed logging was not filtered, disabled, or replaced. Simple Mode remains the authoritative source for performance PERFSTATS; Full Mode PERFSTATS remain diagnostic only.
+- Commits: `477697f` (header accessor), `2264f0b` (accessor implementation), `3acda0d` (profiler output). GitHub Actions CI run `45928806347` started on the profiler commit; result was pending when this entry was written. No owner capture has yet validated the new records or their usefulness to a performance investigation. This is tooling implementation, not evidence of a runtime speedup.
