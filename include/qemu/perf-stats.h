@@ -179,6 +179,7 @@ void qemu_perf_stats_command_end(uint32_t command_id,
                                  const char *command_name,
                                  uint64_t start_ns);
 uint64_t qemu_perf_stats_get_count(QemuPerfStat stat);
+uint64_t qemu_perf_stats_get_work_units(QemuPerfStat stat);
 void qemu_perf_stats_set_vcpu_profile_hooks(void (*on_start)(void),
                                             void (*on_stop)(void));
 
