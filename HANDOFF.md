@@ -468,6 +468,33 @@ replacement artifact is verified to launch without them.
 `5e21e4e0` corrected the MSYS2 package name to
 `mingw-w64-ucrt-x86_64-sdl3`.
 
+### SDL startup and WSI compatibility
+
+- Keep SDL startup limited to the host functionality Y2KBox actually uses.
+  Do not make optional camera, sensor, or haptic subsystem initialization a
+  prerequisite for launching the emulator. If any optional SDL subsystem is
+  ever added, initialize it independently and degrade gracefully when its
+  driver is unavailable. **Future compatibility note:** Vita3K issue
+  [Vita3K/Vita3K#3818](https://github.com/Vita3K/Vita3K/issues/3818) documents
+  an SDL startup failure on some hosts when the camera driver was active; the
+  upstream fix allowed startup without camera, sensor, or haptic drivers.
+  This is a useful warning when adding optional SDL features, not evidence
+  that Y2KBox currently uses those subsystems.
+- Current Linux DXVK Native WSI: `hw/display/vmware_vga_dxvk_wsi.c`
+  synthesizes a sealed-memfd ELF ABI shim for DXVK's SDL WSI integration.
+  Its SDL3 variant is selected when QEMU's SDL2 is already loaded (or by
+  `DXVK_WSI_DRIVER=SDL3`) and exposes a small fixed display/window/Vulkan
+  surface ABI. The shim's `SDL_InitSubSystem` succeeds as a no-op and
+  `SDL_QuitSubSystem` is a no-op; it does not initialize camera, audio,
+  sensor, or haptic devices. On Windows the DXVK WSI uses a hidden Win32
+  `HWND`, not this Linux SDL shim.
+- The Windows SDL2-compat runtime dependency and Linux DXVK WSI shim are
+  separate mechanisms. Commit `76b1d734` changed VMVGA/TCG synchronization
+  and Windows profiling; it did not introduce the SDL3 runtime path. The
+  missing-SDL3 packaging incident and its commit history are documented above
+  under **SDL runtime packaging (Windows)**.
+
+
 ## 8. 3D research notes
 
 ### 8a. PRIMARY: qemu-vmvga (VMware SVGA II / SVGA3D)  - evaluation 2026-11-14 (read from the repo)
@@ -741,30 +768,6 @@ graphics-card rejection.
   additional test. It is evidence for the independent reassessment only.
 
 ## 9. References and resources for development
-
-### SDL optional-subsystem startup compatibility
-
-* Keep SDL startup limited to the host functionality Y2KBox actually uses.
-  Do not make optional camera, sensor, or haptic subsystem initialization a
-  prerequisite for launching the emulator. If any optional SDL subsystem is
-  ever added, initialize it independently and degrade gracefully when its
-  driver is unavailable. **Future compatibility note:** Vita3K issue
-  https://github.com/Vita3K/Vita3K/issues/3818 documents an SDL startup failure
-  on some hosts when the camera driver was active; the upstream fix allowed
-  startup without camera, sensor, or haptic drivers. This is a useful warning
-  when adding optional SDL features, not evidence that Y2KBox currently uses
-  those subsystems.
-* Current Linux DXVK Native WSI: `hw/display/vmware_vga_dxvk_wsi.c`
-  synthesizes a sealed-memfd ELF ABI shim for DXVK's SDL WSI integration.
-  Its SDL3 variant is selected when QEMU's SDL2 is already loaded (or by
-  `DXVK_WSI_DRIVER=SDL3`) and exposes a small fixed display/window/Vulkan
-  surface ABI. The shim's `SDL_InitSubSystem` succeeds as a no-op and
-  `SDL_QuitSubSystem` is a no-op; it does not initialize camera, audio,
-  sensor, or haptic devices. On Windows the DXVK WSI uses a hidden Win32
-  `HWND`, not this Linux SDL shim.
-* Commit `76b1d734` is a VMVGA/TCG synchronization and profiler change; it
-  did not introduce the SDL3 runtime path. The Windows SDL2-compat dependency
-  and Linux DXVK WSI shim are separate mechanisms.
 
 QEMU-based x86 emulation
 * QEMU upstream: https://github.com/qemu/QEMU (TCG: `tcg/`, `target/i386/tcg/`,
