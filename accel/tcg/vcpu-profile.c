@@ -43,6 +43,8 @@ void vcpu_profile_symbol_anchor(void)
 #define VCPU_PROF_DBGHELP_DISP_BUCKET UINT64_C(0x100)
 #define VCPU_PROF_MAX_EXEC_SECS 16U
 #define VCPU_PROF_TCG_STAT_COUNT 8U
+#define VCPU_PROF_STACK_SCAN_WORDS 64U
+#define VCPU_PROF_OS_CALLER_KEY_LEN 256U
 
 static const QemuPerfStat vcpu_prof_tcg_stats[VCPU_PROF_TCG_STAT_COUNT] = {
     QEMU_PERF_TCG_TB_GEN_CODE,
@@ -55,12 +57,19 @@ static const QemuPerfStat vcpu_prof_tcg_stats[VCPU_PROF_TCG_STAT_COUNT] = {
     QEMU_PERF_TCG_PIO_OUT,
 };
 
+typedef struct VcpuProfExecRange {
+    uint64_t start;
+    uint64_t end;
+} VcpuProfExecRange;
+
 typedef struct VcpuProfSample {
     uint64_t rip;
+    uint64_t caller_rip;
     uint32_t guest_pc;
     uint32_t frame;
     uint16_t sec;
     uint8_t in_jit;
+    uint8_t caller_in_jit;
     uint8_t cpl;
     uint8_t halted;
 } VcpuProfSample;
@@ -69,6 +78,11 @@ typedef struct VcpuProfState {
     QemuThread sampler_thread;
     HANDLE vcpu_handle;
     CPUState *cpu;
+    const NT_TIB *vcpu_tib;
+    uint64_t exe_base;
+    uint64_t exe_end;
+    VcpuProfExecRange exe_ranges[VCPU_PROF_MAX_EXEC_SECS];
+    size_t exe_range_count;
     VcpuProfSample *samples;
     uint32_t sample_count;
     int64_t start_us;
@@ -84,6 +98,111 @@ typedef struct VcpuProfState {
     bool sample_cap_hit;
     bool timeline_cap_hit;
 } VcpuProfState;
+
+typedef struct VcpuThreadBasicInfo {
+    LONG exit_status;
+    PVOID teb_base_address;
+    struct {
+        PVOID unique_process;
+        PVOID unique_thread;
+    } client_id;
+    ULONG_PTR affinity_mask;
+    LONG priority;
+    LONG base_priority;
+} VcpuThreadBasicInfo;
+
+typedef LONG (WINAPI *NtQueryInformationThreadFn)(
+    HANDLE thread_handle, ULONG info_class, PVOID info,
+    ULONG info_length, PULONG return_length);
+
+static void vcpu_profile_init_exe_ranges(VcpuProfState *st)
+{
+    HMODULE h_exe = GetModuleHandleA(NULL);
+    const uint8_t *base;
+    const IMAGE_DOS_HEADER *dos;
+    const IMAGE_NT_HEADERS64 *nt;
+    const IMAGE_SECTION_HEADER *sec;
+    uint16_t i;
+
+    if (!h_exe) {
+        return;
+    }
+    base = (const uint8_t *)h_exe;
+    dos = (const IMAGE_DOS_HEADER *)base;
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew < 0) {
+        return;
+    }
+    nt = (const IMAGE_NT_HEADERS64 *)(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE ||
+        nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
+        return;
+    }
+
+    st->exe_base = (uint64_t)(uintptr_t)base;
+    st->exe_end = st->exe_base + (uint64_t)nt->OptionalHeader.SizeOfImage;
+    sec = (const IMAGE_SECTION_HEADER *)(
+        (const uint8_t *)&nt->OptionalHeader +
+        nt->FileHeader.SizeOfOptionalHeader);
+    for (i = 0; i < nt->FileHeader.NumberOfSections &&
+                st->exe_range_count < VCPU_PROF_MAX_EXEC_SECS; i++) {
+        if (sec[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) {
+            uint32_t span = sec[i].Misc.VirtualSize
+                                ? sec[i].Misc.VirtualSize
+                                : sec[i].SizeOfRawData;
+            if (span != 0) {
+                st->exe_ranges[st->exe_range_count].start =
+                    st->exe_base + (uint64_t)sec[i].VirtualAddress;
+                st->exe_ranges[st->exe_range_count].end =
+                    st->exe_ranges[st->exe_range_count].start + (uint64_t)span;
+                st->exe_range_count++;
+            }
+        }
+    }
+}
+
+static bool vcpu_profile_addr_in_exe_exec(const VcpuProfState *st,
+                                          uint64_t addr)
+{
+    size_t i;
+
+    for (i = 0; i < st->exe_range_count; i++) {
+        if (addr >= st->exe_ranges[i].start && addr < st->exe_ranges[i].end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static const NT_TIB *vcpu_profile_query_tib(HANDLE h_thread)
+{
+    HMODULE h_ntdll = GetModuleHandleA("ntdll.dll");
+    NtQueryInformationThreadFn query_fn;
+    VcpuThreadBasicInfo tbi;
+    ULONG ret_len = 0;
+    const NT_TIB *tib;
+
+    QEMU_BUILD_BUG_ON(sizeof(VcpuThreadBasicInfo) != 48);
+    if (!h_ntdll) {
+        return NULL;
+    }
+    query_fn = (NtQueryInformationThreadFn)(void *)GetProcAddress(
+        h_ntdll, "NtQueryInformationThread");
+    if (!query_fn) {
+        return NULL;
+    }
+    memset(&tbi, 0, sizeof(tbi));
+    if (query_fn(h_thread, 0 /* ThreadBasicInformation */, &tbi,
+                 sizeof(tbi), &ret_len) != 0 ||
+        tbi.teb_base_address == NULL) {
+        return NULL;
+    }
+    tib = (const NT_TIB *)tbi.teb_base_address;
+    if (tib->Self != tib ||
+        (uintptr_t)tib->StackLimit >= (uintptr_t)tib->StackBase) {
+        return NULL;
+    }
+    return tib;
+}
 
 static VcpuProfState vcpu_prof;
 
@@ -771,6 +890,64 @@ static void print_top_buckets(GHashTable *tbl, uint32_t total,
     g_free(arr);
 }
 
+typedef struct OsCallerBucket {
+    char call[VCPU_PROF_OS_CALLER_KEY_LEN];
+    uint32_t count;
+} OsCallerBucket;
+
+static int os_caller_cmp_desc(const void *a, const void *b)
+{
+    const OsCallerBucket *ca = a;
+    const OsCallerBucket *cb = b;
+    if (ca->count != cb->count) {
+        return (ca->count > cb->count) ? -1 : 1;
+    }
+    return strcmp(ca->call, cb->call);
+}
+
+static void os_caller_bucket_add(GHashTable *tbl, const char *call)
+{
+    OsCallerBucket *b = g_hash_table_lookup(tbl, call);
+    if (!b) {
+        b = g_new0(OsCallerBucket, 1);
+        snprintf(b->call, sizeof(b->call), "%s", call);
+        g_hash_table_insert(tbl, b->call, b);
+    }
+    b->count++;
+}
+
+static void print_top_os_callers(GHashTable *tbl, uint32_t total,
+                                 uint32_t os_total, size_t limit)
+{
+    GHashTableIter iter;
+    gpointer key, val;
+    size_t n = g_hash_table_size(tbl);
+    OsCallerBucket *arr;
+    size_t i = 0;
+
+    if (n == 0 || total == 0 || os_total == 0) {
+        return;
+    }
+    arr = g_new(OsCallerBucket, n);
+    g_hash_table_iter_init(&iter, tbl);
+    while (g_hash_table_iter_next(&iter, &key, &val)) {
+        arr[i++] = *(const OsCallerBucket *)val;
+    }
+    qsort(arr, n, sizeof(OsCallerBucket), os_caller_cmp_desc);
+    if (n > limit) {
+        n = limit;
+    }
+    for (i = 0; i < n; i++) {
+        double pct = 100.0 * (double)arr[i].count / (double)total;
+        double os_pct = 100.0 * (double)arr[i].count / (double)os_total;
+        fprintf(stderr,
+                "Y2KBOX-PROF-OS-CALLER rank=%zu samples=%" PRIu32
+                " pct=%.2f%% os_pct=%.2f%% call=%s\n",
+                i + 1, arr[i].count, pct, os_pct, arr[i].call);
+    }
+    g_free(arr);
+}
+
 typedef struct JitPcBucket {
     uint64_t key; /* ((uint64_t)cpl << 32) | guest_pc */
     uint32_t guest_pc;
@@ -865,8 +1042,12 @@ static void *vcpu_profile_thread_fn(void *arg)
         DWORD susp;
         BOOL ok = FALSE;
         uint64_t rip = 0;
+        uint64_t caller_rip = 0;
+        uint64_t stack_snap[VCPU_PROF_STACK_SCAN_WORDS];
+        size_t stack_words = 0;
         uint32_t guest_pc = 0;
         uint8_t in_jit = 0;
+        uint8_t caller_in_jit = 0;
         uint8_t cpl = 3;
         uint8_t halted;
         int64_t now_us;
@@ -904,6 +1085,27 @@ static void *vcpu_profile_thread_fn(void *arg)
             memset(&ctx, 0, sizeof(ctx));
             ctx.ContextFlags = CONTEXT_CONTROL;
             ok = GetThreadContext(st->vcpu_handle, &ctx);
+            if (ok && st->vcpu_tib != NULL) {
+                uint64_t sample_rip = (uint64_t)ctx.Rip;
+                if (!(sample_rip >= st->exe_base && sample_rip < st->exe_end) &&
+                    !in_code_gen_buffer((const void *)(uintptr_t)(
+                        sample_rip - tcg_splitwx_diff))) {
+                    uintptr_t rsp = (uintptr_t)ctx.Rsp;
+                    uintptr_t sbase = (uintptr_t)st->vcpu_tib->StackBase;
+                    uintptr_t slimit = (uintptr_t)st->vcpu_tib->StackLimit;
+                    if ((rsp & 7U) == 0 && rsp >= slimit && rsp < sbase) {
+                        size_t bytes = sbase - rsp;
+                        if (bytes > sizeof(stack_snap)) {
+                            bytes = sizeof(stack_snap);
+                        }
+                        stack_words = bytes / sizeof(uint64_t);
+                        if (stack_words > 0) {
+                            memcpy(stack_snap, (const void *)rsp,
+                                   stack_words * sizeof(uint64_t));
+                        }
+                    }
+                }
+            }
             ResumeThread(st->vcpu_handle);
             if (ok) {
                 rip = (uint64_t)ctx.Rip;
@@ -912,6 +1114,26 @@ static void *vcpu_profile_thread_fn(void *arg)
 
         if (!ok || rip == 0) {
             continue;
+        }
+
+        if (stack_words > 0) {
+            size_t wi;
+            for (wi = 0; wi < stack_words; wi++) {
+                uint64_t w = stack_snap[wi];
+                if (vcpu_profile_addr_in_exe_exec(st, w)) {
+                    caller_rip = w;
+                    break;
+                }
+                if (in_code_gen_buffer((const void *)(uintptr_t)(
+                        w - tcg_splitwx_diff))) {
+                    caller_rip = w;
+                    caller_in_jit = 1;
+                    break;
+                }
+            }
+            if (caller_rip == 0) {
+                caller_rip = stack_snap[0];
+            }
         }
 
         if (in_code_gen_buffer((const void *)(uintptr_t)(rip - tcg_splitwx_diff))) {
@@ -929,10 +1151,12 @@ static void *vcpu_profile_thread_fn(void *arg)
 
         VcpuProfSample *s = &st->samples[st->sample_count++];
         s->rip = rip;
+        s->caller_rip = caller_rip;
         s->guest_pc = guest_pc;
         s->frame = frame;
         s->sec = (uint16_t)sec;
         s->in_jit = in_jit;
+        s->caller_in_jit = caller_in_jit;
         s->cpl = cpl;
         s->halted = halted;
     }
@@ -976,6 +1200,7 @@ static void vcpu_profile_report(VcpuProfState *st)
     GHashTable *all_syms = NULL;
     GHashTable *hi_syms = NULL;
     GHashTable *lo_syms = NULL;
+    GHashTable *os_callers = NULL;
     GHashTable *all_jit = NULL;
     GHashTable *lo_jit = NULL;
     SecSummary *secs = NULL;
@@ -1026,6 +1251,7 @@ static void vcpu_profile_report(VcpuProfState *st)
     all_syms = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     hi_syms = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     lo_syms = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+    os_callers = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     all_jit = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
     lo_jit = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 
@@ -1130,6 +1356,34 @@ static void vcpu_profile_report(VcpuProfState *st)
                 } else if (is_lo) {
                     lo_os++;
                 }
+                if (s->caller_rip != 0) {
+                    char call_key[VCPU_PROF_OS_CALLER_KEY_LEN];
+                    if (s->caller_in_jit) {
+                        snprintf(call_key, sizeof(call_key),
+                                 "%.40s!%.80s<-TCG_JIT", rs->mod, rs->sym);
+                    } else {
+                        uint64_t key_caller = s->caller_rip;
+                        ResolvedSym *crs = g_hash_table_lookup(
+                            rip_cache, &key_caller);
+                        if (!crs) {
+                            uint64_t *ck = g_new(uint64_t, 1);
+                            *ck = key_caller;
+                            crs = g_new0(ResolvedSym, 1);
+                            resolve_host_rip(&pe, &dh, key_caller, crs);
+                            g_hash_table_insert(rip_cache, ck, crs);
+                        }
+                        if (crs->is_exe) {
+                            snprintf(call_key, sizeof(call_key),
+                                     "%.40s!%.80s<-%.80s",
+                                     rs->mod, rs->sym, crs->sym);
+                        } else {
+                            snprintf(call_key, sizeof(call_key),
+                                     "%.40s!%.72s<-%.40s!%.72s",
+                                     rs->mod, rs->sym, crs->mod, crs->sym);
+                        }
+                    }
+                    os_caller_bucket_add(os_callers, call_key);
+                }
             }
             sym_bucket_add(all_syms, rs->sym, rs->mod, rs->rva);
             sym_bucket_add(ss->syms, rs->sym, rs->mod, rs->rva);
@@ -1215,6 +1469,9 @@ static void vcpu_profile_report(VcpuProfState *st)
     /* Overall Top 30 */
     print_top_buckets(all_syms, n, "Y2KBOX-PROF-TOP", NULL, 30);
 
+    /* Top callers for OS DLL samples (helps identify ntdll/kernel32 hotspots) */
+    print_top_os_callers(os_callers, n, total_os, 15);
+
     /* High-FPS vs Low-FPS phase comparison */
     if (hi_samples > 0) {
         fprintf(stderr,
@@ -1255,6 +1512,7 @@ static void vcpu_profile_report(VcpuProfState *st)
     g_free(secs);
     g_hash_table_destroy(lo_jit);
     g_hash_table_destroy(all_jit);
+    g_hash_table_destroy(os_callers);
     g_hash_table_destroy(lo_syms);
     g_hash_table_destroy(hi_syms);
     g_hash_table_destroy(all_syms);
@@ -1302,6 +1560,8 @@ static void vcpu_profile_start(void)
     memset(&vcpu_prof, 0, sizeof(vcpu_prof));
     vcpu_prof.vcpu_handle = h;
     vcpu_prof.cpu = cpu;
+    vcpu_profile_init_exe_ranges(&vcpu_prof);
+    vcpu_prof.vcpu_tib = vcpu_profile_query_tib(h);
     vcpu_prof.samples = g_new(VcpuProfSample, VCPU_PROF_MAX_SAMPLES);
     vcpu_prof.sample_count = 0;
     vcpu_prof.start_us = g_get_monotonic_time();

@@ -37,6 +37,7 @@
 #include "qemu/cutils.h"
 #include "qemu/host-utils.h"
 #include "qemu/main-loop.h"
+#include "qemu/rcu.h"
 #include "qemu/timer.h"
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -709,8 +710,77 @@ struct vmsvga_state_s {
     bool legacy_handoff_rebind;
     bool legacy_handoff_timeout_armed;
     uint32_t legacy_handoff_hold_frames;
+    /* Host-only TCG BQL-release coordination (unused under KVM; excluded from VMState). */
+    QemuMutex device_lock;
+    bool device_lock_initialized;
+    bool device_lock_owned;
+    bool bql_released;
+    bool gbo_has_non_direct;
+    uint32_t io_waiters;
 };
 DECLARE_INSTANCE_CHECKER(struct pci_vmsvga_state_s, VMVGA, "vmvga")
+
+/*
+ * TCG-only BQL release during self-contained VMVGA 3D FIFO execution and
+ * asynchronous ScreenTarget readback polling.
+ *
+ * Lock hierarchy (strictly enforced to prevent deadlock):
+ *   ALWAYS:  BQL -> s->device_lock
+ *   NEVER:   acquire BQL while holding s->device_lock.
+ *
+ * When the main loop temporarily releases BQL, it first acquires
+ * s->device_lock (while holding BQL), then calls bql_unlock().  To re-enter
+ * BQL, it releases s->device_lock FIRST and only then calls bql_lock().
+ * vCPU register accesses (except lockless SVGA_INDEX_PORT and the
+ * BQL-released SVGA_REG_SYNC fast-path) acquire s->device_lock while holding
+ * BQL and bump s->io_waiters so the FIFO loop yields at the next command
+ * boundary.  Under KVM (!tcg_enabled()), all helpers are zero-cost no-ops.
+ */
+static inline void vmsvga_io_lock(struct vmsvga_state_s *s)
+{
+    if (!tcg_enabled() || !s->device_lock_initialized) {
+        return;
+    }
+    if (unlikely(qatomic_read(&s->bql_released))) {
+        qatomic_inc(&s->io_waiters);
+        qemu_mutex_lock(&s->device_lock);
+        qatomic_dec(&s->io_waiters);
+    } else {
+        qemu_mutex_lock(&s->device_lock);
+    }
+    qatomic_set(&s->device_lock_owned, true);
+}
+
+static inline void vmsvga_io_unlock(struct vmsvga_state_s *s)
+{
+    if (!tcg_enabled() || !s->device_lock_initialized) {
+        return;
+    }
+    qatomic_set(&s->device_lock_owned, false);
+    qemu_mutex_unlock(&s->device_lock);
+}
+
+static inline bool vmsvga_bql_release_begin(struct vmsvga_state_s *s)
+{
+    if (!tcg_enabled() || !s->device_lock_initialized || !bql_locked() ||
+        qatomic_read(&s->device_lock_owned) ||
+        qatomic_read(&s->io_waiters) != 0) {
+        return false;
+    }
+    qemu_mutex_lock(&s->device_lock);
+    qatomic_set(&s->device_lock_owned, true);
+    qatomic_set(&s->bql_released, true);
+    bql_unlock();
+    return true;
+}
+
+static inline void vmsvga_bql_release_end(struct vmsvga_state_s *s)
+{
+    qatomic_set(&s->device_lock_owned, false);
+    qatomic_set(&s->bql_released, false);
+    qemu_mutex_unlock(&s->device_lock);
+    bql_lock();
+}
 
 static inline bool vmsvga_vgpu9_modern_3d_capable(
     const struct vmsvga_state_s *s)
@@ -1744,17 +1814,20 @@ static uint64_t vmsvga_legacy_vga_read(void *opaque, hwaddr addr,
                                        unsigned size)
 {
     struct vmsvga_state_s *s = opaque;
-    uint8_t *vram_ptr = s->vga.vram_ptr;
+    uint8_t *vram_ptr;
     uint32_t value;
 
     (void)size;
 
+    vmsvga_io_lock(s);
+    vram_ptr = s->vga.vram_ptr;
     if (s->legacy_vga_size != 0) {
         s->vga.vram_ptr = s->legacy_vga_ptr;
     }
 
     value = vga_mem_readb(&s->vga, addr);
     s->vga.vram_ptr = vram_ptr;
+    vmsvga_io_unlock(s);
 
     return value;
 }
@@ -1763,15 +1836,18 @@ static void vmsvga_legacy_vga_write(void *opaque, hwaddr addr, uint64_t data,
                                     unsigned size)
 {
     struct vmsvga_state_s *s = opaque;
-    uint8_t *vram_ptr = s->vga.vram_ptr;
+    uint8_t *vram_ptr;
     (void)size;
 
+    vmsvga_io_lock(s);
+    vram_ptr = s->vga.vram_ptr;
     if (s->legacy_vga_size != 0) {
         s->vga.vram_ptr = s->legacy_vga_ptr;
     }
 
     vga_mem_writeb(&s->vga, addr, data);
     s->vga.vram_ptr = vram_ptr;
+    vmsvga_io_unlock(s);
 }
 
 static const MemoryRegionOps vmsvga_legacy_vga_ops = {
@@ -6235,6 +6311,22 @@ static void vmsvga_trace_gmr2_sample(struct vmsvga_state_s *s)
     }
 }
 
+static bool vmsvga_fifo_reacquire_bql(struct vmsvga_state_s *s,
+                                      bool *bql_released, int32_t *len)
+{
+    if (*bql_released) {
+        vmsvga_bql_release_end(s);
+        *bql_released = false;
+    }
+    if (!s->enable || !s->config || s->fifo == NULL ||
+        s->cb_fifo_scratch_in_use) {
+        *len = 0;
+        return false;
+    }
+    *len = vmsvga_fifo_length(s);
+    return *len >= 1;
+}
+
 static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                             uint32_t dx_context)
 {
@@ -6253,6 +6345,8 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
     struct vmsvga_cursor_definition_s cursor = {0};
     bool trace_flight = vmsvga_trace_flight_enabled();
     bool saved_gart_txn_batch_allowed;
+    bool bql_released = false;
+    bool can_release_bql;
 
     /* Keep register-command-buffer and legacy FIFO side effects ordered.
      * Private FIFO parsing for a queued command buffer sets
@@ -6282,7 +6376,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             vmsvga_damage_flush(s);
         }
         cursor_update_from_fifo(s);
-        s->sync = 0;
+        qatomic_set(&s->sync, 0);
         if (vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
             s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(0);
         }
@@ -6305,12 +6399,35 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
 
     saved_gart_txn_batch_allowed = s->gart_txn_batch_allowed;
     s->gart_txn_batch_allowed = true;
+    can_release_bql =
+        tcg_enabled() && s->device_lock_initialized && bql_locked() &&
+        !qatomic_read(&s->device_lock_owned) && !s->cb_fifo_scratch_in_use &&
+        !trace_flight && s->enable && s->config && s->svga3d_capable &&
+        s->svga3d != NULL;
 
     while ((len >= 1) && maxloop > 0) {
+        uint32_t next_cmd;
+        bool cmd_bql_free;
 
-        maxloop--;
+        if (bql_released && qatomic_read(&s->io_waiters) != 0) {
+            if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
+                break;
+            }
+            can_release_bql =
+                can_release_bql && s->enable && s->config &&
+                s->svga3d_capable && s->svga3d != NULL;
+        }
 
         if (s->fifo_upload.active) {
+            if (bql_released) {
+                if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
+                    break;
+                }
+                if (!s->fifo_upload.active) {
+                    continue;
+                }
+            }
+            maxloop--;
             uint32_t consumed;
             fifo_start = s->fifo_stop;
             consumed = vmsvga_fifo_upload_consume(s, (uint32_t)len);
@@ -6346,8 +6463,34 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             continue;
         }
 
+        next_cmd = le32_to_cpu(s->fifo[s->fifo_stop / sizeof(uint32_t)]);
+        cmd_bql_free = can_release_bql &&
+                       vmsvga3d_fifo_cmd_allows_bql_release(s, next_cmd);
+        if (cmd_bql_free && !bql_released) {
+            bql_released = vmsvga_bql_release_begin(s);
+        } else if (!cmd_bql_free && bql_released) {
+            if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
+                break;
+            }
+            can_release_bql =
+                can_release_bql && s->enable && s->config &&
+                s->svga3d_capable && s->svga3d != NULL;
+            continue;
+        }
+
+        maxloop--;
+
         fifo_start = s->fifo_stop;
         cmd = vmsvga_fifo_read(s);
+        if (unlikely(bql_released && cmd != next_cmd)) {
+            /* Guard against a guest mutating an already-committed FIFO word. */
+            s->fifo_stop = fifo_start;
+            s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
+                break;
+            }
+            continue;
+        }
 
         if (trace_flight) {
             bool is_3d = cmd >= SVGA_3D_CMD_BASE && cmd < SVGA_3D_CMD_MAX;
@@ -7938,32 +8081,63 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
         irq_status &= ~s->irq_status;
 
         if (irq_status) {
-            uint32_t status_before;
+            bool reacquired_for_irq = false;
 
-            if (trace_flight) {
-                status_before = s->irq_status;
+            if (bql_released) {
+                vmsvga_bql_release_end(s);
+                bql_released = false;
+                reacquired_for_irq = true;
+                irq_status = (s->fifo_stop != fifo_start
+                                  ? SVGA_IRQFLAG_FIFO_PROGRESS : 0);
+                irq_status &= s->irq_mask;
+                irq_status &= ~s->irq_status;
             }
-            s->irq_status |= irq_status;
-            if (trace_flight) {
-                fprintf(stderr,
-                        "VMVGA-IRQ event=raise reason=fifo "
-                        "flags=0x%08x mask=0x%08x status-before=0x%08x "
-                        "status-after=0x%08x line=1 fence=%u\n",
-                        irq_status, s->irq_mask, status_before, s->irq_status,
-                        s->fence);
-            }
+            if (irq_status) {
+                uint32_t status_before;
+
+                if (trace_flight) {
+                    status_before = s->irq_status;
+                }
+                s->irq_status |= irq_status;
+                if (trace_flight) {
+                    fprintf(stderr,
+                            "VMVGA-IRQ event=raise reason=fifo "
+                            "flags=0x%08x mask=0x%08x status-before=0x%08x "
+                            "status-after=0x%08x line=1 fence=%u\n",
+                            irq_status, s->irq_mask, status_before,
+                            s->irq_status, s->fence);
+                }
 #ifndef RAISE_IRQ_OFF
-            if (irq_status & s->irq_mask) {
-                struct pci_vmsvga_state_s *pci_vmsvga =
-                    container_of(s, struct pci_vmsvga_state_s, chip);
-                pci_set_irq(PCI_DEVICE(pci_vmsvga), 1);
-            }
+                if (irq_status & s->irq_mask) {
+                    struct pci_vmsvga_state_s *pci_vmsvga =
+                        container_of(s, struct pci_vmsvga_state_s, chip);
+                    pci_set_irq(PCI_DEVICE(pci_vmsvga), 1);
+                }
 #endif
+            }
+            if (reacquired_for_irq) {
+                if (!s->enable || !s->config || s->fifo == NULL ||
+                    s->cb_fifo_scratch_in_use) {
+                    len = 0;
+                    break;
+                }
+                len = vmsvga_fifo_length(s);
+            }
         }
+    }
+
+    if (bql_released) {
+        vmsvga_bql_release_end(s);
+        bql_released = false;
     }
 
     vmsvga3d_gart_txn_flush(s);
     s->gart_txn_batch_allowed = saved_gart_txn_batch_allowed;
+
+    if (!s->enable || !s->config || s->fifo == NULL) {
+        vmsvga_cursor_definition_clear(&cursor);
+        return;
+    }
 
     if (flush_damage) {
         vmsvga_damage_flush(s);
@@ -7982,7 +8156,7 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(1);
         }
     } else {
-        s->sync = 0;
+        qatomic_set(&s->sync, 0);
         if (vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
             s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(0);
         }
@@ -8033,7 +8207,7 @@ static void vmsvga_fifo_bh(void *opaque)
     uint32_t previous_stop;
 
     if (!s->enable || !s->config) {
-        s->sync = 0;
+        qatomic_set(&s->sync, 0);
         if (vmsvga_fifo_has_reg(s, SVGA_FIFO_BUSY)) {
             s->fifo[SVGA_FIFO_BUSY] = cpu_to_le32(0);
         }
@@ -8044,7 +8218,7 @@ static void vmsvga_fifo_bh(void *opaque)
     previous_stop = s->fifo_stop;
     vmsvga_fifo_run(s, false, SVGA3D_INVALID_ID);
 
-    if (s->sync && vmsvga_fifo_pending(s) &&
+    if (qatomic_read(&s->sync) && vmsvga_fifo_pending(s) &&
         s->fifo_stop != previous_stop) {
         qemu_bh_schedule(s->fifo_bh);
     }
@@ -8241,10 +8415,11 @@ static uint32_t vmsvga_index_read(void *opaque, uint32_t address)
     VPRINT("vmsvga_index_read was just executed\n");
 
     struct vmsvga_state_s *s = opaque;
+    uint32_t idx = qatomic_read(&s->index);
 
-    VPRINT("vmsvga_index_read %u %u\n", address, s->index);
+    VPRINT("vmsvga_index_read %u %u\n", address, idx);
 
-    return s->index;
+    return idx;
 }
 
 static void vmsvga_index_write(void *opaque, uint32_t address, uint32_t index)
@@ -8255,7 +8430,7 @@ static void vmsvga_index_write(void *opaque, uint32_t address, uint32_t index)
 
     VPRINT("vmsvga_index_write %u %u\n", address, index);
 
-    s->index = index;
+    qatomic_set(&s->index, index);
 }
 
 static pixman_format_code_t vmsvga_pixman_format(uint32_t bpp)
@@ -9821,11 +9996,11 @@ static uint32_t vmsvga_value_read(void *opaque, uint32_t address)
             s->trace_now.busy_reads++;
             s->trace_activity_seq++;
         }
-        if (s->sync) {
+        if (qatomic_read(&s->sync)) {
             vmsvga_try_commit_mode(s);
             vmsvga_fifo_run(s, false, SVGA3D_INVALID_ID);
         }
-        ret = s->sync;
+        ret = qatomic_read(&s->sync);
         /* vmware_value_read already traces this register when enabled. */
         VPRINT("SVGA_REG_BUSY register %u with the return of %u\n", s->index, ret);
         break;
@@ -10276,7 +10451,7 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
       }
       if (s->enable && s->config) {
           if (vmsvga_fifo_pending(s)) {
-              s->sync = 1;
+              qatomic_set(&s->sync, 1);
               qemu_bh_schedule(s->fifo_bh);
               sync_scheduled = true;
           } else {
@@ -10286,7 +10461,7 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
                * BUSY again.  A legacy SVGA_REG_BUSY read observes the same
                * completed state (zero) as it would after that empty pass.
                */
-              s->sync = 0;
+              qatomic_set(&s->sync, 0);
               vmsvga_fifo_set_busy(s, false);
           }
       }
@@ -10756,6 +10931,10 @@ static VMVGA_GFX_UPDATE_RET vmsvga_update_display_impl(void *opaque)
                             perf_start_ns);
     }
 
+    if (!s->enable || !s->config || !s->active_valid) {
+        goto done;
+    }
+
     /*
      * A scanout can be rebuilt through transient storage: vGPU9 can tear down
      * a directly scanned-out Screen Object while BAR1 is being rewritten, and
@@ -10915,6 +11094,7 @@ static void vmsvga_reset(DeviceState *dev)
         (void)vmsvga_screen_direct_detach(s, "device-reset");
     }
     vmsvga3d_reset(s);
+    s->gbo_has_non_direct = false;
     vmsvga_gmr_reset(s);
     vmsvga_screen_reset(s);
     vmsvga_legacy_handoff_reset_state(s);
@@ -11963,6 +12143,12 @@ static void vmsvga_init(DeviceState *dev, struct vmsvga_state_s *s,
     s->vga.con = vmvga_graphic_console_create(dev, 0, &vmsvga_ops, s);
     s->fifo_size = VMSVGA_FIFO_SIZE;
     s->hidden = false;
+    qemu_mutex_init(&s->device_lock);
+    s->device_lock_initialized = true;
+    s->device_lock_owned = false;
+    s->bql_released = false;
+    s->gbo_has_non_direct = false;
+    s->io_waiters = 0;
     s->fifo_bh = qemu_bh_new_guarded(vmsvga_fifo_bh, s,
                                       &dev->mem_reentrancy_guard);
     s->cb_bh = qemu_bh_new_guarded(vmsvga3d_command_buffer_bh, s,
@@ -12085,19 +12271,30 @@ static uint64_t vmsvga_io_read(void *opaque, hwaddr addr, unsigned size)
     VPRINT("vmsvga_io_read was just executed\n");
 
     struct vmsvga_state_s *s = opaque;
+    uint64_t ret;
+
     switch (addr) {
     case SVGA_INDEX_PORT:
         VPRINT("vmsvga_io_read SVGA_INDEX_PORT\n");
         return vmsvga_index_read(s, addr);
     case SVGA_VALUE_PORT:
         VPRINT("vmsvga_io_read SVGA_VALUE_PORT\n");
-        return vmsvga_value_read(s, addr);
+        vmsvga_io_lock(s);
+        ret = vmsvga_value_read(s, addr);
+        vmsvga_io_unlock(s);
+        return ret;
     case SVGA_BIOS_PORT:
         VPRINT("vmsvga_io_read SVGA_BIOS_PORT\n");
-        return vmsvga_bios_read(s, addr);
+        vmsvga_io_lock(s);
+        ret = vmsvga_bios_read(s, addr);
+        vmsvga_io_unlock(s);
+        return ret;
     case SVGA_IRQSTATUS_PORT:
         VPRINT("vmsvga_io_read SVGA_IRQSTATUS_PORT\n");
-        return vmsvga_irqstatus_read(s, addr);
+        vmsvga_io_lock(s);
+        ret = vmsvga_irqstatus_read(s, addr);
+        vmsvga_io_unlock(s);
+        return ret;
     default:
         VPRINT("vmsvga_io_read default\n");
         return UINT32_MAX;
@@ -12117,15 +12314,33 @@ static void vmsvga_io_write(void *opaque, hwaddr addr, uint64_t data,
         break;
     case SVGA_VALUE_PORT:
         VPRINT("vmsvga_io_write SVGA_VALUE_PORT\n");
+        if (tcg_enabled() && qatomic_read(&s->index) == SVGA_REG_SYNC &&
+            qatomic_read(&s->bql_released) && !vmsvga_trace_flight_enabled()) {
+            /*
+             * While the main thread holds s->device_lock without BQL, the
+             * device is guaranteed enabled and configured, and s->fifo_bh
+             * scheduling is thread-safe.  Avoid stalling the vCPU or bouncing
+             * BQL on high-frequency asynchronous SVGA_REG_SYNC wakeups.
+             */
+            qatomic_set(&s->sync, 1);
+            qemu_bh_schedule(s->fifo_bh);
+            break;
+        }
+        vmsvga_io_lock(s);
         vmsvga_value_write(s, addr, data);
+        vmsvga_io_unlock(s);
         break;
     case SVGA_BIOS_PORT:
         VPRINT("vmsvga_io_write SVGA_BIOS_PORT\n");
+        vmsvga_io_lock(s);
         vmsvga_bios_write(s, addr, data);
+        vmsvga_io_unlock(s);
         break;
     case SVGA_IRQSTATUS_PORT:
         VPRINT("vmsvga_io_write SVGA_IRQSTATUS_PORT\n");
+        vmsvga_io_lock(s);
         vmsvga_irqstatus_write(s, addr, data);
+        vmsvga_io_unlock(s);
         break;
     default:
         VPRINT("vmsvga_io_write default\n");
@@ -12325,6 +12540,20 @@ static void pci_vmsvga_uninit(PCIDevice *dev)
         qatomic_dec(&vmvga_trace_debug_capture_devices);
         s->chip.debug_log = false;
     }
+    if (s->chip.device_lock_initialized) {
+        qemu_mutex_destroy(&s->chip.device_lock);
+        s->chip.device_lock_initialized = false;
+    }
+}
+
+static void pci_vmsvga_write_config(PCIDevice *dev, uint32_t address,
+                                    uint32_t val, int len)
+{
+    struct pci_vmsvga_state_s *s = VMVGA(dev);
+
+    vmsvga_io_lock(&s->chip);
+    pci_default_write_config(dev, address, val, len);
+    vmsvga_io_unlock(&s->chip);
 }
 
 static bool vmsvga_get_debug_log(Object *obj, Error **errp)
@@ -12390,6 +12619,7 @@ static void vmsvga_class_init(ObjectClass *klass, VMVGA_CLASS_INIT_DATA data)
 
     k->realize = pci_vmsvga_realize;
     k->exit = pci_vmsvga_uninit;
+    k->config_write = pci_vmsvga_write_config;
     k->romfile = "vgabios-vmware.bin";
     k->vendor_id = PCI_VENDOR_ID_VMWARE;
     k->device_id = PCI_DEVICE_ID_VMWARE_SVGA2;

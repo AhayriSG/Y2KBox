@@ -995,7 +995,7 @@ static void vmsvga3d_gbo_cache_run(VMSVGA3DGBORun *run)
     run->cache_valid = true;
 }
 
-static bool vmsvga3d_gbo_finalize(VMSVGA3DGBO *gbo)
+static bool vmsvga3d_gbo_finalize(struct vmsvga_state_s *s, VMSVGA3DGBO *gbo)
 {
     uint64_t logical = 0;
     uint32_t run_index;
@@ -1032,6 +1032,10 @@ static bool vmsvga3d_gbo_finalize(VMSVGA3DGBO *gbo)
                 gbo->direct_run_count++;
             }
         }
+    }
+
+    if (s != NULL && gbo->direct_run_count != gbo->run_count) {
+        s->gbo_has_non_direct = true;
     }
 
     return true;
@@ -1163,7 +1167,7 @@ static bool vmsvga3d_gbo_create(struct vmsvga_state_s *s,
                            VMSVGA3D_GBO_GPA_MASK;
         gbo->runs[0].pages = gbo->page_count;
         gbo->run_count = 1;
-        return vmsvga3d_gbo_finalize(gbo);
+        return vmsvga3d_gbo_finalize(s, gbo);
     }
 
     if (format == SVGA3D_MOBFMT_PT_0 || format == SVGA3D_MOBFMT_PT64_0) {
@@ -1177,7 +1181,7 @@ static bool vmsvga3d_gbo_create(struct vmsvga_state_s *s,
             vmsvga3d_gbo_destroy(gbo);
             return false;
         }
-        return vmsvga3d_gbo_finalize(gbo);
+        return vmsvga3d_gbo_finalize(s, gbo);
     }
 
     ppns_per_page = VMSVGA3D_GBO_PAGE_SIZE /
@@ -1203,7 +1207,7 @@ static bool vmsvga3d_gbo_create(struct vmsvga_state_s *s,
             page_index++;
         }
 
-        return vmsvga3d_gbo_finalize(gbo);
+        return vmsvga3d_gbo_finalize(s, gbo);
     }
 
     if ((uint64_t)gbo->page_count >
@@ -1253,7 +1257,7 @@ static bool vmsvga3d_gbo_create(struct vmsvga_state_s *s,
     if (page_index != gbo->page_count) {
         return false;
     }
-    return vmsvga3d_gbo_finalize(gbo);
+    return vmsvga3d_gbo_finalize(s, gbo);
 }
 
 static uint32_t vmsvga3d_gbo_cursor_find_run(const VMSVGA3DGBO *gbo,
@@ -1308,6 +1312,7 @@ static bool vmsvga3d_gbo_transfer_cursor(struct vmsvga_state_s *s,
         return true;
     }
 
+    RCU_READ_LOCK_GUARD();
     run_index = vmsvga3d_gbo_cursor_find_run(gbo, cursor, offset);
     while (size != 0 && run_index < gbo->run_count) {
         VMSVGA3DGBORun *run = &gbo->runs[run_index];
@@ -17040,28 +17045,46 @@ vmsvga3d_screen_target_async_poll_present_impl(
         screen_size = (uint32_t)storage_size;
     }
 
-    if (d3d9_resident && !d3d11_resident) {
-        poll = vmsvga3d_dxvk_d3d9_screen_readback_poll(
-            s->dxvk, surface->dxvk_surface, wait, screen_base,
-            desc->bytes_per_block, screen_stride, screen_size,
-            d3d_rects, G_N_ELEMENTS(d3d_rects), &rect_count,
-            effective_min_sequence, &completed_sequence);
-    } else if (d3d11_resident && !d3d9_resident) {
-        if (exact_sequence) {
-            poll = vmsvga3d_dxvk_d3d11_screen_readback_poll_sequence(
+    {
+        uint32_t surface_sid = surface->sid;
+        bool bql_dropped = vmsvga_bql_release_begin(s);
+
+        if (d3d9_resident && !d3d11_resident) {
+            poll = vmsvga3d_dxvk_d3d9_screen_readback_poll(
                 s->dxvk, surface->dxvk_surface, wait, screen_base,
-                4, screen_stride, screen_size,
+                desc->bytes_per_block, screen_stride, screen_size,
                 d3d_rects, G_N_ELEMENTS(d3d_rects), &rect_count,
                 effective_min_sequence, &completed_sequence);
+        } else if (d3d11_resident && !d3d9_resident) {
+            if (exact_sequence) {
+                poll = vmsvga3d_dxvk_d3d11_screen_readback_poll_sequence(
+                    s->dxvk, surface->dxvk_surface, wait, screen_base,
+                    4, screen_stride, screen_size,
+                    d3d_rects, G_N_ELEMENTS(d3d_rects), &rect_count,
+                    effective_min_sequence, &completed_sequence);
+            } else {
+                poll = vmsvga3d_dxvk_d3d11_screen_readback_poll(
+                    s->dxvk, surface->dxvk_surface, wait, screen_base,
+                    4, screen_stride, screen_size,
+                    d3d_rects, G_N_ELEMENTS(d3d_rects), &rect_count,
+                    effective_min_sequence, &completed_sequence);
+            }
         } else {
-            poll = vmsvga3d_dxvk_d3d11_screen_readback_poll(
-                s->dxvk, surface->dxvk_surface, wait, screen_base,
-                4, screen_stride, screen_size,
-                d3d_rects, G_N_ELEMENTS(d3d_rects), &rect_count,
-                effective_min_sequence, &completed_sequence);
+            if (bql_dropped) {
+                vmsvga_bql_release_end(s);
+            }
+            return VMSVGA3D_DXVK_SCREEN_READBACK_POLL_IDLE;
         }
-    } else {
-        return VMSVGA3D_DXVK_SCREEN_READBACK_POLL_IDLE;
+
+        if (bql_dropped) {
+            vmsvga_bql_release_end(s);
+            if (!s->enable || !s->config || !s->active_valid ||
+                s->svga3d == NULL || surface_sid >= SVGA3D_MAX_SURFACE_IDS ||
+                s->svga3d->surfaces[surface_sid] != surface ||
+                surface->dxvk_surface == NULL) {
+                return VMSVGA3D_DXVK_SCREEN_READBACK_POLL_FAILED;
+            }
+        }
     }
 
     if (poll != VMSVGA3D_DXVK_SCREEN_READBACK_POLL_READY) {
@@ -20654,6 +20677,42 @@ static bool vmsvga3d_fifo_command_impl(struct vmsvga_state_s *s,
  * per-command counters in perf-stats.c retain the command ID/name so a capture
  * can identify expensive handlers without emitting per-command trace lines.
  */
+/*
+ * Whitelist of high-frequency SVGA3D FIFO commands audited to touch only
+ * s->svga3d, DXVK/D3D9/D3D11 host resources, and direct-RAM guest MOB/OTable
+ * reads (zero IRQ/display/timer/BH/MMIO/BQL calls).  Under TCG, the FIFO loop
+ * can execute consecutive whitelisted commands with BQL released while holding
+ * s->device_lock so the vCPU does not stall on main-thread GPU/DXVK work.
+ */
+static bool vmsvga3d_fifo_cmd_allows_bql_release(
+    const struct vmsvga_state_s *s, uint32_t cmd)
+{
+    if (s == NULL || !s->svga3d_capable || s->svga3d == NULL) {
+        return false;
+    }
+
+    switch (cmd) {
+    case SVGA_3D_CMD_DRAW_PRIMITIVES:
+    case SVGA_3D_CMD_SETTEXTURESTATE:
+    case SVGA_3D_CMD_SET_GB_SHADERCONSTS_INLINE:
+    case SVGA_3D_CMD_SURFACE_COPY:
+    case SVGA_3D_CMD_CLEAR:
+    case SVGA_3D_CMD_SETRENDERSTATE:
+    case SVGA_3D_CMD_SETRENDERTARGET:
+    case SVGA_3D_CMD_SET_SHADER_CONST:
+    case SVGA_3D_CMD_SETSCISSORRECT:
+    case SVGA_3D_CMD_SETVIEWPORT:
+    case SVGA_3D_CMD_SETZRANGE:
+    case SVGA_3D_CMD_SETTRANSFORM:
+        return true;
+    case SVGA_3D_CMD_UPDATE_GB_IMAGE:
+    case SVGA_3D_CMD_SET_SHADER:
+        return !s->gbo_has_non_direct;
+    default:
+        return false;
+    }
+}
+
 static bool vmsvga3d_fifo_command(struct vmsvga_state_s *s,
                                   uint32_t dx_context, uint32_t cmd,
                                   int32_t *len, uint32_t fifo_start)
