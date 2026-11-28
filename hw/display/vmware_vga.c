@@ -37,6 +37,7 @@
 #include "qemu/cutils.h"
 #include "qemu/host-utils.h"
 #include "qemu/main-loop.h"
+#include "qemu/mem-reentrancy.h"
 #include "qemu/rcu.h"
 #include "qemu/timer.h"
 #ifdef __SSE2__
@@ -717,6 +718,8 @@ struct vmsvga_state_s {
     bool bql_released;
     bool gbo_has_non_direct;
     bool fifo_stop_deferred;
+    MemReentrancyGuard *reentrancy_guard;
+    bool saved_engaged_in_io;
     uint32_t io_waiters;
 };
 DECLARE_INSTANCE_CHECKER(struct pci_vmsvga_state_s, VMVGA, "vmvga")
@@ -777,6 +780,22 @@ static inline bool vmsvga_bql_release_begin(struct vmsvga_state_s *s)
     }
     qemu_mutex_lock(&s->device_lock);
     qatomic_set(&s->device_lock_owned, true);
+    if (s->reentrancy_guard != NULL) {
+        /*
+         * vmsvga_fifo_bh is a guarded BH, so aio_bh_call() sets
+         * dev->mem_reentrancy_guard.engaged_in_io = true before entering the
+         * FIFO loop.  If left true across bql_unlock(), memory.c's re-entrancy
+         * guard rejects every concurrent vCPU access to vmsvga-io with
+         * MEMTX_ACCESS_ERROR (dropping writes like SVGA_INDEX_PORT /
+         * SVGA_REG_SYNC and returning 0 for reads like SVGA_REG_BUSY).
+         *
+         * Save and clear it while BQL is still held so vCPU PIO accesses
+         * serialize normally through s->device_lock, and restore it after
+         * bql_lock() before any non-whitelisted command or DMA can run.
+         */
+        s->saved_engaged_in_io = s->reentrancy_guard->engaged_in_io;
+        s->reentrancy_guard->engaged_in_io = false;
+    }
     qatomic_store_release(&s->bql_released, true);
     bql_unlock();
     return true;
@@ -788,6 +807,10 @@ static inline void vmsvga_bql_release_end(struct vmsvga_state_s *s)
     qatomic_store_release(&s->bql_released, false);
     qemu_mutex_unlock(&s->device_lock);
     bql_lock();
+    if (s->reentrancy_guard != NULL) {
+        s->reentrancy_guard->engaged_in_io = s->saved_engaged_in_io;
+        s->saved_engaged_in_io = false;
+    }
 }
 
 static inline bool vmsvga_vgpu9_modern_3d_capable(
@@ -12213,6 +12236,8 @@ static void vmsvga_init(DeviceState *dev, struct vmsvga_state_s *s,
     s->bql_released = false;
     s->gbo_has_non_direct = false;
     s->fifo_stop_deferred = false;
+    s->reentrancy_guard = &dev->mem_reentrancy_guard;
+    s->saved_engaged_in_io = false;
     s->io_waiters = 0;
     s->fifo_bh = qemu_bh_new_guarded(vmsvga_fifo_bh, s,
                                       &dev->mem_reentrancy_guard);
