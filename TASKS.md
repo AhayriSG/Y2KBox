@@ -228,6 +228,24 @@ The launcher should act as an **instance manager**, not a chooser among applicat
 * **VBoxVGA 5.2.x / SharedOpenGL (proposed, unproven):** a possible additional virtual GPU choice for newly created instances, being investigated as an alternative route to **Windows XP guest OpenGL support**. It would use the matching VirtualBox 5.2.x Guest Additions/driver stack and Chromium-based SharedOpenGL host service. This is a research candidate, not an implemented Y2KBox backend. VirtualBox 5.2.x documentation describes experimental Windows XP guest 3D support, but that does not establish that its device/protocol/host-service stack can be ported to or works in Y2KBox. Keep T16's research and feasibility gates; do not advertise or offer this GPU as selectable until a minimal end-to-end proof of concept succeeds and licensing/source compatibility have been audited.
 * The virtual GPU is an instance-level hardware choice, not a global application setting or a fixed preset. Do not silently change the GPU of existing instances when another backend is added. Preserve each instance's selected hardware configuration.
 
+**Per-instance display-adapter identity (cosmetic override):**
+* In addition to selecting the actual virtual GPU backend, allow an optional guest-visible display-adapter name override for the VMware SVGA II path:
+  * **VMware SVGA II:** default and recommended; preserve current behavior.
+  * **NVIDIA GeForce 6600 GT:** optional cosmetic identity.
+  * **NVIDIA GeForce 7600 GT:** optional cosmetic identity.
+* Do not offer GeForce 8600 GT; it implies a Direct3D 10 / Shader Model 4.0 generation beyond Y2KBox's intended Direct3D 9.0c / Shader Model 3.0 target.
+* The override should change the name Windows XP displays in device information (including Device Manager) and the name exposed to games that query that information, where technically feasible. This is a name/reporting override, not GPU emulation.
+* Prefer changing the Windows-visible friendly name while preserving the actual VMware SVGA II PCI identity, device functionality, and XP driver matching. Do not change PCI vendor/device IDs merely to display a different name. Games that identify hardware through PCI IDs or other non-name properties may continue to identify the underlying VMware device; document this limitation rather than implying universal game detection support.
+* The selected name must not imply or expose the real GeForce's rendering capabilities, VRAM, API support, or performance. Warn users that a non-default name may affect Windows device identification, driver compatibility, or game detection.
+* Keep this setting separate from the virtual GPU backend selector: the backend determines the emulated device; this option changes only its guest-visible name where supported.
+
+**Optional host CPU clock display:**
+* Provide a per-instance option to report reliable host CPU clock information as the guest's displayed/reported CPU speed, where technically feasible.
+* This changes displayed/reported clock information only. It must not change the fixed `xp-p4` CPU model, guest timing, TCG execution speed, virtual CPU scheduling, or emulated CPU behavior.
+* Do not use transient or fluctuating host boost frequencies as a stable guest clock. If a reliable host clock value cannot be obtained or represented compatibly, retain the existing guest-reported value.
+* Do not add CPU name overrides or alternative CPU identity/emulation profiles as part of this task.
+
+
 The launcher should let users select a qcow2 disk (made with qemu-img), floppy image, and CD/ISO for an instance. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add a **Debug mode** Off/Simple/On setting, default **Off**; it selects disabled, compact, or full diagnostic capture without enabling continuous output. This maps to the `-y2kboxdebugmode off|simple|on` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
 
 Add three independent per-instance device selectors:
