@@ -729,8 +729,19 @@ graphics-card rejection.
 * Current Windows runtime: QEMU uses its SDL2 API frontend (video
   initialization); the MSYS2 SDL2 runtime package is SDL2-compat and loads
   SDL3.dll internally. This is an indirect runtime SDL3 dependency, not a
-  direct QEMU SDL3 frontend or camera/sensor/haptic feature. Keep SDL3.dll
-  beside the Windows executable in packaged artifacts and verify it in CI.
+  direct QEMU SDL3 frontend or camera/sensor/haptic feature.
+* **Why Windows CI explicitly installs and packages SDL3:** SDL2-compat loads
+  SDL3.dll dynamically, so dependency collection with `ldd` on the QEMU
+  executables alone does not reliably discover this runtime dependency. A
+  Windows artifact failed to launch when SDL3.dll was absent. The follow-up
+  packaging change therefore explicitly installs the MSYS2 UCRT64 SDL3
+  runtime package, copies SDL3.dll beside the executables, and collects the
+  DLL's own runtime dependencies. CI also checks that the DLL is present.
+  Keep this explicit install/copy/check unless the SDL2 runtime implementation
+  changes and a replacement artifact is verified to launch without it.
+  History: `8ddefeaf` added explicit SDL3 packaging;
+  `5e21e4e0` corrected the MSYS2 package name to
+  `mingw-w64-ucrt-x86_64-sdl3`.
 * Current Linux DXVK Native WSI: `hw/display/vmware_vga_dxvk_wsi.c`
   synthesizes a sealed-memfd ELF ABI shim for DXVK's SDL WSI integration.
   Its SDL3 variant is selected when QEMU's SDL2 is already loaded (or by
