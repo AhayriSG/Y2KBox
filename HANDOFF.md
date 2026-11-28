@@ -744,8 +744,6 @@ graphics-card rejection.
   existing SDL2-compat runtime dependency and Linux DXVK WSI shim.
 
 QEMU-based x86 emulation
-
-QEMU-based x86 emulation
 * QEMU upstream: https://github.com/qemu/QEMU (TCG: `tcg/`, `target/i386/tcg/`,
   `accel/tcg/`; the new x86 decoder is `target/i386/tcg/decode-new.c.inc`).
 * xemu (original Xbox, Pentium III class CPU + NV2A GPU emulation, QEMU based):
