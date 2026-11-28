@@ -253,7 +253,7 @@ The launcher should act as an **instance manager**, not a chooser among applicat
 **Per-instance CPU identity display:**
 * Provide a CPU identity selector with the following entries:
   * **Intel Pentium 4 (Northwood):** Available; this remains the only implemented and active CPU identity, using the existing `xp-p4` CPU model.
-  * **AMD Athlon 64 2800+:** Not implemented; show this as a disabled, non-selectable option.
+  * **AMD Athlon 64 3200+:** Not implemented; show this as a disabled, non-selectable option.
 * Place an explanatory description adjacent to the CPU identity selector. Explain that the Athlon 64 2800+ is a historically relevant alternative because it supports SSE2 and is a single-core processor, which broadly fits Y2KBox's current instruction-set and single-vCPU target. However, the corresponding CPU identity/profile has not been implemented yet, so the option is displayed for information only and cannot currently be selected.
 * The disabled Athlon entry must not change CPUID values, the CPU vendor/family/model, the fixed `xp-p4` model, or any guest-visible CPU behavior. It must not imply that selecting or emulating an Athlon 64 profile is already supported.
 * Do not implement an alternative CPU identity or emulation profile as part of this task. A functional Athlon 64 profile would require a separate implementation and compatibility assessment; SSE2 support and a single-vCPU configuration alone do not make two CPU models equivalent.
