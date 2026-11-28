@@ -233,18 +233,30 @@ The launcher should act as an **instance manager**, not a chooser among applicat
   * **VMware SVGA II:** default and recommended; preserve current behavior.
   * **NVIDIA GeForce 6600 GT:** optional cosmetic identity.
   * **NVIDIA GeForce 7600 GT:** optional cosmetic identity.
-* Do not offer GeForce 8600 GT; it implies a Direct3D 10 / Shader Model 4.0 generation beyond Y2KBox's intended Direct3D 9.0c / Shader Model 3.0 target.
+* The GUI must show a persistent description box adjacent to the display-adapter name selector. It must explain that:
+  * This setting changes only the name reported to Windows and compatible applications, not the underlying VMware SVGA II hardware.
+  * The GeForce 6600 GT and 7600 GT are offered because they belong to the Direct3D 9.0c / Shader Model 3.0 generation targeted by Y2KBox.
+  * Newer models such as the GeForce 8600 GT are intentionally not offered because they belong to the Direct3D 10 / Shader Model 4.0 generation, beyond Y2KBox's intended graphics target.
+  * Some games or utilities may use the reported name for hardware-specific compatibility decisions, so changing it can cause unexpected behavior.
+  * Applications that inspect PCI IDs or other hardware properties may still identify the underlying VMware device.
+  * VMware SVGA II is the recommended default for maximum compatibility.
+* Do not hide this information behind a tooltip or show it only after a problem occurs.
 * The override should change the name Windows XP displays in device information (including Device Manager) and the name exposed to games that query that information, where technically feasible. This is a name/reporting override, not GPU emulation.
 * Prefer changing the Windows-visible friendly name while preserving the actual VMware SVGA II PCI identity, device functionality, and XP driver matching. Do not change PCI vendor/device IDs merely to display a different name. Games that identify hardware through PCI IDs or other non-name properties may continue to identify the underlying VMware device; document this limitation rather than implying universal game detection support.
 * The selected name must not imply or expose the real GeForce's rendering capabilities, VRAM, API support, or performance. Do not let the name override change the underlying device's capabilities or cause a GeForce driver to be selected or installed.
-* The GUI must show a persistent compatibility-warning description box adjacent to the display-adapter name selector. It must explain that the setting changes only the name reported to Windows and compatible applications, not the underlying VMware SVGA II hardware; some games or utilities may use the reported name for hardware-specific compatibility decisions, so changing it can cause unexpected behavior; and applications that inspect PCI IDs or other hardware properties may still identify the underlying VMware device. State that VMware SVGA II is the recommended default for maximum compatibility. Do not hide this warning behind a tooltip or show it only after a problem occurs.
 * Keep this setting separate from the virtual GPU backend selector: the backend determines the emulated device; this option changes only its guest-visible name where supported.
 
 **Optional host CPU clock display:**
 * Provide a per-instance option to report reliable host CPU clock information as the guest's displayed/reported CPU speed, where technically feasible.
 * This changes displayed/reported clock information only. It must not change the fixed `xp-p4` CPU model, guest timing, TCG execution speed, virtual CPU scheduling, or emulated CPU behavior.
 * Do not use transient or fluctuating host boost frequencies as a stable guest clock. If a reliable host clock value cannot be obtained or represented compatibly, retain the existing guest-reported value.
-* Do not add CPU name overrides or alternative CPU identity/emulation profiles as part of this task.
+**Per-instance CPU identity display:**
+* Provide a CPU identity selector with the following entries:
+  * **Intel Pentium 4 (Northwood):** Available; this remains the only implemented and active CPU identity, using the existing `xp-p4` CPU model.
+  * **AMD Athlon 64 2800+:** Not implemented; show this as a disabled, non-selectable option.
+* Place an explanatory description adjacent to the CPU identity selector. Explain that the Athlon 64 2800+ is a historically relevant alternative because it supports SSE2 and is a single-core processor, which broadly fits Y2KBox's current instruction-set and single-vCPU target. However, the corresponding CPU identity/profile has not been implemented yet, so the option is displayed for information only and cannot currently be selected.
+* The disabled Athlon entry must not change CPUID values, the CPU vendor/family/model, the fixed `xp-p4` model, or any guest-visible CPU behavior. It must not imply that selecting or emulating an Athlon 64 profile is already supported.
+* Do not implement an alternative CPU identity or emulation profile as part of this task. A functional Athlon 64 profile would require a separate implementation and compatibility assessment; SSE2 support and a single-vCPU configuration alone do not make two CPU models equivalent.
 
 
 The launcher should let users select a qcow2 disk (made with qemu-img), floppy image, and CD/ISO for an instance. Add guest CD-ROM **insert/eject** controls so users can swap disc images in the emulated drive for multi-disc games. The initial frontend keeps RAM fixed at 2048 MB, automatic, with no RAM setting; possible later memory presets are tracked separately in T23. Add a **Debug mode** Off/Simple/On setting, default **Off**; it selects disabled, compact, or full diagnostic capture without enabling continuous output. This maps to the `-y2kboxdebugmode off|simple|on` command-line setting; keep it separate from the `-device vmvga` declaration. When enabled, SDL exposes Ctrl+Alt+L for interval-based diagnostic logging.
