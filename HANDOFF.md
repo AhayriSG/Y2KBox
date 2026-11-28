@@ -458,7 +458,13 @@ the DLL is present. **Keep the explicit install/copy/dependency-collection/
 presence-check steps** unless the SDL2 runtime implementation changes and a
 replacement artifact is verified to launch without them.
 
-History: `8ddefeaf` added explicit SDL3 packaging;
+**Incident history:** The missing-SDL3 startup failure was first observed
+  after commit
+  [76b1d734](https://github.com/AhayriSG/Y2KBox/commit/76b1d734b19d2ec185cdb234da9b759436961287),
+  which changed VMVGA/TCG synchronization and Windows profiling code.
+  Investigation found that this commit did not introduce the SDL3 dependency
+  or modify SDL packaging; it exposed an existing packaging gap.
+  History: `8ddefeaf` added explicit SDL3 packaging;
 `5e21e4e0` corrected the MSYS2 package name to
 `mingw-w64-ucrt-x86_64-sdl3`.
 
