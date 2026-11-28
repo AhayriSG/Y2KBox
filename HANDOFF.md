@@ -716,6 +716,35 @@ graphics-card rejection.
 
 ## 9. References and resources for development
 
+### SDL runtime and optional-subsystem startup compatibility
+
+* Keep SDL startup limited to the host functionality Y2KBox actually uses.
+  Do not make optional camera, sensor, or haptic subsystem initialization a
+  prerequisite for launching the emulator. If any optional SDL subsystem is
+  ever added, initialize it independently and degrade gracefully when its
+  driver is unavailable. Reference: Vita3K issue
+  https://github.com/Vita3K/Vita3K/issues/3818, where SDL initialization
+  failed on some hosts when the camera driver was active; the upstream fix
+  allowed startup without camera, sensor, or haptic drivers.
+* Current Windows runtime: QEMU uses its SDL2 API frontend (video
+  initialization); the MSYS2 SDL2 runtime package is SDL2-compat and loads
+  SDL3.dll internally. This is an indirect runtime SDL3 dependency, not a
+  direct QEMU SDL3 frontend or camera/sensor/haptic feature. Keep SDL3.dll
+  beside the Windows executable in packaged artifacts and verify it in CI.
+* Current Linux DXVK Native WSI: `hw/display/vmware_vga_dxvk_wsi.c`
+  synthesizes a sealed-memfd ELF ABI shim for DXVK's SDL WSI integration.
+  Its SDL3 variant is selected when QEMU's SDL2 is already loaded (or by
+  `DXVK_WSI_DRIVER=SDL3`) and exposes a small fixed display/window/Vulkan
+  surface ABI. The shim's `SDL_InitSubSystem` succeeds as a no-op and
+  `SDL_QuitSubSystem` is a no-op; it does not initialize camera, audio,
+  sensor, or haptic devices. On Windows the DXVK WSI uses a hidden Win32
+  `HWND`, not this Linux SDL shim.
+* Commit `76b1d734` is a VMVGA/TCG synchronization and profiler change; it
+  did not introduce the SDL3 runtime path. Distinguish that commit from the
+  existing SDL2-compat runtime dependency and Linux DXVK WSI shim.
+
+QEMU-based x86 emulation
+
 QEMU-based x86 emulation
 * QEMU upstream: https://github.com/qemu/QEMU (TCG: `tcg/`, `target/i386/tcg/`,
   `accel/tcg/`; the new x86 decoder is `target/i386/tcg/decode-new.c.inc`).
