@@ -195,7 +195,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-meson
             mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-pixman
             mingw-w64-ucrt-x86_64-libpng
-            mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-libslirp mingw-w64-ucrt-x86_64-dtc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL3
             mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-nasm
       - name: Configure
         run: |
@@ -272,7 +272,11 @@ jobs:
           cp pc-bios/*.bin pc-bios/*.rom dist/pc-bios/
           cp -r pc-bios/keymaps dist/pc-bios/keymaps
           rm -f dist/pc-bios/keymaps/meson.build
-          for exe in dist/*.exe; do ldd "$exe" | grep -i '/ucrt64/' | awk '{print $3}'; done | sort -u | xargs -I{} cp {} dist/
+          # SDL2-compat loads SDL3.dll dynamically, so ldd on QEMU alone
+          # does not discover it. Ship SDL3 explicitly and package its imports too.
+          cp "$MINGW_PREFIX/bin/SDL3.dll" dist/SDL3.dll
+          for exe in dist/*.exe dist/SDL3.dll; do ldd "$exe" | grep -i '/ucrt64/' | awk '{print $3}'; done | sort -u | xargs -I{} cp {} dist/
+          test -f dist/SDL3.dll
       - name: Smoke test the packaged layout (no -L, run from dist/, SDL present)
         if: needs.changes.outputs.build_artifacts == 'true'
         run: |
