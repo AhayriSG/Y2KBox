@@ -3344,7 +3344,9 @@ static void vmsvga3d_fifo_rewind(struct vmsvga_state_s *s, int32_t *len,
                                  uint32_t fifo_start)
 {
     s->fifo_stop = fifo_start;
-    s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+    if (!s->fifo_stop_deferred) {
+        s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+    }
     *len = 0;
 }
 

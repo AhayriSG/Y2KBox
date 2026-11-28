@@ -716,6 +716,7 @@ struct vmsvga_state_s {
     bool device_lock_owned;
     bool bql_released;
     bool gbo_has_non_direct;
+    bool fifo_stop_deferred;
     uint32_t io_waiters;
 };
 DECLARE_INSTANCE_CHECKER(struct pci_vmsvga_state_s, VMVGA, "vmvga")
@@ -741,7 +742,7 @@ static inline void vmsvga_io_lock(struct vmsvga_state_s *s)
     if (!tcg_enabled() || !s->device_lock_initialized) {
         return;
     }
-    if (unlikely(qatomic_read(&s->bql_released))) {
+    if (unlikely(qatomic_load_acquire(&s->bql_released))) {
         qatomic_inc(&s->io_waiters);
         qemu_mutex_lock(&s->device_lock);
         qatomic_dec(&s->io_waiters);
@@ -762,14 +763,21 @@ static inline void vmsvga_io_unlock(struct vmsvga_state_s *s)
 
 static inline bool vmsvga_bql_release_begin(struct vmsvga_state_s *s)
 {
+    /*
+     * Never drop BQL while a batched GART MemoryRegion transaction is open or
+     * a TCG BAR1 GART IOMMU unmap notification is pending: the vCPU could
+     * otherwise resume with stale CPUTLB entries for newly remapped GART pages
+     * or observe an uncommitted memory-region transaction without BQL.
+     */
     if (!tcg_enabled() || !s->device_lock_initialized || !bql_locked() ||
         qatomic_read(&s->device_lock_owned) ||
-        qatomic_read(&s->io_waiters) != 0) {
+        qatomic_read(&s->io_waiters) != 0 ||
+        s->gart_txn_active || s->gart_iommu_dirty) {
         return false;
     }
     qemu_mutex_lock(&s->device_lock);
     qatomic_set(&s->device_lock_owned, true);
-    qatomic_set(&s->bql_released, true);
+    qatomic_store_release(&s->bql_released, true);
     bql_unlock();
     return true;
 }
@@ -777,7 +785,7 @@ static inline bool vmsvga_bql_release_begin(struct vmsvga_state_s *s)
 static inline void vmsvga_bql_release_end(struct vmsvga_state_s *s)
 {
     qatomic_set(&s->device_lock_owned, false);
-    qatomic_set(&s->bql_released, false);
+    qatomic_store_release(&s->bql_released, false);
     qemu_mutex_unlock(&s->device_lock);
     bql_lock();
 }
@@ -4419,6 +4427,17 @@ static inline bool vmsvga_object_blit(struct vmsvga_state_s *s, uint32_t id,
     return true;
 }
 
+static inline void vmsvga_fifo_publish_stop(struct vmsvga_state_s *s)
+{
+    /*
+     * Publish the consumer pointer with release ordering so all FIFO payload
+     * reads and command-handler guest-RAM/MOB reads complete before a
+     * concurrently running TCG vCPU can observe the command as consumed.
+     */
+    qatomic_store_release(&s->fifo[SVGA_FIFO_STOP],
+                          cpu_to_le32(s->fifo_stop));
+}
+
 static inline uint32_t vmsvga_fifo_read_raw(struct vmsvga_state_s *s);
 static inline void vmsvga_fifo_read_raw_data(struct vmsvga_state_s *s,
                                              void *dst, uint32_t words)
@@ -4439,7 +4458,9 @@ static inline void vmsvga_fifo_read_raw_data(struct vmsvga_state_s *s,
         bytes -= chunk;
     }
 
-    s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+    if (!s->fifo_stop_deferred) {
+        vmsvga_fifo_publish_stop(s);
+    }
 }
 
 static inline void vmsvga_fifo_peek_raw_data(struct vmsvga_state_s *s,
@@ -5280,8 +5301,8 @@ static inline int vmsvga_fifo_length(struct vmsvga_state_s *s)
         return 0;
     }
 
-    s->fifo_next = le32_to_cpu(s->fifo[SVGA_FIFO_NEXT_CMD]);
-    s->fifo_stop = le32_to_cpu(s->fifo[SVGA_FIFO_STOP]);
+    s->fifo_next = le32_to_cpu(qatomic_load_acquire(&s->fifo[SVGA_FIFO_NEXT_CMD]));
+    s->fifo_stop = le32_to_cpu(qatomic_read(&s->fifo[SVGA_FIFO_STOP]));
     if (s->fifo_next == s->fifo_stop) {
         return 0;
     }
@@ -5318,22 +5339,24 @@ static inline bool vmsvga_fifo_pending(struct vmsvga_state_s *s)
         return false;
     }
 
-    return le32_to_cpu(s->fifo[SVGA_FIFO_NEXT_CMD]) !=
-           le32_to_cpu(s->fifo[SVGA_FIFO_STOP]);
+    return le32_to_cpu(qatomic_load_acquire(&s->fifo[SVGA_FIFO_NEXT_CMD])) !=
+           le32_to_cpu(qatomic_read(&s->fifo[SVGA_FIFO_STOP]));
 }
 
 static inline uint32_t vmsvga_fifo_read_raw(struct vmsvga_state_s *s)
 {
     VPRINT("vmsvga_fifo_read_raw was just executed\n");
 
-    uint32_t cmd = s->fifo[s->fifo_stop / sizeof(uint32_t)];
+    uint32_t cmd = qatomic_read(&s->fifo[s->fifo_stop / sizeof(uint32_t)]);
 
     s->fifo_stop += 4;
     if (s->fifo_stop >= s->fifo_max) {
         s->fifo_stop = s->fifo_min;
     }
 
-    s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+    if (!s->fifo_stop_deferred) {
+        vmsvga_fifo_publish_stop(s);
+    }
 
     VPRINT("vmsvga_fifo_read_raw: cmd: %u\n", cmd);
 
@@ -6463,10 +6486,18 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             continue;
         }
 
-        next_cmd = le32_to_cpu(s->fifo[s->fifo_stop / sizeof(uint32_t)]);
+        next_cmd = le32_to_cpu(
+            qatomic_read(&s->fifo[s->fifo_stop / sizeof(uint32_t)]));
         cmd_bql_free = can_release_bql &&
                        vmsvga3d_fifo_cmd_allows_bql_release(s, next_cmd);
         if (cmd_bql_free && !bql_released) {
+            /*
+             * Flush any batched MAP_MOB_INTO_GART / UNMAP_GART_RANGE updates
+             * while BQL is still held so TCG's BAR1 GART CPUTLB entries are
+             * invalidated (and any non-IOMMU MemoryRegion transaction is
+             * committed) before the vCPU runs concurrently without BQL.
+             */
+            vmsvga3d_gart_txn_flush(s);
             bql_released = vmsvga_bql_release_begin(s);
         } else if (!cmd_bql_free && bql_released) {
             if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
@@ -6481,14 +6512,24 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
         maxloop--;
 
         fifo_start = s->fifo_stop;
+        /*
+         * While BQL is released and the TCG vCPU runs concurrently, defer
+         * publishing SVGA_FIFO_STOP until the entire command (including MOB
+         * reads and host GPU work) finishes.  This prevents both premature
+         * completion visibility and backwards SVGA_FIFO_STOP rewinds.
+         */
+        s->fifo_stop_deferred = bql_released;
         cmd = vmsvga_fifo_read(s);
         if (unlikely(bql_released && cmd != next_cmd)) {
             /* Guard against a guest mutating an already-committed FIFO word. */
             s->fifo_stop = fifo_start;
-            s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            s->fifo_stop_deferred = false;
             if (!vmsvga_fifo_reacquire_bql(s, &bql_released, &len)) {
                 break;
             }
+            can_release_bql =
+                can_release_bql && s->enable && s->config &&
+                s->svga3d_capable && s->svga3d != NULL;
             continue;
         }
 
@@ -6521,7 +6562,10 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
 
         if (!vmsvga3d_legacy_present_fifo_2d_barrier_live(s, cmd)) {
             s->fifo_stop = fifo_start;
-            s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            if (!s->fifo_stop_deferred) {
+                s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            }
+            s->fifo_stop_deferred = false;
             len = 0;
             break;
         }
@@ -8040,7 +8084,9 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
             }
             if (len < 1) {
                 s->fifo_stop = fifo_start;
-                s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+                if (!s->fifo_stop_deferred) {
+                    s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+                }
                 len = 0;
                 VPRINT("rewind command %u in SVGA command FIFO\n", cmd);
                 break;
@@ -8054,10 +8100,19 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                 VMVGA_TRACE_WARNING("unknown FIFO command=%u", cmd);
             }
             s->fifo_stop = fifo_start;
-            s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            if (!s->fifo_stop_deferred) {
+                s->fifo[SVGA_FIFO_STOP] = cpu_to_le32(s->fifo_stop);
+            }
             len = 0;
             VPRINT("default command %u in SVGA command FIFO\n", cmd);
             break;
+        }
+
+        if (s->fifo_stop_deferred) {
+            s->fifo_stop_deferred = false;
+            if (s->fifo_stop != fifo_start) {
+                vmsvga_fifo_publish_stop(s);
+            }
         }
 
         if (s->fifo_stop == fifo_start && len == 0) {
@@ -8121,11 +8176,15 @@ static void vmsvga_fifo_run_impl(struct vmsvga_state_s *s, bool flush_damage,
                     len = 0;
                     break;
                 }
+                can_release_bql =
+                    can_release_bql && s->enable && s->config &&
+                    s->svga3d_capable && s->svga3d != NULL;
                 len = vmsvga_fifo_length(s);
             }
         }
     }
 
+    s->fifo_stop_deferred = false;
     if (bql_released) {
         vmsvga_bql_release_end(s);
         bql_released = false;
@@ -8246,6 +8305,7 @@ static SVGACBStatus vmsvga_command_buffer_process(
     uint32_t saved_fifo_next;
     uint32_t saved_fifo_stop;
     uint32_t saved_sync;
+    bool saved_fifo_stop_deferred;
     struct vmsvga_fifo_upload_s saved_fifo_upload;
     uint32_t fifo_min;
     uint32_t ring_bytes;
@@ -8275,6 +8335,7 @@ static SVGACBStatus vmsvga_command_buffer_process(
     saved_fifo_next = s->fifo_next;
     saved_fifo_stop = s->fifo_stop;
     saved_sync = s->sync;
+    saved_fifo_stop_deferred = s->fifo_stop_deferred;
     saved_fifo_upload = s->fifo_upload;
 
     /* Keep the same FIFO register visibility as the configured guest FIFO. */
@@ -8341,6 +8402,7 @@ static SVGACBStatus vmsvga_command_buffer_process(
     s->fifo_max = fifo_max;
     s->fifo_next = fifo_next;
     s->fifo_stop = fifo_min;
+    s->fifo_stop_deferred = false;
     memset(&s->fifo_upload, 0, sizeof(s->fifo_upload));
 
     if (!s->svga3d_capable && dx_context != SVGA3D_INVALID_ID) {
@@ -8392,6 +8454,7 @@ restore:
     s->fifo_next = saved_fifo_next;
     s->fifo_stop = saved_fifo_stop;
     s->sync = saved_sync;
+    s->fifo_stop_deferred = saved_fifo_stop_deferred;
     s->fifo_upload = saved_fifo_upload;
 
     /* FENCE is architecturally visible in the real FIFO register block even
@@ -11095,6 +11158,7 @@ static void vmsvga_reset(DeviceState *dev)
     }
     vmsvga3d_reset(s);
     s->gbo_has_non_direct = false;
+    s->fifo_stop_deferred = false;
     vmsvga_gmr_reset(s);
     vmsvga_screen_reset(s);
     vmsvga_legacy_handoff_reset_state(s);
@@ -12148,6 +12212,7 @@ static void vmsvga_init(DeviceState *dev, struct vmsvga_state_s *s,
     s->device_lock_owned = false;
     s->bql_released = false;
     s->gbo_has_non_direct = false;
+    s->fifo_stop_deferred = false;
     s->io_waiters = 0;
     s->fifo_bh = qemu_bh_new_guarded(vmsvga_fifo_bh, s,
                                       &dev->mem_reentrancy_guard);
@@ -12315,7 +12380,8 @@ static void vmsvga_io_write(void *opaque, hwaddr addr, uint64_t data,
     case SVGA_VALUE_PORT:
         VPRINT("vmsvga_io_write SVGA_VALUE_PORT\n");
         if (tcg_enabled() && qatomic_read(&s->index) == SVGA_REG_SYNC &&
-            qatomic_read(&s->bql_released) && !vmsvga_trace_flight_enabled()) {
+            qatomic_load_acquire(&s->bql_released) &&
+            !vmsvga_trace_flight_enabled()) {
             /*
              * While the main thread holds s->device_lock without BQL, the
              * device is guaranteed enabled and configured, and s->fifo_bh
